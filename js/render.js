@@ -46,12 +46,24 @@ export class MapView {
 
   // colorOf(segId) -> [r, g, b]; borders and coast are drawn darker
   paint(colorOf) {
-    const { ids, edge, grid: g, segs } = this.map, d = this.img.data;
+    const { ids, edge, grid: g, segs, terrain, relief } = this.map, d = this.img.data;
     const cache = segs.map((s) => colorOf(s.id));
     const dark = cache.map((c) => shade(c, -0.55));
     for (let c = 0; c < g * g; c++) {
       const id = ids[c], o = c * 4;
-      if (id < 0) { d[o + 3] = 0; continue; }
+      if (id < 0) {
+        const t = terrain ? terrain[c] : 0;
+        if (t === 1) {
+          // lake: blue, darker toward the middle (edge cells = shore, lighter)
+          const col = edge[c] ? [92, 150, 205] : [38, 96, 160];
+          d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255;
+        } else if (t === 2) {
+          // mountain: brown-grey rock shaded by noise, light peaks
+          const k = relief[c], peak = k > 0.72 ? 35 : 0;
+          d[o] = 78 + k * 55 + peak; d[o + 1] = 68 + k * 45 + peak; d[o + 2] = 58 + k * 38 + peak; d[o + 3] = 255;
+        } else d[o + 3] = 0;
+        continue;
+      }
       const col = edge[c] ? dark[id] : cache[id];
       d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255;
     }

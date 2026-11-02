@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#0b1220">
   <title>Frontlines</title>
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
   <!-- main menu -->
@@ -15,7 +15,7 @@
     <button id="btn-campaign" class="primary">🗺️ Campaign</button>
     <button id="btn-skirmish">⚔️ Quick battle</button>
     <button id="btn-help">❔ How to play</button>
-    <span id="version">build 7 · 2026-11-02 14:49</span>
+    <span id="version">build 8 · 2026-11-02 14:58</span>
   </section>
 
   <!-- campaign world map -->
@@ -73,6 +73,7 @@
         <li><b>Drag</b> from your segment to any neighbour, including your own, to send troops there.</li>
         <li><b>🔁 Auto</b> on: sending to your own neighbour also sets a <b>route</b>. Every second the source tile forwards all troops above its reserve (100% − send %, of its cap) to the target. Chain routes to pipe troops from the back to the front. Select a tile and tap ✕ Stop to end its route.</li>
         <li>Fight: attack = troops × attack bonus, defense = defenders × defense bonus. Higher number wins; the winner keeps the difference.</li>
+        <li>Lakes and mountains can't be occupied or crossed.</li>
         <li>Neutral (grey) segments don't grow. Bots fight each other too: let them weaken each other.</li>
         <li>Each segment can hold one building, paid with its own troops. Captured buildings switch sides.</li>
       </ul>
@@ -83,6 +84,6 @@
   </div>
 
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=7"></script>
+  <script type="module" src="js/main.js?v=8"></script>
 </body>
 </html>

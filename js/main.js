@@ -1,10 +1,10 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor } from './config.js?v=7';
-import { generateMap, rng } from './mapgen.js?v=7';
-import { Battle } from './battle.js?v=7';
-import { personalities } from './ai.js?v=7';
-import { Campaign } from './campaign.js?v=7';
-import { MapView, hexToRgb, shade, label } from './render.js?v=7';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor } from './config.js?v=8';
+import { generateMap, rng } from './mapgen.js?v=8';
+import { Battle } from './battle.js?v=8';
+import { personalities } from './ai.js?v=8';
+import { Campaign } from './campaign.js?v=8';
+import { MapView, hexToRgb, shade, label } from './render.js?v=8';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -78,7 +78,8 @@ let battle = null, bv = null, mode = 'skirmish', regionId = -1;
 let auto = false, selected = -1, pct = 0.5, drag = null, hover = -1, speed = 1, paused = false, key = '';
 
 function startBattle(setup, m, rid = -1) {
-  const map = generateMap({ seed: setup.seed, cells: setup.cells, grid: rules.grid });
+  // battle maps: random island shape + lakes/mountains (setup.shape can force a shape)
+  const map = generateMap({ seed: setup.seed, cells: setup.cells, grid: rules.grid, shape: setup.shape ?? 'random', obstacles: true });
   if (autoplay) setup.factions[0] = { ai: true, color: 0, think: 1.5, personality: personalities.aggressive };
   battle = new Battle(map, setup);
   mode = m; regionId = rid; selected = -1; drag = null; paused = false; key = '';

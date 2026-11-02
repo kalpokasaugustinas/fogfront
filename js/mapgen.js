@@ -27,21 +27,86 @@ function noise2(rand, size) {
   };
 }
 
-export function generateMap({ seed, cells: n, grid: g }) {
+// island shapes as signed distance functions on x, y in [-0.5, 0.5] (negative = inside)
+const shapes = {
+  blob: (x, y) => Math.hypot(x, y) - 0.4,
+  square: (x, y) => Math.max(Math.abs(x), Math.abs(y)) - 0.37,
+  diamond: (x, y) => (Math.abs(x) + Math.abs(y) - 0.46) / Math.SQRT2,
+  triangle: (x, y) => sdTriangle(x, -y + 0.127, 0.44),   // apex up, centred vertically
+  peanut: (x, y) => Math.min(Math.hypot(x - 0.18, y + 0.06), Math.hypot(x + 0.18, y - 0.06)) - 0.26,
+  ring: (x, y) => Math.abs(Math.hypot(x, y) - 0.3) - 0.14,
+};
+export const shapeNames = Object.keys(shapes);
+
+// signed distance to an equilateral triangle with half-side r (inigo quilez), y up
+function sdTriangle(px, py, r) {
+  const k = Math.sqrt(3);
+  px = Math.abs(px) - r;
+  py = py + r / k;
+  if (px + k * py > 0) [px, py] = [(px - k * py) / 2, (-k * px - py) / 2];
+  px -= Math.min(Math.max(px, -2 * r), 0);
+  return -Math.hypot(px, py) * Math.sign(py);
+}
+
+// terrain codes for cells that aren't land segments
+export const terrainTypes = { sea: 0, lake: 1, mountain: 2 };
+
+// shape: a key of shapes, or 'random' (picked from the seed). obstacles: carve lakes + mountain ranges
+export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles = false }) {
   const rand = rng(seed);
   const na = noise2(rand, 3), nb = noise2(rand, 7);
   const wx = noise2(rand, 6), wy = noise2(rand, 6);
   const ids = new Int16Array(g * g).fill(-1);
+  // separate generator for shape + obstacles, so the plain blob maps stay exactly as before
+  const orand = rng(Math.imul(seed ^ 0x5bd1e995, 2654435761));   // hashed so neighbouring seeds differ
+  if (shape === 'random') shape = shapeNames[Math.floor(orand() * shapeNames.length)];
+  const sdf = shapes[shape] ?? shapes.blob;
+  const sx = noise2(orand, 4), sy = noise2(orand, 4), tn = noise2(orand, 14);
+  const squiggle = shape === 'blob' ? 0 : 0.07;   // domain warp makes straight edges wavy
 
-  // 1. island mask: circle with a noisy coastline
+  // 1. island mask: shape with a noisy coastline
   const mask = new Uint8Array(g * g);
   for (let y = 0; y < g; y++) {
     for (let x = 0; x < g; x++) {
       const u = (x + 0.5) / g, w = (y + 0.5) / g;
-      const r = Math.hypot(u - 0.5, w - 0.5);
-      const edge = 0.4 + (na(u, w) - 0.5) * 0.16 + (nb(u, w) - 0.5) * 0.07;
-      if (r < edge) mask[y * g + x] = 1;
+      const px = u - 0.5 + (sx(u, w) - 0.5) * squiggle, py = w - 0.5 + (sy(u, w) - 0.5) * squiggle;
+      const wobble = (na(u, w) - 0.5) * 0.16 + (nb(u, w) - 0.5) * 0.07;
+      if (sdf(px, py) < wobble) mask[y * g + x] = 1;
     }
+  }
+
+  // 1b. obstacles: round lakes and chains of mountain blobs, carved out of the land
+  const terrain = new Uint8Array(g * g);
+  if (obstacles) {
+    const island = mask.slice(), cellsIn = [];
+    for (let c = 0; c < g * g; c++) if (island[c]) cellsIn.push(c);
+    let lakes = Math.floor(orand() * 3), ranges = Math.floor(orand() * 3);
+    if (lakes + ranges === 0) lakes = 1;
+    const blobs = [];
+    const pick = () => { const c = cellsIn[Math.floor(orand() * cellsIn.length)]; return [c % g, Math.floor(c / g)]; };
+    for (let i = 0; i < lakes; i++) {
+      const [x, y] = pick();
+      blobs.push({ x, y, r: g * (0.05 + orand() * 0.045), type: terrainTypes.lake });
+    }
+    for (let i = 0; i < ranges; i++) {
+      let [x, y] = pick();
+      const ang = orand() * Math.PI, steps = 3 + Math.floor(orand() * 4), r = g * (0.025 + orand() * 0.015);
+      for (let k = 0; k < steps; k++) {
+        blobs.push({ x, y, r: r * (0.8 + orand() * 0.5), type: terrainTypes.mountain });
+        x += Math.cos(ang) * r * 1.5 + (orand() - 0.5) * r;
+        y += Math.sin(ang) * r * 1.5 + (orand() - 0.5) * r;
+      }
+    }
+    for (const c of cellsIn) {
+      const x = c % g, y = Math.floor(c / g), wob = 0.75 + 0.5 * tn(x / g, y / g);
+      for (const b of blobs) {
+        if (Math.hypot(x - b.x, y - b.y) < b.r * wob) { terrain[c] = b.type; mask[c] = 0; break; }
+      }
+    }
+    // land cut off by obstacles becomes mountain, so the playable land stays one piece
+    const keepSet = new Uint8Array(g * g);
+    for (const c of largestBlob(mask, g)) keepSet[c] = 1;
+    for (const c of cellsIn) if (!keepSet[c] && !terrain[c]) { terrain[c] = terrainTypes.mountain; mask[c] = 0; }
   }
   // keep only the largest connected landmass, so every segment is reachable
   const land = largestBlob(mask, g);
@@ -144,8 +209,11 @@ export function generateMap({ seed, cells: n, grid: g }) {
   }
 
   const avgArea = segs.reduce((a, s) => a + s.area, 0) / segs.length;
+  const rn = noise2(orand, 48);   // fine noise for mountain shading
   return {
-    grid: g, ids, edge, avgArea,
+    grid: g, ids, edge, avgArea, shape, terrain,
+    // per-cell 0..1 noise, used to shade mountains
+    relief: Float32Array.from({ length: g * g }, (_, c) => (terrain[c] ? rn((c % g) / g, Math.floor(c / g) / g) : 0)),
     segs: segs.map((s) => ({ id: s.id, area: s.area, x: s.x, y: s.y, adj: [...s.adj] })),
   };
 }

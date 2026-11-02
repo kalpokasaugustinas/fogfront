@@ -17,7 +17,7 @@ export const rules = {
 // one building per segment; building costs troops taken from that segment.
 // a captured segment keeps its building (the new owner gets it).
 export const buildings = {
-  farm:     { name: 'Farm',     icon: '🌾', cost: 75,  desc: '+100% growth in this segment' },
+  farm:     { name: 'Farm',     icon: '🌾', cost: 75,  desc: '+60% growth in this segment' },
   barracks: { name: 'Barracks', icon: '⚔️', cost: 100, desc: 'troops sent from here attack x1.5' },
   fort:     { name: 'Fort',     icon: '🛡️', cost: 100, desc: 'defenders here count x1.5' },
   hospital: { name: 'Hospital', icon: '➕', cost: 125, desc: '+50% growth in your adjacent segments' },
@@ -25,7 +25,7 @@ export const buildings = {
 };
 
 export const effects = {
-  farmGrowth: 1.0,      // +100% own growth
+  farmGrowth: 0.6,      // +60% own growth
   hospitalGrowth: 0.5,  // +50% per adjacent own hospital
   labGrowth: 0.1,       // +10% per lab owned, everywhere
   barracksAttack: 1.5,  // attack multiplier of armies sent from barracks
