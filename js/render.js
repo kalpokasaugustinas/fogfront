@@ -5,7 +5,7 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (shadow, foam, cliff) -> top (ground, owner
 // overlays, borders; repainted on ownership change) -> over (trees)
-import { themes } from './config.js?v=11';
+import { themes } from './config.js?v=12';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -45,7 +45,8 @@ function vnoise(x, y, s) {
 // lab(c) labels every cell (segment id, sea, lake, ...): each outline point remembers the pair of
 // labels it separates, so a border shared by two outlines is smoothed the same way in both and
 // points where 3 areas meet stay pinned (no gaps or overlaps between neighbours).
-function outline(test, lab, g, x0 = 0, y0 = 0, x1 = g - 1, y1 = g - 1) {
+// angular = low-poly look (mountains): straight edges instead of smooth curves
+function outline(test, lab, g, x0 = 0, y0 = 0, x1 = g - 1, y1 = g - 1, angular = false) {
   const inside = (x, y) => x >= 0 && y >= 0 && x < g && y < g && test(y * g + x);
   const label = (x, y) => (x >= 0 && y >= 0 && x < g && y < g ? lab(y * g + x) : -1);
   // point keys use doubled coordinates so every edge midpoint is an integer
@@ -93,7 +94,8 @@ function outline(test, lab, g, x0 = 0, y0 = 0, x1 = g - 1, y1 = g - 1) {
       cur = next;
     }
     if (loop.length < 3) continue;
-    const pts = chaikin(chaikin(relax(relax(loop, codes), codes)));
+    const pts = angular ? rdp(relax(loop, codes), 2.2 * g / 480) : chaikin(chaikin(relax(relax(loop, codes), codes)));
+    if (pts.length < 3) continue;
     path.moveTo(pts[0][0], pts[0][1]);
     for (let i = 1; i < pts.length; i++) path.lineTo(pts[i][0], pts[i][1]);
     path.closePath();
@@ -133,6 +135,26 @@ function relax(p, codes) {
   return out;
 }
 
+// ramer-douglas-peucker simplification of a closed loop (eps in grid units)
+function rdp(p, eps) {
+  const simplify = (pts) => {
+    if (pts.length < 3) return pts;
+    const a = pts[0], b = pts[pts.length - 1];
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+    let far = 0, fi = 0;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const d = Math.abs((pts[i][0] - a[0]) * dy - (pts[i][1] - a[1]) * dx) / len;
+      if (d > far) { far = d; fi = i; }
+    }
+    if (far <= eps) return [a, b];
+    return [...simplify(pts.slice(0, fi + 1)).slice(0, -1), ...simplify(pts.slice(fi))];
+  };
+  // split the loop at its two farthest-apart points so both halves are open polylines
+  let j = 0, best = 0;
+  for (let i = 1; i < p.length; i++) { const d = Math.hypot(p[i][0] - p[0][0], p[i][1] - p[0][1]); if (d > best) { best = d; j = i; } }
+  return [...simplify(p.slice(0, j + 1)).slice(0, -1), ...simplify([...p.slice(j), p[0]]).slice(0, -1)];
+}
+
 // one round of chaikin corner cutting on a closed loop (rounds the 45° marching-squares steps)
 function chaikin(p) {
   const out = [];
@@ -159,10 +181,10 @@ export class MapView {
     this.buildGround();
     this.buildOutlines();
     this.placeTrees();
-    // sea + soft light around the island live on the container, so there's no square edge
-    const sl = this.theme.seaLight;
+    // fog around the island lives on the container, so there's no square edge
+    const { fogA, fogB } = this.theme;
     this.canvas.parentElement.style.background =
-      `radial-gradient(circle at 50% 50%, rgb(${sl}) 0%, ${this.theme.sea} 65%)`;
+      `radial-gradient(circle at 50% 45%, rgb(${fogA}) 0%, rgb(${fogB}) 75%)`;
     this.under = this.over = this.topC = null;   // cached layers belong to the old map
     this.styleOf = null;
     this.resize();
@@ -227,7 +249,24 @@ export class MapView {
     this.islandP = outline((c) => ids[c] >= 0 || mtn(c), lab, g);
     this.outerP = outline((c) => ids[c] >= 0 || mtn(c) || lake(c), lab, g);
     this.lakesP = outline(lake, lab, g);
-    this.mtnP = outline(mtn, lab, g);
+    this.mtnP = outline(mtn, lab, g, 0, 0, g - 1, g - 1, true);
+    // cracks on the rock tops: short kinked lines starting on random mountain cells
+    const rockCells = [];
+    for (let c = 0; c < g * g; c++) if (mtn(c)) rockCells.push(c);
+    this.cracks = [];
+    const k = this.k, count = Math.round(rockCells.length / (450 * k * k));
+    for (let i = 0; i < count; i++) {
+      const c0 = rockCells[Math.floor(hash(i, 11, this.seed) * rockCells.length)];
+      let x0 = c0 % g, y0 = Math.floor(c0 / g), a = hash(i, 12, this.seed) * Math.PI * 2;
+      const line = [[x0, y0]];
+      for (let s = 0; s < 2 + Math.floor(hash(i, 13, this.seed) * 2); s++) {
+        a += (hash(i, 14 + s, this.seed) - 0.5) * 1.6;
+        const len = (5 + hash(i, 20 + s, this.seed) * 8) * k;
+        x0 += Math.cos(a) * len; y0 += Math.sin(a) * len;
+        line.push([x0, y0]);
+      }
+      this.cracks.push(line);
+    }
     // per-segment bounding boxes keep the tracing fast
     const box = segs.map(() => [g, g, -1, -1]);
     for (let c = 0; c < g * g; c++) {
@@ -285,26 +324,15 @@ export class MapView {
   buildUnder() {
     const [c, x] = this.newLayer(), t = this.theme, g = this.map.grid, px = 1 / this.scale;   // px = one css pixel in grid units
     const ch = Math.max(3, this.size * 0.018) * px;   // cliff height
-    // soft shadow in the water
+    // the island floats in fog: a faint shadow far below, then mist hugging the cliff foot
     x.save();
-    x.filter = `blur(${this.size * 0.02 * this.dpr}px)`;
-    x.translate(g * 0.01, ch + g * 0.02);
-    x.fillStyle = css(t.shadow, 0.35);
+    x.filter = `blur(${this.size * 0.035 * this.dpr}px)`;
+    x.translate(g * 0.015, ch + g * 0.05);
+    x.fillStyle = css(t.shadow, 0.16);
     x.fill(this.outerP);
     x.restore();
-    // wide faint foam halo + crisp foam rim at the waterline
     x.save();
     x.translate(0, ch);
-    x.filter = `blur(${this.size * 0.025 * this.dpr}px)`;
-    x.fillStyle = css(t.foam, 0.35);
-    x.fill(this.outerP);
-    x.filter = `blur(${Math.max(0.5, this.size * 0.002) * this.dpr}px)`;
-    x.lineJoin = 'round';
-    x.lineWidth = Math.max(3, this.size * 0.012) * px;
-    x.strokeStyle = css(t.foam, 0.95);
-    x.stroke(this.outerP);
-    x.fill(this.outerP);
-    x.filter = 'none';
     // lakes: water back in (sea colour, a bit deeper), light rim along the shore
     x.fillStyle = css(shade(hexToRgb(t.sea), -0.08));
     x.fill(this.lakesP);
@@ -320,6 +348,25 @@ export class MapView {
       x.fill(this.islandP, 'evenodd');
       x.restore();
     }
+    // mist banks around the island: big blurred blobs at random spots near the coast
+    x.save();
+    x.filter = `blur(${this.size * 0.03 * this.dpr}px)`;
+    const fogc = shade(t.fogA, 0.4);
+    for (let i = 0; i < 26; i++) {
+      const a = hash(i, 31, this.seed) * Math.PI * 2, rr = g * (0.42 + hash(i, 32, this.seed) * 0.14);
+      const fx = g / 2 + Math.cos(a) * rr, fy = g / 2 + Math.sin(a) * rr + ch;
+      x.fillStyle = css(fogc, 0.45 + hash(i, 33, this.seed) * 0.35);
+      x.beginPath();
+      x.ellipse(fx, fy, g * (0.06 + hash(i, 34, this.seed) * 0.07), g * (0.03 + hash(i, 35, this.seed) * 0.03), 0, 0, Math.PI * 2);
+      x.fill();
+    }
+    // mist rising along the cliff foot
+    x.filter = `blur(${this.size * 0.012 * this.dpr}px)`;
+    x.translate(0, ch * 1.4);
+    x.lineWidth = g * 0.025;
+    x.strokeStyle = css(fogc, 0.75);
+    x.stroke(this.outerP);
+    x.restore();
     this.under = c;
   }
 
@@ -367,17 +414,60 @@ export class MapView {
       x.strokeStyle = st[id].color ? css(shade(st[id].color, -0.35), 0.9) : css(t.lineNeutral, 0.45);
       x.stroke(p);
     });
-    // mountains on top of everything inside the island
-    x.save();
-    x.clip(this.mtnP);
-    x.drawImage(this.rockC, 0, 0, g, g);
-    x.restore();
     // light lip along the cliff edge
     x.lineWidth = Math.max(2, this.size * 0.006) * px;
     x.strokeStyle = css(t.lip, 0.7);
     x.stroke(this.islandP);
     x.restore();
+    this.drawRocks(x, px);
     this.topC = c;
+  }
+
+  // mountains as flat low-poly rock plateaus (like chunky cliffs): soft contact shadow,
+  // stacked slate side walls, a light top face with a gentle gradient, dark cracks and outline
+  drawRocks(x, px) {
+    const t = this.theme, g = this.map.grid, hgt = Math.max(4, this.size * 0.028) * px;
+    x.save();
+    x.filter = `blur(${Math.max(1, this.size * 0.006) * this.dpr}px)`;
+    x.fillStyle = 'rgba(25,30,35,0.3)';
+    x.translate(hgt * 0.3, hgt * 0.15);
+    x.fill(this.mtnP);
+    x.restore();
+    // side walls: the outline repeated upward, darker at the foot
+    for (let i = 0; i <= hgt; i += px * 0.5) {
+      x.save();
+      x.translate(0, -i);
+      x.fillStyle = css(i < hgt * 0.55 ? t.rockSideDark : t.rockSide);
+      x.fill(this.mtnP);
+      x.restore();
+    }
+    // top face
+    x.save();
+    x.translate(0, -hgt);
+    const grad = x.createLinearGradient(0, 0, g, g);
+    grad.addColorStop(0, css(shade(t.rockTop, 0.06)));
+    grad.addColorStop(1, css(shade(t.rockTop, -0.1)));
+    x.fillStyle = grad;
+    x.fill(this.mtnP);
+    x.save();
+    x.clip(this.mtnP);
+    // a few darker facets: the top face split by the cracks reads as broken rock
+    x.lineCap = 'round';
+    x.lineJoin = 'round';
+    x.strokeStyle = css(t.rockSideDark, 0.9);
+    x.lineWidth = Math.max(1.2, this.size * 0.003) * px;
+    for (const line of this.cracks) {
+      x.beginPath();
+      x.moveTo(line[0][0], line[0][1]);
+      for (let i = 1; i < line.length; i++) x.lineTo(line[i][0], line[i][1]);
+      x.stroke();
+    }
+    x.restore();
+    x.lineJoin = 'round';
+    x.lineWidth = Math.max(1, this.size * 0.0025) * px;
+    x.strokeStyle = css(t.rockSideDark, 0.85);
+    x.stroke(this.mtnP);
+    x.restore();
   }
 
   // trees: round crowns or low-poly pines, with a small shadow

@@ -40,6 +40,7 @@ export const neutralColor = '#7d8580';
 // island climates (picked per battle). colours are [r, g, b] except sea (css)
 export const themes = {
   summer: {
+    rockTop: [214, 210, 192], rockSide: [102, 106, 112], rockSideDark: [74, 78, 86], fogA: [236, 239, 237], fogB: [196, 205, 203],
     sea: '#9fb6b7', seaLight: [196, 214, 212], foam: [244, 249, 248], shadow: [52, 78, 84],
     groundA: [150, 172, 116], groundB: [184, 196, 140], shore: [222, 214, 176], scree: [150, 146, 126], lip: [232, 232, 210],
     cliffLight: [238, 236, 228], cliffDark: [190, 190, 182],
@@ -47,6 +48,7 @@ export const themes = {
     tree: 'round', trees: 1, treeDark: [62, 96, 70], treeLight: [96, 132, 92], lineNeutral: [70, 84, 64],
   },
   autumn: {
+    rockTop: [228, 204, 182], rockSide: [86, 78, 92], rockSideDark: [62, 56, 70], fogA: [238, 233, 229], fogB: [204, 196, 194],
     sea: '#93aaa8', seaLight: [190, 206, 202], foam: [240, 244, 242], shadow: [48, 62, 70],
     groundA: [206, 140, 116], groundB: [226, 170, 140], shore: [232, 206, 176], scree: [132, 110, 112], lip: [240, 214, 192],
     cliffLight: [104, 94, 108], cliffDark: [72, 64, 78],
@@ -54,6 +56,7 @@ export const themes = {
     tree: 'pine', trees: 1.2, treeDark: [52, 40, 58], treeLight: [86, 66, 88], lineNeutral: [110, 70, 64],
   },
   winter: {
+    rockTop: [242, 244, 247], rockSide: [72, 72, 82], rockSideDark: [52, 52, 62], fogA: [242, 244, 246], fogB: [208, 213, 218],
     sea: '#c4cbc8', seaLight: [222, 228, 226], foam: [252, 253, 253], shadow: [70, 80, 86],
     groundA: [226, 230, 234], groundB: [242, 244, 246], shore: [204, 214, 220], scree: [170, 172, 180], lip: [252, 252, 254],
     cliffLight: [84, 82, 92], cliffDark: [58, 56, 66],
@@ -61,6 +64,7 @@ export const themes = {
     tree: 'pine', trees: 0.9, treeDark: [64, 78, 76], treeLight: [96, 112, 108], treeSnow: [250, 251, 252], lineNeutral: [120, 128, 140],
   },
   moor: {
+    rockTop: [226, 212, 172], rockSide: [72, 70, 86], rockSideDark: [52, 50, 66], fogA: [230, 232, 226], fogB: [190, 195, 189],
     sea: '#a2aca5', seaLight: [200, 208, 200], foam: [238, 242, 236], shadow: [50, 56, 60],
     groundA: [168, 170, 132], groundB: [190, 188, 148], shore: [210, 204, 170], scree: [118, 116, 112], lip: [214, 210, 180],
     cliffLight: [80, 78, 92], cliffDark: [56, 54, 66],
