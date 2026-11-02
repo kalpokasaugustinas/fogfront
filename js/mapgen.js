@@ -530,3 +530,129 @@ export function spreadStarts(map, k, rand, first = -1) {
   }
   return starts;
 }
+
+// fair start: reshape the starting segments to the same size (the average segment area).
+// a small start grows into its non-start neighbours, nearest cells first (so it stays round);
+// a big one hands its farthest cells to them. neighbours never drop below half their size.
+// keep = a segment that keeps its shape (expedition capital = the previous island).
+// edits map.ids in place, then recomputes areas, borders, adjacency and label spots
+export function equalizeStarts(map, starts, keep = -1) {
+  const { ids, grid: g, segs } = map;
+  const target = Math.round(segs.reduce((a, s) => a + s.area, 0) / segs.length);
+  const fixed = new Set(starts), area = segs.map((s) => s.area), floor = segs.map((s) => s.area * 0.5);
+  const nb = (c) => { const x = c % g; return [x > 0 ? c - 1 : -1, x < g - 1 ? c + 1 : -1, c - g, c + g].filter((m) => m >= 0 && m < g * g); };
+  const free = (c) => ids[c] >= 0 && !fixed.has(ids[c]) && area[ids[c]] > floor[ids[c]];
+  for (const sid of starts) {
+    if (sid === keep) continue;
+    const s = segs[sid], d2 = (c) => ((c % g) + 0.5 - s.x) ** 2 + (Math.floor(c / g) + 0.5 - s.y) ** 2;
+    const own = [];
+    for (let c = 0; c < g * g; c++) if (ids[c] === sid) own.push(c);
+    if (area[sid] < target) {
+      // grow: min-heap of frontier cells by distance to the label spot
+      const heap = [], seen = new Uint8Array(g * g);
+      const push = (c) => {
+        seen[c] = 1; heap.push(c);
+        for (let i = heap.length - 1; i > 0;) { const p = (i - 1) >> 1; if (d2(heap[p]) <= d2(heap[i])) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; }
+      };
+      const pop = () => {
+        const top = heap[0], last = heap.pop();
+        if (heap.length) {
+          heap[0] = last;
+          for (let i = 0; ;) {
+            const l = i * 2 + 1, r = l + 1;
+            let m = i;
+            if (l < heap.length && d2(heap[l]) < d2(heap[m])) m = l;
+            if (r < heap.length && d2(heap[r]) < d2(heap[m])) m = r;
+            if (m === i) break;
+            [heap[m], heap[i]] = [heap[i], heap[m]]; i = m;
+          }
+        }
+        return top;
+      };
+      for (const c of own) for (const m of nb(c)) if (!seen[m] && free(m)) push(m);
+      while (heap.length && area[sid] < target) {
+        const c = pop();
+        if (!free(c)) continue;
+        area[ids[c]]--; area[sid]++; ids[c] = sid;
+        for (const m of nb(c)) if (!seen[m] && free(m)) push(m);
+      }
+    } else if (area[sid] > target) {
+      // shrink: peel the farthest cells that touch a non-start neighbour, ring by ring
+      own.sort((a, b) => d2(b) - d2(a));
+      for (let pass = 0; pass < g && area[sid] > target; pass++) {
+        let moved = 0;
+        for (const c of own) {
+          if (ids[c] !== sid || area[sid] <= target) continue;
+          const m = nb(c).find((m) => ids[m] >= 0 && ids[m] !== sid && !fixed.has(ids[m]));
+          if (m === undefined) continue;
+          area[sid]--; area[ids[m]]++; ids[c] = ids[m]; moved++;
+        }
+        if (!moved) break;
+      }
+    }
+  }
+  // pieces cut off from their segment join the neighbour they touch most
+  for (let round = 0; round < 4; round++) {
+    const comp = new Int32Array(g * g).fill(-1), main = new Map(), sizes = [];
+    for (let c0 = 0; c0 < g * g; c0++) {
+      if (ids[c0] < 0 || comp[c0] >= 0) continue;
+      const k = sizes.length, q = [c0];
+      comp[c0] = k;
+      for (let i = 0; i < q.length; i++) for (const m of nb(q[i])) if (comp[m] < 0 && ids[m] === ids[c0]) { comp[m] = k; q.push(m); }
+      sizes.push(q.length);
+      if (!main.has(ids[c0]) || sizes[main.get(ids[c0])] < q.length) main.set(ids[c0], k);
+    }
+    let orphans = 0;
+    for (let c = 0; c < g * g; c++) {
+      if (ids[c] < 0 || comp[c] === main.get(ids[c])) continue;
+      const m = nb(c).find((m) => ids[m] >= 0 && ids[m] !== ids[c] && comp[m] === main.get(ids[m]));
+      if (m !== undefined) { ids[c] = ids[m]; orphans++; }
+    }
+    if (!orphans) break;
+  }
+  recount(map);
+}
+
+// recompute per-segment area, coast, adjacency (incl. sea routes), border distance, edge cells
+// and label spots from map.ids (same rules as generateMap steps 6-7)
+function recount(map) {
+  const { ids, grid: g, segs, terrain } = map;
+  const nb = (c) => { const x = c % g; return [x > 0 ? c - 1 : -1, x < g - 1 ? c + 1 : -1, c - g, c + g].filter((m) => m >= 0 && m < g * g); };
+  for (const s of segs) { s.area = 0; s.sx = 0; s.sy = 0; s.coast = false; s.adjSet = new Set(); }
+  const edge = new Uint8Array(g * g);
+  for (let c = 0; c < g * g; c++) {
+    const id = ids[c], x = c % g;
+    if (id >= 0) { const s = segs[id]; s.area++; s.sx += x; s.sy += Math.floor(c / g); }
+    const r = x < g - 1 ? ids[c + 1] : -1, d = c < g * g - g ? ids[c + g] : -1;
+    const l = x > 0 ? ids[c - 1] : -1, u = c >= g ? ids[c - g] : -1;
+    const same = (m, v) => v === id || (id >= 0 && m >= 0 && m < g * g && terrain[m]);
+    if (!same(c + 1, r) || !same(c + g, d) || !same(c - 1, l) || !same(c - g, u)) edge[c] = 1;
+    if (id >= 0 && [[c + 1, r, x < g - 1], [c + g, d, c < g * g - g], [c - 1, l, x > 0], [c - g, u, c >= g]].some(([m, v, ok]) => !ok || (v < 0 && !terrain[m]))) segs[id].coast = true;
+    if (id >= 0 && r >= 0 && r !== id) { segs[id].adjSet.add(r); segs[r].adjSet.add(id); }
+    if (id >= 0 && d >= 0 && d !== id) { segs[id].adjSet.add(d); segs[d].adjSet.add(id); }
+  }
+  for (const b of map.bridges) {
+    // sea route ends follow whoever now owns the landing cell
+    b.a = ids[Math.floor(b.ay) * g + Math.floor(b.ax)];
+    b.b = ids[Math.floor(b.by) * g + Math.floor(b.bx)];
+    segs[b.a].adjSet.add(b.b); segs[b.b].adjSet.add(b.a);
+  }
+  const dist = new Int16Array(g * g).fill(-1), queue = [];
+  for (let c = 0; c < g * g; c++) {
+    if (ids[c] < 0) continue;
+    if (nb(c).some((m) => ids[m] !== ids[c]) || nb(c).length < 4) { dist[c] = 0; queue.push(c); }
+  }
+  for (let k = 0; k < queue.length; k++) for (const m of nb(queue[k])) if (dist[m] < 0 && ids[m] === ids[queue[k]]) { dist[m] = dist[queue[k]] + 1; queue.push(m); }
+  const best = segs.map(() => -1e9);
+  for (let c = 0; c < g * g; c++) {
+    const id = ids[c];
+    if (id < 0) continue;
+    const s = segs[id], x = c % g, y = Math.floor(c / g);
+    const score = dist[c] - Math.hypot(x - s.sx / s.area, y - s.sy / s.area) * 0.05;
+    if (score > best[id]) { best[id] = score; s.x = x + 0.5; s.y = y + 0.5; }
+  }
+  for (const s of segs) { s.adj = [...s.adjSet]; delete s.adjSet; delete s.sx; delete s.sy; }
+  map.edge = edge;
+  map.bdist = dist;
+  map.avgArea = segs.reduce((a, s) => a + s.area, 0) / segs.length;
+}

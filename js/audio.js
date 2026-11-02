@@ -135,6 +135,19 @@ export const sfx = {
   build() {
     for (let i = 0; i < 3; i++) noise({ type: 'bandpass', freq: 600 + i * 150, q: 3, vol: 0.12, dur: 0.07, when: i * 0.11 });
   },
+  // countdown war drum: deep boom + skin slap, a little higher on each count (i = 0, 1, 2)
+  drum(i) {
+    note({ freq: 70 + i * 12, type: 'sine', vol: 0.28, dur: 0.45, attack: 0.004, glide: 0.6 });
+    noise({ type: 'lowpass', freq: 240, q: 0.8, vol: 0.22, dur: 0.16 });
+    noise({ type: 'bandpass', freq: 900, q: 1.5, vol: 0.05, dur: 0.05 });
+  },
+  // battle start: two-note horn call with a drum hit
+  horn() {
+    note({ freq: 147, type: 'sawtooth', vol: 0.09, dur: 0.3, attack: 0.04, cutoff: 1200 });
+    note({ freq: 220, type: 'sawtooth', vol: 0.1, dur: 0.7, attack: 0.05, when: 0.25, cutoff: 1400 });
+    note({ freq: 294, type: 'sawtooth', vol: 0.05, dur: 0.6, attack: 0.05, when: 0.3, cutoff: 1600 });
+    noise({ type: 'lowpass', freq: 160, vol: 0.2, dur: 0.3, when: 0.25 });
+  },
   click() { note({ freq: 880, type: 'sine', vol: 0.05, dur: 0.05, attack: 0.002 }); },
 };
 

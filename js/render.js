@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=21';
-import * as structures from './structures.js?v=21';
+import { themes } from './config.js?v=22';
+import * as structures from './structures.js?v=22';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -37,6 +37,52 @@ function vnoise(x, y, s) {
   const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
   const a = hash(ix, iy, s), b = hash(ix + 1, iy, s), c = hash(ix, iy + 1, s), d = hash(ix + 1, iy + 1, s);
   return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+}
+
+// ---------- clouds ----------
+
+// fog palette per climate: blue-grey shadows, soft body, near-white lit tops
+function cloudColors(t) {
+  return { dark: mix(shade(t.fogB, -0.12), [150, 168, 190], 0.45), mid: mix(t.fogB, [196, 208, 222], 0.4), light: mix(t.fogA, [255, 255, 255], 0.7) };
+}
+
+// periodic value noise (wraps every p lattice cells), so the texture tiles seamlessly
+function pnoise(x, y, p, s) {
+  const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy), w = (v) => ((v % p) + p) % p;
+  const a = hash(w(ix), w(iy), s), b = hash(w(ix + 1), w(iy), s), c = hash(w(ix), w(iy + 1), s), d = hash(w(ix + 1), w(iy + 1), s);
+  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+}
+
+// tileable billowing cloud texture as a data url (cached per climate). density = fractal noise;
+// lighting = density minus density a little to the top-left, so puffs get bright rims and
+// shaded undersides
+const cloudCache = new Map();
+function cloudTexture(t) {
+  const key = `${t.fogA}|${t.fogB}`;
+  if (cloudCache.has(key)) return cloudCache.get(key);
+  const n = 256, c = document.createElement('canvas');
+  c.width = c.height = n;
+  const x = c.getContext('2d'), img = x.createImageData(n, n), cl = cloudColors(t);
+  const fbm = (u, v) => {
+    let s = 0, amp = 0.55, tot = 0;
+    for (let o = 0, p = 4; o < 5; o++, p *= 2, amp *= 0.5) { s += pnoise((u / n) * p, (v / n) * p, p, 71 + o) * amp; tot += amp; }
+    return s / tot;
+  };
+  for (let v = 0; v < n; v++) {
+    for (let u = 0; u < n; u++) {
+      const d = fbm(u, v), lit = d - fbm(u - 3, v - 4);
+      const dens = Math.min(1, Math.max(0, (d - 0.32) / 0.4));
+      let col = mix(cl.dark, cl.mid, dens);
+      col = lit > 0 ? mix(col, cl.light, Math.min(1, lit * 9) * dens) : mix(col, cl.dark, Math.min(1, -lit * 6) * 0.6);
+      const o = (v * n + u) * 4;
+      img.data[o] = col[0]; img.data[o + 1] = col[1]; img.data[o + 2] = col[2]; img.data[o + 3] = 255;
+    }
+  }
+  x.putImageData(img, 0, 0);
+  const url = c.toDataURL();
+  cloudCache.set(key, url);
+  return url;
 }
 
 // ---------- outline tracing ----------
@@ -185,9 +231,7 @@ export class MapView {
     this.buildOutlines();
     this.placeTrees();
     // fog around the island lives on the container, so there's no square edge
-    const { fogA, fogB } = this.theme;
-    this.canvas.parentElement.style.background =
-      `radial-gradient(circle at 50% 45%, rgb(${fogA}) 0%, rgb(${fogB}) 75%)`;
+    this.canvas.parentElement.style.background = `url(${cloudTexture(this.theme)}) center / 720px 720px repeat, rgb(${this.theme.fogB})`;
     this.styleOf = this.st = null;
     this.bkey = this.okey = null;
     this.size = 0;   // forces resize() to rebuild every cached layer for the new map
@@ -236,6 +280,14 @@ export class MapView {
       const tc = this.segTheme && ids[c] >= 0 ? this.segTheme[ids[c]] : t;   // this cell's climate
       let col = mix(tc.groundA, tc.groundB, n);
       if (near && near[c]) col = mix(col, nearType[c] === 1 ? tc.shore : tc.scree, 0.5 * (1 - (near[c] - 1) / 10) ** 1.5);
+      // terrain traits are visible in the ground: forest floor is darker and mottled, highland is
+      // stony scree with grass patches, lakeside has a wide sandy shore
+      const tr = ids[c] >= 0 ? segs[ids[c]].trait : null;
+      if (tr === 'forest') col = mix(col, tc.treeDark, 0.18 + 0.14 * vnoise(x / (5 * this.k), y / (5 * this.k), seed + 3));
+      else if (tr === 'highland') {
+        const patch = vnoise(x / (9 * this.k), y / (9 * this.k), seed + 4);
+        col = mix(col, mix(tc.scree, tc.rockLight, vnoise(x / (3 * this.k), y / (3 * this.k), seed + 5) * 0.6), 0.25 + 0.4 * (patch > 0.45 ? 1 : patch / 0.45));
+      } else if (tr === 'lakeside' && near[c] && nearType[c] === 1) col = mix(col, tc.shore, 0.35 * (1 - near[c] / 11));
       gi.data[o] = col[0]; gi.data[o + 1] = col[1]; gi.data[o + 2] = col[2]; gi.data[o + 3] = 255;
     }
     this.groundC.getContext('2d').putImageData(gi, 0, 0);
@@ -285,7 +337,7 @@ export class MapView {
 
   // tree clusters inside segments, away from borders and number labels
   placeTrees() {
-    const { ids, bdist, grid: g, segs } = this.map, t = this.theme, k = this.k;
+    const { ids, bdist, grid: g, segs, near, nearType } = this.map, t = this.theme, k = this.k;
     this.trees = [];
     if (!bdist || !t.trees) return;
     const clear = 26 * k;   // keep label areas free
@@ -303,8 +355,8 @@ export class MapView {
     for (let n = 0, tries = 0; n < clusters && tries < clusters * 30; tries++) {
       const cx = hash(i++, 1, this.seed) * g, cy = hash(i++, 2, this.seed) * g;
       if (!ok(cx, cy)) continue;
-      // forest tiles get the woods; elsewhere only the odd copse
-      if (segs[ids[Math.floor(cy) * g + Math.floor(cx)]].trait !== 'forest' && hash(i++, 7, this.seed) < 0.8) continue;
+      // forest tiles are filled separately below; elsewhere only the odd copse
+      if (segs[ids[Math.floor(cy) * g + Math.floor(cx)]].trait === 'forest' || hash(i++, 7, this.seed) < 0.88) continue;
       n++;
       // a cluster = a small wood: 6-17 trees packed together
       const count = 6 + Math.floor(hash(i++, 3, this.seed) * 12);
@@ -312,6 +364,40 @@ export class MapView {
         const a = hash(i++, 4, this.seed) * Math.PI * 2, d = Math.sqrt(hash(i++, 5, this.seed)) * 14 * k * Math.max(0.5, dt);
         const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
         if (ok(x, y)) this.trees.push({ x, y, r: (3.4 + hash(i++, 6, this.seed) * 2.2) * k * Math.max(0.45, dt), seg: ids[Math.floor(y) * g + Math.floor(x)] });
+      }
+    }
+    // forest tiles: woodland over the whole tile (jittered grid, a few clearings)
+    const sp = 6.5 * k * Math.max(0.5, dt), rock = 12 * k * Math.max(0.5, dt);
+    const segAt = (x, y) => segs[ids[Math.floor(y) * g + Math.floor(x)]];
+    for (let gy = sp / 2; gy < g; gy += sp * 0.8) {
+      for (let gx = sp / 2; gx < g; gx += sp) {
+        const x = gx + (hash(i++, 8, this.seed) - 0.5) * sp, y = gy + (hash(i++, 9, this.seed) - 0.5) * sp * 0.8;
+        if (!ok(x, y) || segAt(x, y).trait !== 'forest') continue;
+        if (vnoise(x / (14 * k), y / (14 * k), this.seed + 6) < 0.28) continue;   // clearing
+        this.trees.push({ x, y, r: (3 + hash(i++, 6, this.seed) * 2) * k * Math.max(0.45, dt), seg: segAt(x, y).id });
+      }
+    }
+    // highland tiles: scattered low-poly boulders
+    for (let gy = rock / 2; gy < g; gy += rock * 0.8) {
+      for (let gx = rock / 2; gx < g; gx += rock) {
+        const x = gx + (hash(i++, 10, this.seed) - 0.5) * rock, y = gy + (hash(i++, 11, this.seed) - 0.5) * rock * 0.8;
+        if (!ok(x, y) || segAt(x, y).trait !== 'highland' || hash(i++, 12, this.seed) < 0.35) continue;
+        this.trees.push({ kind: 'rock', x, y, r: (1.6 + hash(i++, 13, this.seed) * 2) * k * Math.max(0.5, dt), seg: segAt(x, y).id, a: hash(i++, 14, this.seed) });
+      }
+    }
+    // reeds: lakeside tiles along the shore, river tiles along the banks
+    const reedOk = (x, y) => { const c = Math.floor(y) * g + Math.floor(x); return x >= 0 && y >= 0 && x < g && y < g && ids[c] >= 0 && bdist[c] >= 2 * k; };
+    const rr = 2 * k * Math.max(0.6, dt);
+    if (near) for (let c = 0; c < g * g; c += 3) {
+      if (ids[c] < 0 || segs[ids[c]].trait !== 'lakeside' || near[c] !== 1 || nearType[c] !== 1 || hash(c, 15, this.seed) < 0.75) continue;
+      const x = (c % g) + 0.5, y = Math.floor(c / g) + 0.5;
+      if (reedOk(x, y)) this.trees.push({ kind: 'reed', x, y, r: rr, seg: ids[c] });
+    }
+    for (const pts of this.map.rivers ?? []) {
+      for (const [j, [rx, ry]] of pts.entries()) {
+        if (j % 2 || hash(j, 16, rx | 0) < 0.4) continue;
+        const side = hash(j, 17, ry | 0) < 0.5 ? -1 : 1, x = rx + side * 4.5 * k, y = ry + (hash(j, 18, rx | 0) - 0.5) * 3 * k;
+        if (reedOk(x, y) && segAt(x, y).trait === 'river') this.trees.push({ kind: 'reed', x, y, r: rr, seg: segAt(x, y).id });
       }
     }
     this.trees.sort((a, b) => a.y - b.y);   // draw back to front
@@ -369,18 +455,30 @@ export class MapView {
       x.fill(this.islandP, 'evenodd');
       x.restore();
     }
-    // mist banks around the island and mist along the cliff foot
-    x.save();
-    x.filter = `blur(${this.size * 0.03 * this.dpr}px)`;
-    const fogc = shade(t.fogA, 0.4);
-    for (let i = 0; i < 26; i++) {
-      const a = hash(i, 31, this.seed) * Math.PI * 2, rr = g * (0.42 + hash(i, 32, this.seed) * 0.14);
+    // cloud banks around the island: puffs with a blue-grey underside, a soft body and a bright
+    // top-left rim (light from above), like the cloud texture behind them
+    // (puffs go on a scratch layer without blur, which is then blurred once: a blur filter per
+    // fill would cost hundreds of full-layer blurs)
+    const [pc, pcx] = this.newLayer();
+    const fogc = shade(t.fogA, 0.4), cl = cloudColors(t);
+    for (let i = 0; i < 22; i++) {
+      const a = hash(i, 31, this.seed) * Math.PI * 2, rr = g * (0.44 + hash(i, 32, this.seed) * 0.12);
       const fx = g / 2 + Math.cos(a) * rr, fy = g / 2 + Math.sin(a) * rr + ch;
-      x.fillStyle = css(fogc, 0.45 + hash(i, 33, this.seed) * 0.35);
-      x.beginPath();
-      x.ellipse(fx, fy, g * (0.06 + hash(i, 34, this.seed) * 0.07), g * (0.03 + hash(i, 35, this.seed) * 0.03), 0, 0, Math.PI * 2);
-      x.fill();
+      const puffs = [];
+      for (let j = 0; j < 6; j++) {
+        const pr = g * (0.025 + hash(i * 7 + j, 36, this.seed) * 0.03);
+        puffs.push([fx + (hash(i * 7 + j, 37, this.seed) - 0.5) * g * 0.13, fy + (hash(i * 7 + j, 38, this.seed) - 0.5) * g * 0.04, pr]);
+      }
+      for (const [col, dx, dy, sc, al] of [[cl.dark, 0, 0.35, 1, 0.55], [cl.mid, 0, 0.1, 0.95, 0.85], [cl.light, -0.18, -0.22, 0.7, 0.9]]) {
+        pcx.fillStyle = css(col, al);
+        for (const [px0, py0, pr] of puffs) { pcx.beginPath(); pcx.ellipse(px0 + dx * pr, py0 + dy * pr, pr * sc, pr * sc * 0.62, 0, 0, Math.PI * 2); pcx.fill(); }
+      }
     }
+    x.save();
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.filter = `blur(${this.size * 0.014 * this.dpr}px)`;
+    x.drawImage(pc, 0, 0);
+    this.gridT(x);
     x.filter = `blur(${this.size * 0.012 * this.dpr}px)`;
     x.translate(0, ch * 1.4);
     x.lineWidth = g * 0.025;
@@ -500,19 +598,19 @@ export class MapView {
 
   // rivers (visual only): smoothed polylines, drawn in pieces so they widen toward the mouth
   drawRivers(x, px) {
-    // river blue (icy in winter), independent of the fog colour
-    const t = this.theme, water = t.groundA[0] > 215 ? [128, 168, 196] : [84, 142, 190], dt = this.map.detail ?? 1;
+    // same water as the lakes: lake colour, foam rim along the banks, light ripple in the middle
+    const t = this.theme, water = shade(hexToRgb(t.sea), -0.08), dt = this.map.detail ?? 1;
     x.lineCap = 'round';
     x.lineJoin = 'round';
     for (const raw of this.map.rivers ?? []) {
       const pts = chaikin(chaikin(raw)).slice(2, -2);   // open line: drop the wrap-around corner
       const pieces = 6, len = pts.length;
-      for (const [col, extra] of [[t.shore, 1.6], [water, 0]]) {
-        x.strokeStyle = css(col, extra ? 0.7 : 0.95);
+      for (const [col, extra, alpha, thin] of [[t.shore, 3.2, 0.55, 1], [t.foam, 1.8, 0.9, 1], [water, 0, 1, 1], [t.seaLight, 0, 0.55, 0.3]]) {
+        x.strokeStyle = css(col, alpha);
         for (let k = 0; k < pieces; k++) {
           const a = Math.floor((k / pieces) * len), b = Math.min(len - 1, Math.floor(((k + 1) / pieces) * len) + 1);
           if (b - a < 2) continue;
-          x.lineWidth = ((1.3 + 3.6 * ((k + 1) / pieces)) * (0.6 + 0.4 * dt) + extra) * Math.max(1, this.size / 700) * px;
+          x.lineWidth = ((1.8 + 4.6 * ((k + 1) / pieces)) * (0.6 + 0.4 * dt) * thin + extra) * Math.max(1, this.size / 700) * px;
           x.beginPath();
           x.moveTo(pts[a][0], pts[a][1]);
           for (let i = a + 1; i <= b; i++) x.lineTo(pts[i][0], pts[i][1]);
@@ -613,6 +711,29 @@ export class MapView {
     for (const tr of this.trees) {
       if (tr.seg !== id) continue;
       const px = this.sx(tr.x), py = this.sy(tr.y), r = Math.max(1.6, tr.r * sc);
+      if (tr.kind === 'rock') {
+        // low-poly boulder: lit top-left face, shaded right face, small shadow
+        const w = r * (1 + tr.a * 0.5), h = r * 0.9;
+        x.fillStyle = 'rgba(20,30,30,0.2)';
+        x.beginPath(); x.ellipse(px + w * 0.25, py + h * 0.1, w * 1.05, h * 0.38, 0, 0, Math.PI * 2); x.fill();
+        x.fillStyle = css(t.rockLight);
+        x.beginPath(); x.moveTo(px - w, py); x.lineTo(px - w * 0.55, py - h); x.lineTo(px + w * (0.1 + tr.a * 0.3), py - h * 1.15); x.lineTo(px + w * 0.2, py); x.fill();
+        x.fillStyle = css(t.rockDark);
+        x.beginPath(); x.moveTo(px + w * 0.2, py); x.lineTo(px + w * (0.1 + tr.a * 0.3), py - h * 1.15); x.lineTo(px + w * 0.75, py - h * 0.55); x.lineTo(px + w * 0.9, py); x.fill();
+        continue;
+      }
+      if (tr.kind === 'reed') {
+        // reed clump: a few thin blades with dark seed heads
+        x.lineCap = 'round';
+        x.lineWidth = Math.max(0.6, r * 0.16);
+        for (let j = -2; j <= 2; j++) {
+          const tx = px + j * r * 0.44, ty = py - r * (1.3 + ((j + 3) % 3) * 0.3);
+          x.strokeStyle = css(j % 2 ? t.treeLight : mix(t.treeLight, t.shore, 0.35));
+          x.beginPath(); x.moveTo(px + j * r * 0.18, py); x.lineTo(tx, ty); x.stroke();
+          if (j % 2 === 0) { x.fillStyle = css([110, 84, 58]); x.fillRect(tx - r * 0.1, ty - r * 0.15, r * 0.2, r * 0.45); }
+        }
+        continue;
+      }
       x.fillStyle = 'rgba(20,30,30,0.22)';
       x.beginPath(); x.ellipse(px + r * 0.45, py + r * 0.3, r * 1.05, r * 0.5, 0, 0, Math.PI * 2); x.fill();
       const tw = Math.max(1, r * 0.28);

@@ -1,10 +1,10 @@
 // battle simulation: segments, troops, buildings, armies. no drawing here,
 // so the same code runs in the browser and in headless tests.
-import { rules, buildings, effects, traits, relicGarrison } from './config.js?v=21';
-import { perks, combineMods } from './expedition.js?v=21';
-import { hops } from './mapgen.js?v=21';
-import { rng, spreadStarts } from './mapgen.js?v=21';
-import { think } from './ai.js?v=21';
+import { rules, buildings, effects, traits, relicGarrison } from './config.js?v=22';
+import { perks, combineMods } from './expedition.js?v=22';
+import { hops } from './mapgen.js?v=22';
+import { rng, spreadStarts, equalizeStarts } from './mapgen.js?v=22';
+import { think } from './ai.js?v=22';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
@@ -35,6 +35,11 @@ export class Battle {
     // segments: cap from size (largest = capMax), growth = growthRate x cap,
     // neutral garrison = a random share of the cap (bigger tiles hold more)
     const [nmin, nmax] = opts.neutral ?? [0.15, 0.35];
+    // fair start: pick the starting tiles first and reshape them to the same size, so every
+    // side begins with the same cap and growth (the expedition capital keeps its stamped shape)
+    const first = this.factions[0].capital && map.stampSeg >= 0 ? map.stampSeg : -1;
+    const startIds = spreadStarts(map, this.factions.length, this.rand, first);
+    if (opts.equalStarts !== false) equalizeStarts(map, startIds, first);
     const maxArea = Math.max(...map.segs.map((s) => s.area));
     this.segs = map.segs.map((s) => {
       const cap = Math.round((rules.capMax * s.area) / maxArea / 5) * 5;
@@ -42,11 +47,11 @@ export class Battle {
       return { ...s, owner: -1, troops: garrison, garrison, cap, baseGrowth: round1(cap * rules.growthRate), building: null };
     });
     // expedition: the player's capital is the stamped segment (previous island's shape)
-    const first = this.factions[0].capital && map.stampSeg >= 0 ? map.stampSeg : -1;
-    spreadStarts(map, this.factions.length, this.rand, first).forEach((sid, f) => {
+    startIds.forEach((sid, f) => {
       const s = this.segs[sid], fac = this.factions[f];
       s.owner = f;
       s.troops = rules.startTroops;
+      s.home = true;   // starting tile: drawn with a single house until something is built
       if (fac.capital) {
         // capital: full at the start, the rest waits in the reserve
         s.capital = true;
@@ -67,6 +72,18 @@ export class Battle {
       const s = pool.splice(Math.floor(this.rand() * pool.length), 1)[0];
       s.relic = perks[Math.floor(this.rand() * perks.length)].id;
       s.garrison = s.troops = Math.min(s.cap, Math.round(s.troops * relicGarrison));
+    }
+    // expedition: stronger neutrals (scaled to the player) and fortified camps on the biggest
+    // open tiles (not forest / highland, so their look stays); camp = number of houses 1-3
+    if (opts.camps) {
+      const { mult, share, boost } = opts.camps, neutrals = this.segs.filter((s) => s.owner < 0);
+      for (const s of neutrals) s.garrison = s.troops = Math.round(s.troops * mult);
+      const open = neutrals.filter((s) => !s.relic && s.trait !== 'forest' && s.trait !== 'highland').sort((a, b) => b.cap - a.cap);
+      const want = Math.round(neutrals.length * share);
+      open.slice(0, want).forEach((s, i) => {
+        s.garrison = s.troops = Math.round(s.troops * boost);
+        s.camp = 3 - Math.floor((i / Math.max(1, want)) * 3);
+      });
     }
     this.updateGrowth();
   }
@@ -166,6 +183,41 @@ export class Battle {
     this.events.push({ type: 'fight', owner: a.owner, prev: t.owner, size: Math.min(A, D) });
   }
 
+  // enemy armies on the same road in opposite directions meet halfway and fight there
+  // (instead of passing through each other and both taking a tile); fights at a border count too
+  meet() {
+    for (const a of this.armies) {
+      if (a.done || a.clash) continue;
+      for (const b of this.armies) {
+        if (b === a || b.done || b.clash || b.owner === a.owner || b.from !== a.to || b.to !== a.from || a.t + b.t < 1) continue;
+        const A = a.n * a.atk, B = b.n * b.atk;
+        const dur = Math.min(rules.fightMax, rules.fightMin + (rules.fightMax - rules.fightMin) * Math.min(1, Math.min(A, B) / rules.fightScale));
+        const k = Math.max(1, Math.min(A, B) / dur);
+        a.clash = { with: b, k };
+        b.clash = { with: a, k };
+        this.events.push({ type: 'fight', owner: a.owner, prev: b.owner, size: Math.min(A, B) });
+        break;
+      }
+    }
+  }
+
+  // one step of a clash between two armies: equal strength loss on both sides, like fightStep;
+  // the survivor marches on (or resumes its border fight)
+  clashStep(a, dt) {
+    const b = a.clash.with;
+    if (a.done) return;
+    if (b.done) { a.clash = null; return; }
+    if (a.clash.stepped === this.time) return;   // the pair is resolved once per step
+    a.clash.stepped = b.clash.stepped = this.time;
+    const d = Math.min(a.clash.k * dt, a.n * a.atk, b.n * b.atk);
+    a.n -= d / a.atk;
+    b.n -= d / b.atk;
+    for (const [me, foe] of [[a, b], [b, a]]) if (me.owner === 0) { this.stats.deaths += d / me.atk; this.stats.killed += d / foe.atk; }
+    for (const [me, foe] of [[a, b], [b, a]]) {
+      if (me.n <= 1e-6) { me.done = true; foe.clash = null; }
+    }
+  }
+
   // one step of a running fight
   fightStep(a, dt) {
     const t = this.segs[a.to];
@@ -245,7 +297,9 @@ export class Battle {
       s.troops += flow;
       f.reserve -= flow;
     }
+    this.meet();
     for (const a of this.armies) {
+      if (a.clash) { this.clashStep(a, dt); continue; }
       if (a.fight) { this.fightStep(a, dt); continue; }
       a.t = Math.min(a.stopAt, a.t + dt / a.dur);
       if (a.t >= a.stopAt) this.arrive(a);

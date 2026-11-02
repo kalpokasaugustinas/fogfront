@@ -139,7 +139,10 @@ try:
 
             # start that region's battle, then play: select own segment, attack a neighbour
             page.click("#attack-btn")
-            page.wait_for_timeout(400)
+            page.wait_for_timeout(1200)
+            page.screenshot(path=str(out / f"{name}-countdown.png"))   # 3-2-1 overlay
+            page.evaluate("__fl.skipCountdown()")
+            page.wait_for_timeout(200)
             b = page.evaluate("""(() => { const b = __fl.battle; const me = b.segs.find(s => s.owner === 0);
                 return { me: me.id, x: me.x, y: me.y, target: b.segs[me.adj[0]] }; })()""")
             box = page.locator("#battle-canvas").bounding_box()

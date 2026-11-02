@@ -7,18 +7,21 @@
 //   - pick 1 of 3 perks
 // bots scale with you: base troops + 70% of your carried people, and capitals with the same
 // total bonus strength in a random mix. losing a stage ends the run.
-import { effects } from './config.js?v=21';
-import { personalities } from './ai.js?v=21';
-import { rng } from './mapgen.js?v=21';
+import { effects } from './config.js?v=22';
+import { personalities } from './ai.js?v=22';
+import { rng } from './mapgen.js?v=22';
 
 export const stages = [
-  { name: 'Valley', detail: 1, area: '5 km²', cells: 12, bots: 1, shape: 'random', neutral: [0.12, 0.3] },
-  { name: 'Region', detail: 0.75, area: '800 km²', cells: 16, bots: 2, shape: 'random', neutral: [0.18, 0.38] },
-  { name: 'Country', detail: 0.55, area: '90,000 km²', cells: 20, bots: 3, shape: 'random', neutral: [0.24, 0.46] },
-  { name: 'Continent', detail: 0.42, area: '10 million km²', cells: 26, bots: 3, shape: 'world', neutral: [0.3, 0.55] },
-  { name: 'World', detail: 0.32, area: '510 million km²', cells: 34, bots: 4, shape: 'world', neutral: [0.36, 0.64] },
+  { name: 'Valley', detail: 1, cells: 12, bots: 1, shape: 'random', neutral: [0.12, 0.3] },
+  { name: 'Region', detail: 0.75, cells: 16, bots: 2, shape: 'random', neutral: [0.18, 0.38] },
+  { name: 'Country', detail: 0.55, cells: 20, bots: 3, shape: 'random', neutral: [0.24, 0.46] },
+  { name: 'Continent', detail: 0.42, cells: 26, bots: 3, shape: 'world', neutral: [0.3, 0.55] },
+  { name: 'World', detail: 0.32, cells: 34, bots: 4, shape: 'world', neutral: [0.36, 0.64] },
 ];
 
+// neutral scaling in stages 2-5: garrison x sqrt(carried troops / campBase), at most campMax;
+// campShare of the neutral tiles (biggest first) are camps with a further x campBoost
+export const campBase = 150, campMax = 4, campShare = 0.3, campBoost = 1.5;
 export const botCarry = 0.7;   // share of the player's carried people each bot starts with
 
 // perks: mods are multipliers unless noted (capitalDef, loot are added; fort replaces x1.5)
@@ -87,6 +90,9 @@ export class Expedition {
       neutral: st.neutral,
       detail: st.detail,
       stamp: this.shape,   // previous island outline -> shape of the new capital
+      // from stage 2 on, neutrals scale with the troops the player carries (so every stage is a
+      // similar fight), and the strongest neutral tiles become fortified camps (drawn as hamlets)
+      camps: this.capital ? { mult: Math.min(campMax, Math.max(1, Math.sqrt(carried / campBase))), share: campShare, boost: campBoost } : undefined,
       factions: [{ ai: false, color: 0, mods: this.mods(), capital: this.capital ?? undefined }, ...bots],
     };
   }

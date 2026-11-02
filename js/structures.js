@@ -156,6 +156,25 @@ export function ground(v, x, id, type, owner) {
       const a = rnd(i, 21, seed) * Math.PI * 2, d = Math.sqrt(rnd(i, 22, seed));
       x.fillRect(p[0] + Math.cos(a) * d * u * 6.5, p[1] - u * 0.4 + Math.sin(a) * d * u * 3.6, u * 0.5, u * 0.3);
     }
+  } else if (type.startsWith('camp')) {
+    // zoomed-out maps: smaller hamlets, so they don't crowd the tile
+    ((u) => {
+      // neutral camp: trampled ground under the hamlet
+      const [p] = v.spots(id, 1, 0);
+      if (!p) return;
+      const r = 3.5 + Number(type.slice(4)) * 1.2;
+      x.fillStyle = css(snow ? [220, 218, 214] : [178, 160, 122], 0.7);
+      x.beginPath(); x.ellipse(p[0], p[1] - u * 0.5, u * r, u * r * 0.58, 0, 0, Math.PI * 2); x.fill();
+    })(u * Math.max(0.55, v.map.detail ?? 1));
+  } else if (type === 'home') {
+    // starting tile: a small dirt yard and a path around the single house
+    const [p] = v.spots(id, 1, 0);
+    if (!p) { x.restore(); return; }
+    x.fillStyle = css(snow ? [222, 220, 216] : [196, 176, 134], 0.8);
+    x.beginPath(); x.ellipse(p[0], p[1] - u * 0.3, u * 3.4, u * 1.9, 0, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = css(snow ? [214, 210, 204] : [190, 168, 126], 0.8);
+    x.lineWidth = u * 0.45;
+    x.beginPath(); x.moveTo(p[0] - u * 0.2, p[1] + u * 1.4); x.quadraticCurveTo(p[0] - u * 2, p[1] + u * 3.5, p[0] - u * 4.5, p[1] + u * 4.2); x.stroke();
   } else if (type === 'relic') {
     // glowing ring of standing stones on the ground
     const [p] = v.spots(id, 1, 0);
@@ -190,31 +209,44 @@ export function top(v, x, id, type, owner) {
       x.beginPath(); x.arc(px + u * 2.4, py - u * 0.4, u * 0.6, Math.PI, 0); x.fill();
     }
   } else if (type === 'fort') {
-    // stone wall along the segment edge with round towers, keep in the middle
+    // tall stone wall along the segment edge: the wall band is stacked upward (like the cliffs) so
+    // the edges facing the camera show a high stone face, then the walkway and merlons on top;
+    // round towers stand along it, keep in the middle
+    const p = v.segP[id], wpx = (u * 0.9) / v.scale, wallH = u * 3, gy = 1 / (v.scale * v.tilt);   // css px -> grid y
     x.save();
     v.gridT(x);
-    x.clip(v.segP[id]);
-    const wpx = (u * 0.9) / v.scale;
     x.lineJoin = 'round';
-    x.lineWidth = wpx * 2.6;
-    x.strokeStyle = css(stoneDark);
-    x.stroke(v.segP[id]);
+    x.save(); x.clip(p); x.lineWidth = wpx * 3.4; x.strokeStyle = 'rgba(20,30,30,0.22)'; x.stroke(p); x.restore();   // foot shadow
+    for (let h = 0; h <= wallH; h += 0.5) {
+      x.save();
+      x.translate(0, -h * gy);
+      x.clip(p);
+      x.lineWidth = wpx * 2.4;
+      x.strokeStyle = css(h < wallH * 0.2 ? dk(stoneDark, 0.12) : (Math.round(h / (u * 0.75)) % 2 ? stoneDark : dk(stoneDark, 0.06)));   // stone courses
+      x.stroke(p);
+      x.restore();
+    }
+    x.translate(0, -wallH * gy);
+    x.clip(p);
     x.lineWidth = wpx * 2;
     x.strokeStyle = css(stone);
-    x.stroke(v.segP[id]);
+    x.stroke(p);
     x.setLineDash([wpx * 0.7, wpx * 0.7]);
     x.lineWidth = wpx * 0.8;
     x.strokeStyle = css(lt(stone, 0.35));
-    x.stroke(v.segP[id]);
+    x.stroke(p);
     x.restore();
     for (const [px, py] of v.edgeSpots(id, u * 9)) {
-      shadow(x, px + u * 0.5, py + u * 0.2, u * 1.1, u * 0.45);
+      const th = wallH + u * 1.6;
+      shadow(x, px + u * 0.5, py + u * 0.2, u * 1.2, u * 0.45);
       x.fillStyle = css(stoneDark);
-      x.fillRect(px - u * 0.9, py - u * 2.2, u * 1.8, u * 2.2);
+      x.fillRect(px - u * 1, py - th, u * 2, th);
       x.fillStyle = css(stone);
-      x.fillRect(px - u * 0.9, py - u * 2.2, u * 1.1, u * 2.2);
+      x.fillRect(px - u * 1, py - th, u * 1.2, th);
       x.fillStyle = css(lt(stone, 0.2));
-      x.beginPath(); x.ellipse(px, py - u * 2.2, u * 0.9, u * 0.4, 0, 0, Math.PI * 2); x.fill();
+      x.beginPath(); x.ellipse(px, py - th, u * 1, u * 0.45, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = css(dk(stoneDark, 0.3));
+      x.fillRect(px - u * 0.15, py - th + u * 0.9, u * 0.3, u * 0.6);   // arrow slit
     }
     const [k] = v.spots(id, 1, 0);
     if (!k) { x.restore(); return; }
@@ -259,6 +291,52 @@ export function top(v, x, id, type, owner) {
     tower(x, c[0] - u * 2.2, c[1] + u * 0.3, u, 1.5, 3.6);
     tower(x, c[0] + u * 2.2, c[1] + u * 0.3, u, 1.5, 3.6);
     flag(x, c[0], ty, u * 1.5, col);
+  } else if (type.startsWith('camp')) {
+    // zoomed-out maps: smaller hamlets, so they don't crowd the tile
+    ((u) => {
+      // neutral camp: 2-4 houses (more = stronger garrison) behind a ring of palisade stakes,
+      // with a watch fire; roofs turn to the owner's colour once someone takes it
+      const lv = Number(type.slice(4)), [p] = v.spots(id, 1, 0);
+      if (!p) return;
+      const r = 3.5 + lv * 1.2, roofs = owner ? [col, dk(col, 0.25)] : [[124, 104, 86], [150, 120, 84], [112, 112, 118]];
+      const homes = [];
+      for (let i = 0; i <= lv; i++) {
+        const a = (i / (lv + 1)) * Math.PI * 2 + rnd(i, 41, seed) * 0.8;
+        homes.push([p[0] + Math.cos(a) * u * r * 0.45, p[1] - u * 0.5 + Math.sin(a) * u * r * 0.26]);
+      }
+      homes.sort((a, b) => a[1] - b[1]);
+      const stakes = (from, to) => {
+        for (let i = from; i < to; i++) {
+          const a = (i / 22) * Math.PI * 2, sx = p[0] + Math.cos(a) * u * r * 0.95, sy = p[1] - u * 0.5 + Math.sin(a) * u * r * 0.55;
+          x.fillStyle = css(i % 2 ? [128, 98, 66] : [150, 116, 78]);
+          x.fillRect(sx - u * 0.18, sy - u * 1.1, u * 0.36, u * 1.1);
+        }
+      };
+      stakes(11, 22);   // back half of the palisade first, front half after the houses
+      for (const [i, h] of homes.entries()) house(x, h[0], h[1], u * 0.95, wallWhite, roofs[i % roofs.length]);
+      x.fillStyle = 'rgba(255, 170, 70, 0.35)';
+      x.beginPath(); x.arc(p[0], p[1] - u * 0.6, u * 1, 0, Math.PI * 2); x.fill();
+      x.fillStyle = css([240, 150, 60]);
+      x.beginPath(); x.moveTo(p[0] - u * 0.35, p[1] - u * 0.3); x.lineTo(p[0], p[1] - u * 1.3); x.lineTo(p[0] + u * 0.35, p[1] - u * 0.3); x.fill();
+      stakes(0, 11);
+    })(u * Math.max(0.55, v.map.detail ?? 1));
+  } else if (type === 'home') {
+    // starting tile: one house with a roof in the owner's colour, a little fence and a tree
+    const [p] = v.spots(id, 1, 0);
+    if (!p) { x.restore(); return; }
+    x.strokeStyle = css([150, 120, 86]);
+    x.lineWidth = Math.max(0.6, u * 0.16);
+    for (let i = 0; i < 6; i++) {
+      const fx = p[0] - u * 3 + i * u * 0.6;
+      x.beginPath(); x.moveTo(fx, p[1] + u * 0.6); x.lineTo(fx, p[1] - u * 0.2); x.stroke();
+    }
+    x.beginPath(); x.moveTo(p[0] - u * 3, p[1] + u * 0.2); x.lineTo(p[0] - u * 0.1, p[1] + u * 0.2); x.stroke();
+    house(x, p[0] + u * 0.6, p[1], u * 1.25, wallWhite, col);
+    shadow(x, p[0] + u * 3.6, p[1] - u * 0.1, u * 0.9, u * 0.35);
+    x.fillStyle = css([96, 72, 54]);
+    x.fillRect(p[0] + u * 3.15, p[1] - u * 1.1, u * 0.3, u * 1.1);
+    x.fillStyle = css([74, 112, 76]);
+    x.beginPath(); x.arc(p[0] + u * 3.3, p[1] - u * 1.6, u * 0.95, 0, Math.PI * 2); x.fill();
   } else if (type === 'relic') {
     // standing stones around a tall obelisk with a glowing gold gem
     const [p] = v.spots(id, 1, 0);
