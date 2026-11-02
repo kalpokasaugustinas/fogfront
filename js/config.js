@@ -6,19 +6,20 @@ export const rules = {
   armySpeed: 90,      // army travel speed in grid cells per second (scale with grid)
   startTroops: 25,    // troops in each faction's starting segment
   overCapDecay: 1,    // troops/s lost while a segment is above its cap
-  // segment size -> cap and growth (size ratio = area / average area, clamped)
-  capBase: 20, capPerSize: 40,          // avg segment: cap 60
+  // cap scales with segment area: the largest segment on the map holds capMax
+  capMax: 1000,
+  // growth from size ratio (area / average area, clamped)
   growthBase: 3, growthPerSize: 5,      // avg segment: 8 troops/s
 };
 
 // one building per segment; building costs troops taken from that segment.
 // a captured segment keeps its building (the new owner gets it).
 export const buildings = {
-  farm:     { name: 'Farm',     icon: '🌾', cost: 15, desc: '+100% growth in this segment' },
-  barracks: { name: 'Barracks', icon: '⚔️', cost: 20, desc: 'troops sent from here attack x1.5' },
-  fort:     { name: 'Fort',     icon: '🛡️', cost: 20, desc: 'defenders here count x1.5' },
-  hospital: { name: 'Hospital', icon: '➕', cost: 25, desc: '+50% growth in your adjacent segments' },
-  lab:      { name: 'Lab',      icon: '🔬', cost: 30, desc: '+10% growth in all your segments' },
+  farm:     { name: 'Farm',     icon: '🌾', cost: 75,  desc: '+100% growth in this segment' },
+  barracks: { name: 'Barracks', icon: '⚔️', cost: 100, desc: 'troops sent from here attack x1.5' },
+  fort:     { name: 'Fort',     icon: '🛡️', cost: 100, desc: 'defenders here count x1.5' },
+  hospital: { name: 'Hospital', icon: '➕', cost: 125, desc: '+50% growth in your adjacent segments' },
+  lab:      { name: 'Lab',      icon: '🔬', cost: 150, desc: '+10% growth in all your segments' },
 };
 
 export const effects = {

@@ -6,7 +6,7 @@ Prototype stage.
 
 ## How it plays
 - **Campaign:** a world map of 16 regions held by 3 rival empires. Attack any region next to one you own. Difficulty grows with distance from home: more segments, more enemies, stronger neutrals, faster bots. Progress is saved in the browser.
-- **Battle:** each segment you own grows troops up to its cap. Bigger segments grow faster and hold more (avg: cap 60, +8/s).
+- **Battle:** each segment you own grows troops up to its cap. Cap scales with segment size: the largest segment on the map holds 1000. Bigger segments also grow faster (avg +8/s).
   - Tap your segment, then tap a neighbour to send the chosen % (25/50/75/100): attack an enemy/neutral, or move troops to your own. Tap the selected segment again to deselect.
   - Or drag from your segment to any neighbour.
   - Fight: attack = troops × attack bonus, defense = defenders × defense bonus. The higher number wins and keeps the difference.
@@ -16,11 +16,11 @@ Prototype stage.
 
 | Building | Cost | Effect |
 |---|---|---|
-| 🌾 Farm | 15 | +100% growth in this segment |
-| ⚔️ Barracks | 20 | troops sent from here attack x1.5 |
-| 🛡️ Fort | 20 | defenders here count x1.5 |
-| ➕ Hospital | 25 | +50% growth in your adjacent segments |
-| 🔬 Lab | 30 | +10% growth in all your segments |
+| 🌾 Farm | 75 | +100% growth in this segment |
+| ⚔️ Barracks | 100 | troops sent from here attack x1.5 |
+| 🛡️ Fort | 100 | defenders here count x1.5 |
+| ➕ Hospital | 125 | +50% growth in your adjacent segments |
+| 🔬 Lab | 150 | +10% growth in all your segments |
 
 - **Bots** have personalities (aggressive, builder, turtle). They pick targets by value per troop needed, build according to position (front line: fort or barracks; behind the front: farm, hospital or lab), and push troops from the back to the front.
 

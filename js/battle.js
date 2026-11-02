@@ -20,13 +20,14 @@ export class Battle {
 
     // segments: cap and base growth come from the segment's size
     const [nmin, nmax] = opts.neutral ?? [8, 30];
+    const maxArea = Math.max(...map.segs.map((s) => s.area));
     this.segs = map.segs.map((s) => {
       const size = Math.min(2, Math.max(0.4, s.area / map.avgArea));
       return {
         ...s,
         owner: -1,
         troops: Math.round(nmin + this.rand() * (nmax - nmin)),
-        cap: Math.round((rules.capBase + rules.capPerSize * size) / 5) * 5,
+        cap: Math.round((rules.capMax * s.area) / maxArea / 5) * 5,   // largest segment = capMax
         baseGrowth: round1(rules.growthBase + rules.growthPerSize * size),
         building: null,
       };
