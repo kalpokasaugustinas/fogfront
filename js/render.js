@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=24';
-import * as structures from './structures.js?v=24';
+import { themes } from './config.js?v=25';
+import * as structures from './structures.js?v=25';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -921,10 +921,10 @@ export class MapView {
   // segment under a screen point (-1 for sea)
   segAt(clientX, clientY) {
     // screen -> canvas css px (undoing any zoom transform), then -> grid
-    const r = this.canvas.getBoundingClientRect();
+    const r = pageRect(this.canvas), p = pagePoint(clientX, clientY);
     const g = this.map.grid;
-    const x = Math.floor(((clientX - r.left) * this.size) / r.width / this.scale);
-    const y = Math.floor((((clientY - r.top) * this.cssH) / r.height - this.oy) / (this.scale * this.tilt));
+    const x = Math.floor(((p.x - r.left) * this.size) / r.width / this.scale);
+    const y = Math.floor((((p.y - r.top) * this.cssH) / r.height - this.oy) / (this.scale * this.tilt));
     if (x < 0 || y < 0 || x >= g || y >= g) return -1;
     const id = this.map.ids[y * g + x];
     if (id >= 0) return id;
@@ -971,6 +971,19 @@ export function unitSprite(kind, color, z, dpr) {
   s = { c, w, h };
   unitCache.set(key, s);
   return s;
+}
+
+// ---------- page rotation ----------
+// phones held upright: the whole page is rotated 90 degrees by css (html.rotated) so the game is
+// always landscape. these helpers turn screen coordinates into page coordinates (and screen rects
+// into page rects), so input works the same either way
+const rotated = () => document.documentElement.classList.contains('rotated');
+export function pagePoint(clientX, clientY) {
+  return rotated() ? { x: clientY, y: window.innerWidth - clientX } : { x: clientX, y: clientY };
+}
+export function pageRect(el) {
+  const r = el.getBoundingClientRect();
+  return rotated() ? { left: r.top, top: window.innerWidth - r.right, width: r.height, height: r.width } : r;
 }
 
 // outlined text, readable on any colour

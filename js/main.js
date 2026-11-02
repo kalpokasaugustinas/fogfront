@@ -1,12 +1,12 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=24';
-import { generateMap, rng } from './mapgen.js?v=24';
-import { Battle } from './battle.js?v=24';
-import { personalities } from './ai.js?v=24';
-import { Campaign } from './campaign.js?v=24';
-import { Expedition, stages, perks } from './expedition.js?v=24';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=24';
-import { MapView, hexToRgb, shade, label, pill, unitSprite } from './render.js?v=24';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=25';
+import { generateMap, rng } from './mapgen.js?v=25';
+import { Battle } from './battle.js?v=25';
+import { personalities } from './ai.js?v=25';
+import { Campaign } from './campaign.js?v=25';
+import { Expedition, stages, perks } from './expedition.js?v=25';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=25';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=25';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -342,19 +342,19 @@ function drawCountdown(ctx) {
 // - drag from your segment to any neighbour = send troops
 function localPos(e) {
   // canvas css px, undoing the zoom transform
-  const r = bv.canvas.getBoundingClientRect();
-  return { x: ((e.clientX - r.left) * bv.size) / r.width, y: ((e.clientY - r.top) * bv.cssH) / r.height };
+  const r = pageRect(bv.canvas), p = pagePoint(e.clientX, e.clientY);
+  return { x: ((p.x - r.left) * bv.size) / r.width, y: ((p.y - r.top) * bv.cssH) / r.height };
 }
 
 // ---------- zoom + pan ----------
 // the map sits in #cam, which is scaled / moved with a css transform (cheap, no redraw). pinch or
-// mouse wheel zooms (1x-3x) around the fingers / cursor; one finger on empty ground pans. when
+// mouse wheel zooms (1x-5x) around the fingers / cursor; one finger on empty ground pans. when
 // zooming settles, the view re-renders at a higher resolution so it stays sharp
-const cam = { z: 1, x: 0, y: 0 }, pointers = new Map();
+const zoomMax = 5, cam = { z: 1, x: 0, y: 0 }, pointers = new Map();
 let pinch = null, pan = null, boostTimer = 0;
 function setCam(z, x, y) {
   const w = $('battle-wrap').clientWidth, h = $('battle-wrap').clientHeight;
-  cam.z = Math.min(3, Math.max(1, z));
+  cam.z = Math.min(zoomMax, Math.max(1, z));
   cam.x = Math.min(0, Math.max(w - w * cam.z, x));
   cam.y = Math.min(0, Math.max(h - h * cam.z, y));
   $('cam').style.transform = cam.z === 1 ? '' : `translate(${cam.x}px, ${cam.y}px) scale(${cam.z})`;
@@ -366,13 +366,13 @@ function setCam(z, x, y) {
 }
 // zoom to nz keeping the screen point (px, py) (relative to the map area) fixed
 function zoomAt(px, py, nz) {
-  nz = Math.min(3, Math.max(1, nz));
+  nz = Math.min(zoomMax, Math.max(1, nz));
   const wx = (px - cam.x) / cam.z, wy = (py - cam.y) / cam.z;
   setCam(nz, px - wx * nz, py - wy * nz);
 }
 function wrapPos(e) {
-  const r = $('battle-wrap').getBoundingClientRect();
-  return { x: e.clientX - r.left, y: e.clientY - r.top };
+  const r = pageRect($('battle-wrap')), p = pagePoint(e.clientX, e.clientY);
+  return { x: p.x - r.left, y: p.y - r.top };
 }
 $('battle-wrap').addEventListener('wheel', (e) => {
   e.preventDefault();
@@ -406,7 +406,7 @@ $('battle-canvas').addEventListener('pointermove', (e) => {
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, wrapPos(e));
   if (pinch && pointers.size === 2) {
     // keep the map point under the pinch centre under the fingers while scaling
-    const p = pinchInfo(), nz = Math.min(3, Math.max(1, pinch.z0 * (p.d / Math.max(1, pinch.d))));
+    const p = pinchInfo(), nz = Math.min(zoomMax, Math.max(1, pinch.z0 * (p.d / Math.max(1, pinch.d))));
     const wx = (pinch.x - pinch.x0) / pinch.z0, wy = (pinch.y - pinch.y0) / pinch.z0;
     setCam(nz, p.x - wx * nz, p.y - wy * nz);
     return;
@@ -509,6 +509,10 @@ function renderWheel() {
   });
   svg += `<circle class="rim" r="${R}"/><circle class="rim inner" r="${r0}"/></svg>`;
   box.innerHTML = svg;
+  // small screens (phone landscape): shrink the wheel to fit around the tile
+  const k = Math.max(0.62, Math.min(1, $('battle-wrap').clientHeight / 560));
+  box.firstElementChild.style.setProperty('--k', k);
+  box.firstElementChild.style.transformOrigin = `${R + 8}px ${R + 8}px`;
   for (const g of box.querySelectorAll('.sector')) {
     g.addEventListener('pointerdown', (e) => e.stopPropagation());
     g.addEventListener('click', () => {
@@ -523,7 +527,7 @@ function updateWheel() {
   if (wheelFor < 0) return;
   const s = battle.segs[wheelFor];
   for (const g of $('wheel').querySelectorAll('.sector')) g.classList.toggle('off', s.troops < battle.costOf(0, g.dataset.type));
-  const r = bv.canvas.getBoundingClientRect(), wr = $('battle-wrap').getBoundingClientRect();
+  const r = pageRect(bv.canvas), wr = pageRect($('battle-wrap'));
   const left = Math.round(r.left - wr.left + (bv.sx(s.x) * r.width) / bv.size), top = Math.round(r.top - wr.top + (bv.sy(s.y) * r.height) / bv.cssH);
   const pos = `${left}px,${top}px`;
   if (pos !== wheelPos) { wheelPos = pos; $('wheel').style.transform = `translate(${pos})`; }
@@ -532,7 +536,7 @@ function updateWheel() {
 // capital: nothing can be built; its carried-over bonuses
 function capitalInfo(s) {
   const b = s.bonus, pc = (v) => `+${Math.round(v * 100)}%`;
-  return `<br>Bonuses: ${pc(b.growth)} growth here · ${pc(b.hosp)} in neighbours · ${pc(b.lab)} everywhere · defense ${pc(b.def)} · attack ${pc(b.atk)}`;
+  return `Bonuses: ${pc(b.growth)} growth here · ${pc(b.hosp)} in neighbours · ${pc(b.lab)} everywhere · defense ${pc(b.def)} · attack ${pc(b.atk)}`;
 }
 
 function updatePanel() {
@@ -542,8 +546,19 @@ function updatePanel() {
     const s = battle.segs[sid], who = s.owner < 0 ? 'Neutral' : factionNames[battle.factions[s.owner].color];
     const mult = [s.building === 'fort' && `🛡️ defense x${effects.fortDefense}`, s.building === 'barracks' && `⚔️ attack x${effects.barracksAttack}`].filter(Boolean).join(' · ');
     const col = s.owner < 0 ? neutralColor : factionColors[battle.factions[s.owner].color];
-    $('seg-info').innerHTML = `<b style="color:${col}">${who}</b>
-      ${s.trait ? `· ${traits[s.trait].name} (${traits[s.trait].desc}) ` : ''}${s.relic ? `· ✨ Relic: ${perks.find((p) => p.id === s.relic).name} (${perks.find((p) => p.id === s.relic).desc}, for whoever holds it) ` : ''}· ${Math.floor(s.troops)} / ${s.owner < 0 ? s.garrison + ' (regrows to it at +' + Math.round(s.baseGrowth * rules.neutralRegrow * 10) / 10 + '/s)' : s.cap + ' troops · +' + s.growth + '/s'}${s.capital ? ' · 🏰 Capital' : s.building ? ' · ' + buildings[s.building].icon + ' ' + buildings[s.building].name : ''}${mult ? ' · ' + mult : ''}${s.capital && s.owner === 0 ? capitalInfo(s) : ''}`;
+    // card: owner ribbon (+ tile kind), troops / cap and growth, then chips for terrain, structure, relic
+    const relic = s.relic ? perks.find((p) => p.id === s.relic) : null;
+    const kind = s.capital ? 'Capital' : s.home ? 'Homeland' : s.camp ? 'Camp' : s.owner < 0 ? 'Village' : 'Territory';
+    const rate = s.owner < 0 ? `regrows to ${s.garrison} · +${Math.round(s.baseGrowth * rules.neutralRegrow * 10) / 10}/s` : `+${s.growth}/s`;
+    const chips = [
+      s.trait && `<span>${traits[s.trait].name}: ${traits[s.trait].desc}</span>`,
+      s.building && !s.capital && `<span>${buildings[s.building].icon} ${buildings[s.building].name}</span>`,
+      mult && `<span>${mult}</span>`,
+      relic && `<span class="gold">✨ ${relic.name}: ${relic.desc}</span>`,
+      s.capital && s.owner === 0 && `<span class="gold">${capitalInfo(s)}</span>`,
+    ].filter(Boolean).join('');
+    $('seg-info').innerHTML = `<div class="who" style="background:${col}">${who}<small>${kind}</small></div>
+      <div class="body"><div class="troops">${Math.floor(s.troops)} <small>/ ${s.owner < 0 ? s.garrison : s.cap} · ${rate}</small></div>${chips ? `<div class="chips">${chips}</div>` : ''}</div>`;
   } else $('seg-info').textContent = '';
   // selected tile's route (if any) with a stop button
   const route = selected >= 0 ? battle.routes.get(selected) : null;
@@ -657,7 +672,7 @@ function zoomOut() {
   const snap = document.createElement('canvas');
   snap.width = old.width; snap.height = old.height;
   snap.getContext('2d').drawImage(old, 0, 0);
-  const wr = wrap.getBoundingClientRect(), or = old.getBoundingClientRect();
+  const wr = pageRect(wrap), or = pageRect(old);
   Object.assign(snap.style, { position: 'absolute', left: or.left - wr.left + 'px', top: or.top - wr.top + 'px', width: or.width + 'px', height: or.height + 'px' });
   snap.className = 'zoom-snap';
   wrap.appendChild(snap);
@@ -665,7 +680,7 @@ function zoomOut() {
   paused = true;
   requestAnimationFrame(() => {
     const cap = battle.segs[battle.factions[0].capitalSeg];
-    const nr = old.getBoundingClientRect(), tx = cap ? bv.sx(cap.x) : nr.width / 2, ty = cap ? bv.sy(cap.y) : nr.height / 2;
+    const nr = pageRect(old), tx = cap ? bv.sx(cap.x) : nr.width / 2, ty = cap ? bv.sy(cap.y) : nr.height / 2;
     // new map starts zoomed in on the capital, old map sits on top and shrinks into it
     old.style.transformOrigin = `${tx}px ${ty}px`;
     old.style.transform = 'scale(3)';
@@ -830,6 +845,18 @@ setSpeed(1);
 
 // audio: start on the first gesture, toggles remembered
 addEventListener('pointerdown', initAudio, { capture: true });
+// phones held upright: rotate the page by css (always landscape, no 'turn your phone' prompt).
+// --sw / --sh = the real screen size, so the rotated page fills it exactly
+function syncRotation() {
+  const upright = matchMedia('(orientation: portrait) and (pointer: coarse)').matches;
+  const root = document.documentElement;
+  root.style.setProperty('--sw', innerWidth + 'px');
+  root.style.setProperty('--sh', innerHeight + 'px');
+  root.classList.toggle('rotated', upright);
+  root.classList.toggle('compact', (upright ? innerWidth : innerHeight) < 500);   // short landscape: compact hud
+}
+syncRotation();
+addEventListener('resize', syncRotation);
 // phones: the first tap anywhere in the game goes fullscreen (browser bars hidden). browsers only
 // allow this from a user gesture; unsupported (iphone safari) or refused requests are ignored
 function goFullscreen() {

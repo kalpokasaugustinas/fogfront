@@ -14,7 +14,7 @@ html, body { margin: 0; height: 100%; }
 body {
   background: radial-gradient(circle at 50% 35%, #c5d4d2, var(--bg) 75%);
   color: var(--text);
-  font: 15px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font: 15px/1.4 'Fredoka', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
@@ -166,10 +166,19 @@ canvas { touch-action: none; display: block; }
 .hud.tl { top: 10px; left: 10px; }
 .hud.tr { top: 10px; right: 10px; }
 .hud.bl { bottom: 10px; left: 10px; flex-direction: column; align-items: flex-start; }
-.hud.info { top: 58px; left: 50%; transform: translateX(-50%); max-width: min(620px, 70vw); pointer-events: none;
-  background: rgba(255,255,255,0.82); border-radius: 12px; padding: 5px 12px; font-size: 12px; text-align: center;
-  box-shadow: 0 2px 0 rgba(30,50,55,0.15), 0 4px 10px rgba(30,50,55,0.12); }
-.hud.info:empty { display: none; }
+/* tile info card (bottom-left, above the send box): owner ribbon, big troop count, chips */
+#seg-info { pointer-events: none; width: 250px; border-radius: 16px; overflow: hidden; background: rgba(255,255,255,0.88); backdrop-filter: blur(6px);
+  box-shadow: 0 3px 0 rgba(30,50,55,0.2), 0 6px 14px rgba(30,50,55,0.15); }
+#seg-info:empty { display: none; }
+#seg-info .who { padding: 4px 12px; color: #fff; font-weight: 700; font-size: 15px; letter-spacing: 0.3px; text-shadow: 0 1px 0 rgba(0,0,0,0.25);
+  display: flex; justify-content: space-between; align-items: center; }
+#seg-info .who small { font-weight: 500; font-size: 12px; opacity: 0.9; }
+#seg-info .body { padding: 6px 12px 8px; }
+#seg-info .troops { font-size: 22px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+#seg-info .troops small { font-size: 13px; font-weight: 500; color: var(--muted); }
+#seg-info .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+#seg-info .chips span { font-size: 11.5px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: rgba(30,50,55,0.08); }
+#seg-info .chips span.gold { background: rgba(224,150,26,0.18); color: #8a5a08; }
 #clock { font-variant-numeric: tabular-nums; color: var(--text); }
 
 /* stage badge: gold shield-ribbon with the current stage */
@@ -208,8 +217,9 @@ canvas { touch-action: none; display: block; }
 
 /* build wheel: a ring of glossy sectors around the selected tile, matching the game's light diorama look */
 #wheel { position: absolute; left: 0; top: 0; z-index: 4; width: 0; height: 0; pointer-events: none; }
-#wheel svg { position: absolute; overflow: visible; pointer-events: none; filter: drop-shadow(0 6px 10px rgba(20,40,50,0.35)); animation: wheel-in 0.16s ease-out; }
-@keyframes wheel-in { from { transform: scale(0.6); opacity: 0; } }
+#wheel svg { --k: 1; position: absolute; overflow: visible; pointer-events: none; filter: drop-shadow(0 6px 10px rgba(20,40,50,0.35));
+  transform: scale(var(--k)); animation: wheel-in 0.16s ease-out; }
+@keyframes wheel-in { from { transform: scale(calc(var(--k) * 0.6)); opacity: 0; } }
 #wheel .sector { pointer-events: auto; cursor: pointer; }
 #wheel .glass { fill: rgba(16, 26, 36, 0.62); }
 #wheel .hole { fill: rgba(16, 26, 36, 0.06); }
@@ -226,8 +236,28 @@ canvas { touch-action: none; display: block; }
 #wheel .tick { stroke: rgba(255, 255, 255, 0.4); stroke-width: 1; }
 #wheel text { pointer-events: none; }
 
-/* phones held upright: the game is landscape only */
-#rotate { display: none; z-index: 50; }
-#rotate .rot-ico { font-size: 48px; animation: rot 1.6s ease-in-out infinite; }
-@keyframes rot { 50% { transform: rotate(-90deg); } }
-@media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
+/* short screens (phones in landscape): compact hud */
+/* (html.compact is set from the page's real height, so it also works on the rotated page) */
+html.compact .hud.tl, html.compact .hud.tr { top: 6px; }
+html.compact .hud.tl { left: 6px; }
+html.compact .hud.tr { right: 6px; }
+html.compact .hud.bl { left: 6px; bottom: 6px; gap: 5px; }
+html.compact .round { width: 34px; height: 34px; font-size: 15px; }
+html.compact .chunky-group { padding: 3px; }
+html.compact .chunky-group button { min-width: 34px; height: 28px; font-size: 11px; padding: 0 7px; }
+html.compact .chunky { height: 36px; min-width: 42px; font-size: 15px; }
+html.compact .sendbox { padding: 4px 6px 4px 10px; gap: 6px; border-radius: 16px; }
+html.compact .sendbox .lbl { font-size: 10px; }
+html.compact #seg-info { width: 200px; }
+html.compact #seg-info .who { font-size: 13px; padding: 3px 10px; }
+html.compact #seg-info .body { padding: 4px 10px 6px; }
+html.compact #seg-info .troops { font-size: 18px; }
+html.compact #seg-info .chips span { font-size: 10.5px; }
+html.compact .stage-badge { font-size: 13px; padding: 4px 12px 4px 30px; }
+html.compact .stage-badge::before { width: 20px; height: 20px; font-size: 12px; }
+html.compact .badge { font-size: 12px; padding: 4px 9px; }
+
+/* phones held upright: the whole page is turned 90 degrees, so the game is always landscape
+   (fixed-position screens and overlays follow, since the transformed body contains them) */
+html.rotated body { position: fixed; top: 0; left: 0; width: var(--sh); height: var(--sw); transform-origin: top left;
+  transform: translateX(var(--sw)) rotate(90deg); }

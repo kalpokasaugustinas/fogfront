@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#a9bcbc">
   <title>Frontlines</title>
-  <link rel="stylesheet" href="style.css?v=24">
+  <!-- rounded game font (falls back to the system font offline) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="style.css?v=25">
 </head>
 <body>
   <!-- main menu -->
@@ -31,7 +35,7 @@
       <button id="btn-expedition" class="mode gold"><span class="m-ico">🧭</span><span class="m-txt"><b>Expedition</b><small id="m-expedition">Valley → World roguelite</small></span><span class="play">GO</span></button>
       <button id="btn-skirmish" class="mode green"><span class="m-ico">⚔️</span><span class="m-txt"><b>Quick battle</b><small>Random island · 3 rivals</small></span><span class="play">FIGHT</span></button>
     </div>
-    <span id="version">build 24 · 2026-11-02 18:44</span>
+    <span id="version">build 25 · 2026-11-02 19:17</span>
   </section>
 
   <!-- campaign world map -->
@@ -66,8 +70,8 @@
         <button data-speed="0" title="Pause (space)">❚❚</button><button data-speed="1" title="Normal speed">▶</button><button data-speed="2" title="2x speed">▶▶</button><button data-speed="3" title="3x speed">▶▶▶</button>
       </span>
     </div>
-    <div id="seg-info" class="hud info"></div>
     <div class="hud bl">
+      <div id="seg-info"></div>
       <div id="route-info" class="hidden"><span></span><button id="route-stop" title="Stop this route">✕</button></div>
       <div class="sendbox">
         <span class="lbl">Send</span>
@@ -87,9 +91,6 @@
       </div>
     </div>
   </section>
-
-  <!-- phones held upright: ask to rotate (the game is landscape only) -->
-  <div id="rotate" class="overlay"><div class="card"><div class="rot-ico">📱</div><b>Turn your phone sideways</b><p class="hint">Frontlines plays in landscape.</p></div></div>
 
   <!-- rules -->
   <div id="help" class="overlay hidden">
@@ -118,6 +119,6 @@
 
   <div id="zoom-banner"></div>
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=24"></script>
+  <script type="module" src="js/main.js?v=25"></script>
 </body>
 </html>

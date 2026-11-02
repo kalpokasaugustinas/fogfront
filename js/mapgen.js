@@ -302,6 +302,31 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
   const remap = new Map();
   for (const c of land) if (ids[c] >= 0 && !remap.has(ids[c])) remap.set(ids[c], remap.size);
   for (const c of land) if (ids[c] >= 0) ids[c] = remap.get(ids[c]);
+
+  // 5b. every island must be playable: one made only of rock / lake (no tiles) sinks into the sea,
+  //     and one with too little tile land (under ~60% of an average tile) turns its rock and lake
+  //     into tile land, given to the nearest tile on that island
+  {
+    let tileCells = 0;
+    for (const c of land) if (ids[c] >= 0) tileCells++;
+    const minTiles = (tileCells / Math.max(1, remap.size)) * 0.6, seen = new Uint8Array(g * g);
+    const solid = (c) => ids[c] >= 0 || terrain[c] === terrainTypes.mountain || terrain[c] === terrainTypes.lake;
+    for (let c0 = 0; c0 < g * g; c0++) {
+      if (seen[c0] || !solid(c0)) continue;
+      const blob = [c0];
+      seen[c0] = 1;
+      for (let k = 0; k < blob.length; k++) for (const m of nbrs(blob[k])) if (!seen[m] && solid(m)) { seen[m] = 1; blob.push(m); }
+      const tiles = blob.filter((c) => ids[c] >= 0);
+      if (!tiles.length) {
+        for (const c of blob) { ids[c] = -1; terrain[c] = terrainTypes.sea; relief[c] = 0; }
+      } else if (tiles.length < minTiles && tiles.length < blob.length) {
+        const q = [...tiles];
+        for (let k = 0; k < q.length; k++) {
+          for (const m of nbrs(q[k])) if (ids[m] < 0 && terrain[m] && seen[m]) { ids[m] = ids[q[k]]; terrain[m] = terrainTypes.sea; relief[m] = 0; q.push(m); }
+        }
+      }
+    }
+  }
   const segs = Array.from({ length: remap.size }, (_, id) => ({ id, area: 0, sx: 0, sy: 0, adj: new Set() }));
 
   // 6. area, adjacency and edge cells (edge = differs from any 4-neighbour, so borders are 2 cells wide)
@@ -348,6 +373,50 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
     for (const p of pairs) {
       const tree = find(p.a) !== find(p.b);
       if (!tree && p.d > g * 0.05) continue;
+      root[find(p.a)] = find(p.b);
+      const sa = ids[p.ca], sb = ids[p.cb];
+      segs[sa].adj.add(sb);
+      segs[sb].adj.add(sa);
+      bridges.push({ a: sa, b: sb, ax: (p.ca % g) + 0.5, ay: Math.floor(p.ca / g) + 0.5, bx: (p.cb % g) + 0.5, by: Math.floor(p.cb / g) + 0.5 });
+    }
+  }
+
+  // 6c. every map (not just 'world'): all segments must be reachable. land that ended up cut apart
+  //     (a separate islet, the stamped capital off the coast, a mountain ridge splitting the island)
+  //     gets sea routes between the closest border cells of its parts, joined as a spanning tree
+  const comp = new Int32Array(segs.length).fill(-1);
+  let parts = 0;
+  for (const s0 of segs) {
+    if (comp[s0.id] >= 0) continue;
+    const q = [s0.id];
+    comp[s0.id] = parts;
+    for (let k = 0; k < q.length; k++) for (const m of segs[q[k]].adj) if (comp[m] < 0) { comp[m] = parts; q.push(m); }
+    parts++;
+  }
+  if (parts > 1) {
+    const rim = Array.from({ length: parts }, () => []);
+    for (const c of land) {
+      if (ids[c] < 0 || c % 3) continue;
+      if (nbrs(c).length < 4 || nbrs(c).some((m) => ids[m] < 0)) rim[comp[ids[c]]].push(c);
+    }
+    const pairs = [];
+    for (let a = 0; a < parts; a++) {
+      for (let b = a + 1; b < parts; b++) {
+        let best = null;
+        for (const ca of rim[a]) {
+          const ax = ca % g, ay = Math.floor(ca / g);
+          for (const cb of rim[b]) {
+            const d = (ax - (cb % g)) ** 2 + (ay - Math.floor(cb / g)) ** 2;
+            if (!best || d < best.d) best = { d, ca, cb };
+          }
+        }
+        if (best) pairs.push({ a, b, ...best });
+      }
+    }
+    pairs.sort((p, q) => p.d - q.d);
+    const root = Array.from({ length: parts }, (_, i) => i), find = (i) => (root[i] === i ? i : (root[i] = find(root[i])));
+    for (const p of pairs) {
+      if (find(p.a) === find(p.b)) continue;
       root[find(p.a)] = find(p.b);
       const sa = ids[p.ca], sb = ids[p.cb];
       segs[sa].adj.add(sb);
