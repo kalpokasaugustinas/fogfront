@@ -34,7 +34,6 @@ sfx = [
     # war cries: short slices of a crowd shouting ambience
     *[(f'shout{i}', 'crowd_shouting.ogg', 0.4 + i * 5, 1.6) for i in range(5)],
     ('drums', 'horde_war_drums_by_william_hector.wav', 0, 3.6),             # 3-2-1 countdown bed
-    ('horn', 'theircoming3.ogg', 0, None),                                  # battle start horn
 ]
 
 

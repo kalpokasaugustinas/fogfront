@@ -113,6 +113,7 @@ try:
                 page.wait_for_timeout(500)
                 for stage in range(5):
                     # give the player a few buildings, then take every bot segment
+                    page.evaluate("__fl.skipCountdown()")
                     page.evaluate("""(() => { const b = __fl.battle, types = ['farm', 'farm', 'lab', 'fort', 'barracks', 'hospital'];
                       const free = b.segs.filter(s => !s.capital).slice(0, 6);
                       free.forEach((s, i) => { s.owner = 0; s.building = types[i]; s.troops = 300; });
@@ -154,7 +155,7 @@ try:
                     print("  ", json.dumps(r))
 
             # campaign map
-            page.click("#btn-campaign")
+            page.evaluate("document.getElementById('btn-campaign').click()")   # hidden on the menu for now
             page.wait_for_timeout(300)
             home = page.evaluate("__fl.campaign.map.segs.find(s => __fl.campaign.attackable(s.id)).id")
             box = page.locator("#campaign-canvas").bounding_box()

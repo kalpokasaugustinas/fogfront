@@ -24,6 +24,5 @@ Licences: CC BY 4.0 https://creativecommons.org/licenses/by/4.0/ · CC BY 3.0 ht
 | sfx/clash0-9 | starninjas, "20 sword sound effects": https://opengameart.org/content/20-sword-sound-effects-attacks-and-clashes |
 | sfx/shout0-4 | "Crowd shouting/speaking ambience": https://opengameart.org/content/crowd-shoutingspeaking-ambience |
 | sfx/drums | William Hector, "Horde war drums loop": https://opengameart.org/content/horde-war-drums-loop |
-| sfx/horn | "They're coming (generic horn sound)": https://opengameart.org/content/their-coming-generic-horn-sound |
 
 Capture horns are still synthesized in `js/audio.js`.

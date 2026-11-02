@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=29">
+  <link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
   <!-- main menu -->
@@ -18,7 +18,7 @@
     <div class="menu-bg"><canvas id="menu-canvas"></canvas></div>
     <div class="menu-fog"></div>
     <header class="menu-top">
-      <span class="badge" id="m-regions" title="Campaign regions">🏳️ 1/34</span>
+      <span class="badge hidden" id="m-regions" title="Campaign regions">🏳️ 1/34</span>
       <span class="badge" id="m-best" title="Best expedition">🧭 —</span>
       <span class="badge" id="m-wins" title="Quick battle wins">🏆 0</span>
       <span class="spacer"></span>
@@ -31,11 +31,11 @@
       <div class="ribbon">Conquer the map, one region at a time</div>
     </div>
     <div class="modes">
-      <button id="btn-campaign" class="mode blue pulse"><span class="m-ico">🗺️</span><span class="m-txt"><b>Campaign</b><small id="m-campaign">34 regions · 4 empires</small></span><span class="play">PLAY</span></button>
+      <button id="btn-campaign" class="mode blue pulse hidden"><span class="m-ico">🗺️</span><span class="m-txt"><b>Campaign</b><small id="m-campaign">34 regions · 4 empires</small></span><span class="play">PLAY</span></button>
       <button id="btn-expedition" class="mode gold"><span class="m-ico">🧭</span><span class="m-txt"><b>Expedition</b><small id="m-expedition">Valley → World roguelite</small></span><span class="play">GO</span></button>
       <button id="btn-skirmish" class="mode green"><span class="m-ico">⚔️</span><span class="m-txt"><b>Quick battle</b><small>Random island · 3 rivals</small></span><span class="play">FIGHT</span></button>
     </div>
-    <span id="version">build 29 · 2026-11-02 20:25</span>
+    <span id="version">build 30 · 2026-11-02 20:33</span>
   </section>
 
   <!-- campaign world map -->
@@ -81,13 +81,19 @@
         <button id="auto" class="chunky" title="Auto-send (A): sending to your own segment also sets a standing route">🔁<small>Auto</small></button>
       </div>
     </div>
+    <!-- end screen: sunburst (victory), ribbon title, stars, stat tiles, chunky buttons -->
     <div id="end" class="overlay hidden">
-      <div class="card">
-        <h2 id="end-title"></h2>
+      <div class="rays"></div>
+      <div class="card end-card">
+        <div class="end-ribbon"><h2 id="end-title"></h2></div>
+        <div id="end-stars" class="stars"></div>
+        <p id="end-why" class="star-why"></p>
         <div id="end-stats"></div>
         <div id="end-perks"></div>
-        <button id="end-retry">↻ Retry</button>
-        <button id="end-continue" class="primary">Continue</button>
+        <div class="end-btns">
+          <button id="end-retry" class="mode gold big-btn">↻ Retry</button>
+          <button id="end-continue" class="mode green big-btn">Continue</button>
+        </div>
       </div>
     </div>
   </section>
@@ -119,6 +125,6 @@
 
   <div id="zoom-banner"></div>
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=29"></script>
+  <script type="module" src="js/main.js?v=30"></script>
 </body>
 </html>

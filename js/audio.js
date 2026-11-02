@@ -59,7 +59,7 @@ export function setMusic(on) {
 
 // ---------- samples ----------
 // name -> number of variants (files name0.mp3, name1.mp3, ...); 0 = a single file name.mp3
-const sample_files = { click: 0, step: 3, build: 3, clash: 10, shout: 5, drums: 0, horn: 0 };
+const sample_files = { click: 0, step: 3, build: 3, clash: 10, shout: 5, drums: 0 };
 const buffers = {};
 
 // fetch + decode every clip once; effects play as soon as their clip is ready
@@ -148,8 +148,6 @@ export const sfx = {
   build() { for (let i = 0; i < 3; i++) play('build', { vol: 0.45, when: i * 0.13 }); },
   // countdown: the war drum recording runs under all three counts, so only count 0 starts it
   drum(i) { if (i === 0) play('drums', { vol: 0.7, jitter: 0 }); },
-  // battle start: low war horn
-  horn() { play('horn', { vol: 0.55, jitter: 0 }); },
   click() { play('click', { vol: 0.5, jitter: 0.05 }); },
 };
 

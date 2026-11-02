@@ -50,7 +50,7 @@ A live 4-bot battle plays on a decorative island behind the menu (new island whe
 ## Sound
 Recorded audio files in `audio/` (free licences, credits in [audio/CREDITS.md](audio/CREDITS.md) and the How to play screen):
 - Music: orchestral tracks streamed through two crossfading decks. Menus loop Scott Buckley's "Aphelion" (from 1:45). Battles rotate 4 war tracks ("Song Of The Forge" opening march, "Five Armies", "Heroic Demise", "Battle Theme A"), each battle starting on the next one, with 3 s crossfades. The end card plays a victory or defeat piece once.
-- Effects: footsteps while armies walk, crowd war cries when fights start, 10 recorded sword clashes, war drums under the 3-2-1 countdown, a war horn at the start, hammer knocks when building. Capture horns are still synthesized.
+- Effects: footsteps while armies walk, crowd war cries when fights start, 10 recorded sword clashes, war drums under the 3-2-1 countdown, hammer knocks when building. Capture horns are still synthesized.
 - Sound and music toggles on the menu (music also in the battle bar), remembered per browser.
 - Rebuild the files: `python tools/build_audio.py <music_dir> <sfx_dir>` (trims, loudness-matches and encodes to mp3; needs `pip install imageio-ffmpeg`).
 
