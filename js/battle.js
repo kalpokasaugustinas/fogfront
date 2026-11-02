@@ -1,8 +1,8 @@
 // battle simulation: segments, troops, buildings, armies. no drawing here,
 // so the same code runs in the browser and in headless tests.
-import { rules, buildings, effects } from './config.js?v=5';
-import { rng, spreadStarts } from './mapgen.js?v=5';
-import { think } from './ai.js?v=5';
+import { rules, buildings, effects } from './config.js?v=6';
+import { rng, spreadStarts } from './mapgen.js?v=6';
+import { think } from './ai.js?v=6';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
