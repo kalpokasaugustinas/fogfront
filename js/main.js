@@ -1,12 +1,12 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=22';
-import { generateMap, rng } from './mapgen.js?v=22';
-import { Battle } from './battle.js?v=22';
-import { personalities } from './ai.js?v=22';
-import { Campaign } from './campaign.js?v=22';
-import { Expedition, stages, perks } from './expedition.js?v=22';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=22';
-import { MapView, hexToRgb, shade, label, pill, unitSprite } from './render.js?v=22';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=23';
+import { generateMap, rng } from './mapgen.js?v=23';
+import { Battle } from './battle.js?v=23';
+import { personalities } from './ai.js?v=23';
+import { Campaign } from './campaign.js?v=23';
+import { Expedition, stages, perks } from './expedition.js?v=23';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=23';
+import { MapView, hexToRgb, shade, label, pill, unitSprite } from './render.js?v=23';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -113,9 +113,11 @@ function startBattle(setup, m, rid = -1) {
   if (!bv) bv = new MapView($('battle-canvas'), map, theme); else bv.setMap(map, theme);
   bv.prewarm(battle.factions.map((f) => colors[f.color]), 0.16);
   $('stage').classList.toggle('hidden', m !== 'expedition');
-  if (m === 'expedition') $('stage').textContent = `${expedition.stage + 1}/${stages.length} · ${expedition.current.name}`;
+  if (m === 'expedition') $('stage').textContent = `Stage ${expedition.stage + 1}`;
+  wheelOn = false;
+  setCam(1, 0, 0);
   $('end').classList.add('hidden');
-  renderBuildPanel();
+  renderWheel();
   show('battle');
 }
 
@@ -135,7 +137,7 @@ const canTarget = (from, to) => from >= 0 && to >= 0 && from !== to && battle.se
 
 // repaint the map raster when ownership, buildings or the selection changed
 function paintBattle() {
-  const k = `${battle.version}:${selected}`;
+  const k = `${battle.version}:${selected}:${wheelOn}`;
   if (k === key) return;
   key = k;
   if (selected >= 0 && !isMine(selected)) selected = -1;
@@ -145,7 +147,7 @@ function paintBattle() {
     if (o < 0) return { color: null, fill: 0, building };
     return { color: colors[battle.factions[o].color], fill: 0.16, building };
   });
-  renderBuildPanel();
+  renderWheel();
 }
 
 // troop figures in tiles, tile numbers, sea routes and armies (marching / fighting) for battle b
@@ -230,6 +232,7 @@ function drawBattle() {
   if (selected >= 0) bv.highlight(ctx, selected, colors[0], battle.segs[selected].adj, performance.now() / 1000);
   const fs = Math.max(11, Math.min(18, bv.size / 30));
   drawUnits(ctx, bv, battle, acc, true);
+  updateWheel();   // follows zoom / pan
   // player routes: dashed arrows with a moving dash
   ctx.save();
   for (const [a, r] of battle.routes) {
@@ -338,28 +341,98 @@ function drawCountdown(ctx) {
 // - tap your segment that isn't a neighbour = select it; tap the selected one again = deselect
 // - drag from your segment to any neighbour = send troops
 function localPos(e) {
+  // canvas css px, undoing the zoom transform
   const r = bv.canvas.getBoundingClientRect();
+  return { x: ((e.clientX - r.left) * bv.size) / r.width, y: ((e.clientY - r.top) * bv.cssH) / r.height };
+}
+
+// ---------- zoom + pan ----------
+// the map sits in #cam, which is scaled / moved with a css transform (cheap, no redraw). pinch or
+// mouse wheel zooms (1x-3x) around the fingers / cursor; one finger on empty ground pans. when
+// zooming settles, the view re-renders at a higher resolution so it stays sharp
+const cam = { z: 1, x: 0, y: 0 }, pointers = new Map();
+let pinch = null, pan = null, boostTimer = 0;
+function setCam(z, x, y) {
+  const w = $('battle-wrap').clientWidth, h = $('battle-wrap').clientHeight;
+  cam.z = Math.min(3, Math.max(1, z));
+  cam.x = Math.min(0, Math.max(w - w * cam.z, x));
+  cam.y = Math.min(0, Math.max(h - h * cam.z, y));
+  $('cam').style.transform = cam.z === 1 ? '' : `translate(${cam.x}px, ${cam.y}px) scale(${cam.z})`;
+  clearTimeout(boostTimer);
+  boostTimer = setTimeout(() => {
+    const boost = cam.z >= 1.9 ? 2 : cam.z >= 1.4 ? 1.5 : 1;
+    if (bv && bv.boost !== boost) { bv.boost = boost; bv.resize(); }
+  }, 300);
+}
+// zoom to nz keeping the screen point (px, py) (relative to the map area) fixed
+function zoomAt(px, py, nz) {
+  nz = Math.min(3, Math.max(1, nz));
+  const wx = (px - cam.x) / cam.z, wy = (py - cam.y) / cam.z;
+  setCam(nz, px - wx * nz, py - wy * nz);
+}
+function wrapPos(e) {
+  const r = $('battle-wrap').getBoundingClientRect();
   return { x: e.clientX - r.left, y: e.clientY - r.top };
 }
+$('battle-wrap').addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const p = wrapPos(e);
+  zoomAt(p.x, p.y, cam.z * Math.exp(-e.deltaY * 0.0015));
+}, { passive: false });
+const pinchInfo = () => {
+  const [a, b] = [...pointers.values()];
+  return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+};
 $('battle-canvas').addEventListener('pointerdown', (e) => {
-  if (!battle || battle.state !== 'running' || countdown > 0) return;
+  if (!battle) return;
   bv.canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, wrapPos(e));
+  if (pointers.size === 2) {
+    // second finger: pinch zoom (cancels any drag / pan of the first finger)
+    drag = pan = null;
+    pinch = { ...pinchInfo(), z0: cam.z, x0: cam.x, y0: cam.y };
+    return;
+  }
+  if (pointers.size > 2 || battle.state !== 'running' || countdown > 0) return;
   const sid = bv.segAt(e.clientX, e.clientY);
   hover = sid;
   // own segment: decide tap vs drag on pointerup
   if (isMine(sid)) drag = { from: sid, moved: false, ...localPos(e) };
   else if (canTarget(selected, sid)) sendFrom(selected, sid);
-  else if (sid < 0) selected = -1;
+  else pan = { ...wrapPos(e), x0: cam.x, y0: cam.y, moved: false, sid };   // empty ground: pan (tap = deselect)
 });
 $('battle-canvas').addEventListener('pointermove', (e) => {
   if (!battle) return;
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, wrapPos(e));
+  if (pinch && pointers.size === 2) {
+    // keep the map point under the pinch centre under the fingers while scaling
+    const p = pinchInfo(), nz = Math.min(3, Math.max(1, pinch.z0 * (p.d / Math.max(1, pinch.d))));
+    const wx = (pinch.x - pinch.x0) / pinch.z0, wy = (pinch.y - pinch.y0) / pinch.z0;
+    setCam(nz, p.x - wx * nz, p.y - wy * nz);
+    return;
+  }
+  if (pan) {
+    const p = wrapPos(e);
+    if (Math.hypot(p.x - pan.x, p.y - pan.y) > 6) pan.moved = true;
+    if (pan.moved) setCam(cam.z, pan.x0 + p.x - pan.x, pan.y0 + p.y - pan.y);
+    return;
+  }
   hover = bv.segAt(e.clientX, e.clientY);
   if (drag) {
     Object.assign(drag, localPos(e));
-    if (hover !== drag.from && !drag.moved) { drag.moved = true; selected = drag.from; }
+    if (hover !== drag.from && !drag.moved) { drag.moved = true; selected = drag.from; wheelOn = false; }
   }
 });
+function pointerEnd(e) {
+  pointers.delete(e.pointerId);
+  if (pinch) { if (pointers.size < 2) pinch = null; drag = pan = null; return; }
+  if (pan) { if (!pan.moved && pan.sid < 0) selected = -1; pan = null; }
+}
+$('battle-canvas').addEventListener('pointercancel', (e) => { pointerEnd(e); drag = null; });
 $('battle-canvas').addEventListener('pointerup', (e) => {
+  const wasPinch = !!pinch;
+  pointerEnd(e);
+  if (wasPinch) return;
   if (drag) {
     const to = bv.segAt(e.clientX, e.clientY), from = drag.from;
     if (drag.moved) { if (canTarget(from, to)) sendFrom(from, to); }
@@ -368,7 +441,7 @@ $('battle-canvas').addEventListener('pointerup', (e) => {
     // so a supply chain can be built tile by tile
     else if (auto && battle.routes.get(selected)?.to === from) selected = from;
     else if (canTarget(selected, from)) sendFrom(selected, from); // tap own neighbour: move troops
-    else selected = from;                                         // tap other own segment: select
+    else { selected = from; wheelOn = true; }                     // tap other own segment: select (+ build wheel)
   }
   drag = null;
 });
@@ -389,27 +462,60 @@ function setAuto(on) {
 $('auto').onclick = () => setAuto(!auto);
 $('route-stop').onclick = () => { if (selected >= 0) battle.clearRoute(selected); };
 
-// bottom panel: send %, selected segment info, build buttons
-function renderBuildPanel() {
-  const box = $('build');
-  if (selected < 0 || !battle) {
-    box.innerHTML = '<p class="hint">Tap your segment to select it, then tap a neighbour to send troops: attack enemies, move to your own. Or drag.</p>';
-    return;
+// build wheel: tapping your tile that has no structure opens a ring of the 5 buildings around it.
+// tap a sector to build (paid with that tile's troops); the hole in the middle and everything
+// outside the ring stay tappable, so sending troops works as usual (and closes the wheel)
+let wheelOn = false, wheelFor = -1, wheelPos = '';
+const wheelColors = { farm: ['#ffd76a', '#e0a020'], barracks: ['#f07a6a', '#c8372e'], fort: ['#b7c0c8', '#77828d'], hospital: ['#ffffff', '#d8dde0'], lab: ['#8fe3f2', '#2aa8c8'] };
+function renderWheel() {
+  const box = $('wheel'), s = battle && selected >= 0 ? battle.segs[selected] : null;
+  const want = wheelOn && s && s.owner === 0 && !s.building && !s.capital ? selected : -1;
+  if (want === wheelFor) return;
+  wheelFor = want;
+  wheelPos = '';
+  box.classList.toggle('hidden', want < 0);
+  if (want < 0) { box.innerHTML = ''; return; }
+  const R = 104, r0 = 40, types = Object.keys(buildings), n = types.length, gap = 0.035;
+  const pt = (rad, a) => `${(Math.cos(a) * rad).toFixed(1)},${(Math.sin(a) * rad).toFixed(1)}`;
+  let svg = `<svg width="${R * 2}" height="${R * 2}" viewBox="${-R} ${-R} ${R * 2} ${R * 2}" style="left:${-R}px;top:${-R}px">
+    <defs><linearGradient id="wheel-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe7a0"/><stop offset="0.5" stop-color="#e0a43a"/><stop offset="1" stop-color="#9a6420"/></linearGradient>
+    ${types.map((t) => `<radialGradient id="wg-${t}" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="${wheelColors[t][0]}"/><stop offset="1" stop-color="${wheelColors[t][1]}"/></radialGradient>`).join('')}</defs>`;
+  types.forEach((t, i) => {
+    const a0 = -Math.PI / 2 - Math.PI / n + (i / n) * Math.PI * 2 + gap, a1 = a0 + (Math.PI * 2) / n - gap * 2, am = (a0 + a1) / 2;
+    const d = `M${pt(r0, a0)} L${pt(R - 3, a0)} A${R - 3},${R - 3} 0 0 1 ${pt(R - 3, a1)} L${pt(r0, a1)} A${r0},${r0} 0 0 0 ${pt(r0, a0)} Z`;
+    const [ix, iy] = pt(60, am).split(','), [nx, ny] = pt(84, am).split(',');
+    svg += `<g class="sector" data-type="${t}"><path class="bg" d="${d}"/>
+      <circle class="ico-bg" cx="${ix}" cy="${iy - 2}" r="16" fill="url(#wg-${t})"/>
+      <text x="${ix}" y="${iy - 1}" font-size="16">${buildings[t].icon}</text>
+      <text class="name" x="${nx}" y="${+ny - 4}"${buildings[t].name.length > 6 ? ' style="font-size:8.5px"' : ''}>${buildings[t].name}</text>
+      <text class="cost" x="${nx}" y="${+ny + 8}">${battle.costOf(0, t)}</text></g>`;
+  });
+  svg += `<circle class="rim" r="${R - 1}"/><circle class="rim" r="${r0 - 1}" style="stroke-width:3"/></svg>`;
+  box.innerHTML = svg;
+  for (const g of box.querySelectorAll('.sector')) {
+    g.addEventListener('pointerdown', (e) => e.stopPropagation());
+    g.addEventListener('click', () => {
+      if (battle.build(0, selected, g.dataset.type)) sfx.build();
+      else flash(`${buildings[g.dataset.type].name} needs ${battle.costOf(0, g.dataset.type)} troops in this tile`);
+    });
   }
-  const sel = battle.segs[selected];
-  if (sel.capital) {
-    // capital: no building; show the carried-over bonuses
-    const b = sel.bonus, pc = (v) => `+${Math.round(v * 100)}%`;
-    box.innerHTML = `<p class="hint">🏰 <b>Capital</b>: nothing can be built here. Carried-over bonuses:
-      ${pc(b.growth)} growth here · ${pc(b.hosp)} growth in your neighbouring segments · ${pc(b.lab)} growth everywhere ·
-      defense ${pc(b.def)} · attack ${pc(b.atk)} from here</p>`;
-    return;
-  }
-  box.innerHTML = Object.entries(buildings).map(([type, b]) =>
-    `<button class="bld" data-type="${type}"><span class="ico">${b.icon}</span><span><b>${b.name}</b> · ${battle.costOf(0, type)}<br><small>${b.desc}</small></span></button>`).join('');
-  for (const btn of box.querySelectorAll('.bld')) btn.onclick = () => {
-    if (battle.build(0, selected, btn.dataset.type)) sfx.build(); else flash('Need more troops in this segment');
-  };
+  updateWheel();
+}
+// sector states (enough troops?) and position over the tile, following zoom / pan
+function updateWheel() {
+  if (wheelFor < 0) return;
+  const s = battle.segs[wheelFor];
+  for (const g of $('wheel').querySelectorAll('.sector')) g.classList.toggle('off', s.troops < battle.costOf(0, g.dataset.type));
+  const r = bv.canvas.getBoundingClientRect(), wr = $('battle-wrap').getBoundingClientRect();
+  const left = Math.round(r.left - wr.left + (bv.sx(s.x) * r.width) / bv.size), top = Math.round(r.top - wr.top + (bv.sy(s.y) * r.height) / bv.cssH);
+  const pos = `${left}px,${top}px`;
+  if (pos !== wheelPos) { wheelPos = pos; $('wheel').style.transform = `translate(${pos})`; }
+}
+
+// capital: nothing can be built; its carried-over bonuses
+function capitalInfo(s) {
+  const b = s.bonus, pc = (v) => `+${Math.round(v * 100)}%`;
+  return `<br>Bonuses: ${pc(b.growth)} growth here · ${pc(b.hosp)} in neighbours · ${pc(b.lab)} everywhere · defense ${pc(b.def)} · attack ${pc(b.atk)}`;
 }
 
 function updatePanel() {
@@ -420,25 +526,12 @@ function updatePanel() {
     const mult = [s.building === 'fort' && `🛡️ defense x${effects.fortDefense}`, s.building === 'barracks' && `⚔️ attack x${effects.barracksAttack}`].filter(Boolean).join(' · ');
     const col = s.owner < 0 ? neutralColor : factionColors[battle.factions[s.owner].color];
     $('seg-info').innerHTML = `<b style="color:${col}">${who}</b>
-      ${s.trait ? `· ${traits[s.trait].name} (${traits[s.trait].desc}) ` : ''}${s.relic ? `· ✨ Relic: ${perks.find((p) => p.id === s.relic).name} (${perks.find((p) => p.id === s.relic).desc}, for whoever holds it) ` : ''}· ${Math.floor(s.troops)} / ${s.owner < 0 ? s.garrison + ' (regrows to it at +' + s.baseGrowth + '/s)' : s.cap + ' troops · +' + s.growth + '/s'}${s.capital ? ' · 🏰 Capital' : s.building ? ' · ' + buildings[s.building].icon + ' ' + buildings[s.building].name : ''}${mult ? ' · ' + mult : ''}`;
+      ${s.trait ? `· ${traits[s.trait].name} (${traits[s.trait].desc}) ` : ''}${s.relic ? `· ✨ Relic: ${perks.find((p) => p.id === s.relic).name} (${perks.find((p) => p.id === s.relic).desc}, for whoever holds it) ` : ''}· ${Math.floor(s.troops)} / ${s.owner < 0 ? s.garrison + ' (regrows to it at +' + s.baseGrowth + '/s)' : s.cap + ' troops · +' + s.growth + '/s'}${s.capital ? ' · 🏰 Capital' : s.building ? ' · ' + buildings[s.building].icon + ' ' + buildings[s.building].name : ''}${mult ? ' · ' + mult : ''}${s.capital && s.owner === 0 ? capitalInfo(s) : ''}`;
   } else $('seg-info').textContent = '';
   // selected tile's route (if any) with a stop button
   const route = selected >= 0 ? battle.routes.get(selected) : null;
   $('route-info').classList.toggle('hidden', !route);
   if (route) $('route-info').firstElementChild.textContent = `🔁 Route active, keeps ${Math.round(route.keep * 100)}% of cap`;
-  for (const btn of $('build').querySelectorAll('.bld')) {
-    const s = battle.segs[selected];
-    btn.disabled = !s || s.troops < battle.costOf(0, btn.dataset.type) || s.building === btn.dataset.type;
-    btn.classList.toggle('current', !!s && s.building === btn.dataset.type);
-  }
-  // faction chips: segments and total troops (on map + marching)
-  $('factions').innerHTML = battle.factions.map((f) => {
-    const segs = battle.segs.filter((s) => s.owner === f.id);
-    // total strength: troops on the map + marching + reserve (expedition capitals)
-    const troops = segs.reduce((v, s) => v + s.troops, 0) + battle.armies.filter((a) => a.owner === f.id).reduce((v, a) => v + a.n, 0) + f.reserve;
-    const dead = !battle.alive(f.id);
-    return `<span class="chip ${dead ? 'dead' : ''}"><i style="background:${factionColors[f.color]}"></i>${segs.length}▣ ${Math.floor(troops)}</span>`;
-  }).join('');
   const res = battle.factions[0].reserve;
   $('clock').textContent = fmtTime(battle.time) + (res >= 1 ? ` · 🏕️ ${Math.floor(res)}` : '');
   $('clock').title = res >= 1 ? 'Reserve: flows into your capital when it has room' : '';
@@ -724,7 +817,9 @@ addEventListener('pointerdown', initAudio, { capture: true });
 function goFullscreen() {
   const el = document.documentElement;
   if (!matchMedia('(pointer: coarse)').matches || document.fullscreenElement || !el.requestFullscreen) return;
-  el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+  el.requestFullscreen({ navigationUI: 'hide' })
+    .then(() => screen.orientation?.lock?.('landscape'))   // phones: landscape only
+    .catch(() => {});
 }
 addEventListener('pointerup', goFullscreen, { capture: true });
 addEventListener('keydown', initAudio, { capture: true });

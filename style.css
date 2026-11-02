@@ -125,7 +125,6 @@ canvas { touch-action: none; display: block; }
 .card button { margin: 6px 4px 0; }
 
 /* expedition: stage label, carry-over list, perk choices, zoom-out transition */
-#stage { font-size: 12px; color: var(--muted); white-space: nowrap; }
 /* end-screen stats grid */
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
 .stats div { background: rgba(30, 50, 55, 0.06); border-radius: 10px; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; }
@@ -158,3 +157,76 @@ canvas { touch-action: none; display: block; }
   background: #000c; padding: 8px 14px; border-radius: 10px; pointer-events: none; transition: 0.2s; z-index: 20;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- battle hud: full-screen map, chunky freemium-style controls in the corners ---------- */
+#battle-wrap { position: absolute; inset: 0; padding: 0; }
+#cam { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; transform-origin: 0 0; }
+.hud { position: absolute; z-index: 3; display: flex; align-items: center; gap: 8px; pointer-events: none; }
+.hud > * { pointer-events: auto; }
+.hud.tl { top: 10px; left: 10px; }
+.hud.tr { top: 10px; right: 10px; }
+.hud.bl { bottom: 10px; left: 10px; flex-direction: column; align-items: flex-start; }
+.hud.info { top: 58px; left: 50%; transform: translateX(-50%); max-width: min(620px, 70vw); pointer-events: none;
+  background: rgba(255,255,255,0.82); border-radius: 12px; padding: 5px 12px; font-size: 12px; text-align: center;
+  box-shadow: 0 2px 0 rgba(30,50,55,0.15), 0 4px 10px rgba(30,50,55,0.12); }
+.hud.info:empty { display: none; }
+#clock { font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* stage badge: gold shield-ribbon with the current stage */
+.stage-badge { position: relative; white-space: nowrap; padding: 6px 16px 6px 34px; font-weight: 900; font-size: 15px; color: #fff; letter-spacing: 0.5px;
+  background: linear-gradient(180deg, #ffc94d, #e0961a); border-radius: 999px; text-shadow: 0 2px 0 rgba(120,60,0,0.45);
+  box-shadow: 0 3px 0 #a3650a, 0 6px 12px rgba(0,0,0,0.2), inset 0 2px 0 rgba(255,255,255,0.45); }
+.stage-badge::before { content: '⚑'; position: absolute; left: 4px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 14px; background: linear-gradient(180deg, #d1403a, #9e2622); box-shadow: 0 2px 0 #6e1714; text-shadow: none; }
+
+/* chunky button group (speed, send %): glossy pills with a pressed-in bottom edge */
+.chunky-group { display: inline-flex; gap: 0; padding: 4px; border-radius: 16px; background: rgba(34,51,58,0.35); backdrop-filter: blur(4px);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.25); }
+.chunky-group button, .chunky { border: 0; font-weight: 900; color: #3a4a50; min-width: 42px; height: 36px; padding: 0 10px; font-size: 13px;
+  background: linear-gradient(180deg, #ffffff, #dfe7e8); box-shadow: 0 3px 0 #9aaaae, inset 0 1px 0 #fff; border-radius: 0; margin: 0 1px; }
+.chunky-group button:first-child { border-radius: 12px 0 0 12px; }
+.chunky-group button:last-child { border-radius: 0 12px 12px 0; }
+.chunky-group button:active, .chunky:active { transform: translateY(2px); box-shadow: 0 1px 0 #9aaaae, inset 0 1px 0 #fff; }
+.chunky-group button.on { color: #fff; background: linear-gradient(180deg, #5aa2ff, #2f74d6); box-shadow: 0 3px 0 #1c4f9c, inset 0 1px 0 rgba(255,255,255,0.5);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+#speed button { letter-spacing: -3px; font-size: 11px; }
+#speed button[data-speed="0"] { letter-spacing: -1px; }
+#speed button[data-speed="0"].on { background: linear-gradient(180deg, #ffc94d, #e0961a); box-shadow: 0 3px 0 #a3650a, inset 0 1px 0 rgba(255,255,255,0.5); }
+
+/* send box (bottom-left corner): label, % group, round auto toggle */
+.sendbox { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border-radius: 20px; background: rgba(255,255,255,0.78);
+  backdrop-filter: blur(6px); box-shadow: 0 3px 0 rgba(30,50,55,0.2), 0 6px 14px rgba(30,50,55,0.15); }
+.sendbox .lbl { font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.chunky { border-radius: 14px; height: 46px; min-width: 52px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; font-size: 18px; }
+.chunky small { font-size: 10px; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+#auto { margin: 0; }
+#auto.on { color: #fff; background: linear-gradient(180deg, #4fd394, #23966a); box-shadow: 0 3px 0 #166647, inset 0 1px 0 rgba(255,255,255,0.5); }
+#route-info { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 4px 4px 4px 12px; border-radius: 999px;
+  background: rgba(255,255,255,0.85); box-shadow: 0 2px 0 rgba(30,50,55,0.18); }
+#route-info button { width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; color: #fff; font-weight: 900;
+  background: linear-gradient(180deg, #e2554c, #b8382f); box-shadow: 0 2px 0 #7e211b; }
+
+/* build wheel: a ring of glossy sectors around the selected tile, matching the game's light diorama look */
+#wheel { position: absolute; left: 0; top: 0; z-index: 4; width: 0; height: 0; pointer-events: none; }
+#wheel svg { position: absolute; overflow: visible; pointer-events: none; filter: drop-shadow(0 6px 10px rgba(20,40,50,0.35)); animation: wheel-in 0.16s ease-out; }
+@keyframes wheel-in { from { transform: scale(0.6); opacity: 0; } }
+#wheel .sector { pointer-events: auto; cursor: pointer; }
+#wheel .sector path.bg { fill: rgba(250,248,240,0.94); stroke: rgba(154,100,32,0.5); stroke-width: 1.5; transition: fill 0.1s; }
+#wheel .sector:hover path.bg { fill: #fff6dc; }
+#wheel .sector:active path.bg { fill: #ffe7a0; }
+#wheel .sector.off { cursor: default; }
+#wheel .sector.off path.bg { fill: rgba(226,226,222,0.92); }
+#wheel .sector.off text { opacity: 0.45; }
+#wheel .rim { fill: none; stroke: url(#wheel-gold); stroke-width: 5; }
+#wheel text { font-weight: 900; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+#wheel .ico-bg { stroke: rgba(255,255,255,0.9); stroke-width: 2; }
+#wheel .name { font-size: 10px; fill: #3a4a50; }
+#wheel .cost { font-size: 11px; fill: #9a6420; }
+#wheel .sector.off .cost { fill: #b8382f; opacity: 1; }
+#wheel .centre-txt { font-size: 11px; fill: #fff; text-shadow: 0 1px 0 rgba(0,0,0,0.3); }
+
+/* phones held upright: the game is landscape only */
+#rotate { display: none; z-index: 50; }
+#rotate .rot-ico { font-size: 48px; animation: rot 1.6s ease-in-out infinite; }
+@keyframes rot { 50% { transform: rotate(-90deg); } }
+@media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }

@@ -153,7 +153,9 @@ try:
             page.wait_for_timeout(1000)
             page.evaluate("__fl.battle.segs[%d].troops = 200" % b["me"])   # enough for a farm + an attack
             page.mouse.click(*to_px(b["x"], b["y"]))
-            page.click("#build .bld[data-type=farm]")
+            page.wait_for_timeout(250)
+            page.screenshot(path=str(out / f"{name}-wheel.png"))   # build wheel around the tile
+            page.click("#wheel .sector[data-type=farm]")
             page.mouse.click(*to_px(b["target"]["x"], b["target"]["y"]))
             page.wait_for_timeout(300)
             state = page.evaluate("({ my_armies: __fl.battle.armies.filter(a => a.owner === 0).length, orders: __fl.battle.stats.sent, building: __fl.battle.segs[%d].building })" % b["me"])

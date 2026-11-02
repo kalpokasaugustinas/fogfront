@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=22';
-import * as structures from './structures.js?v=22';
+import { themes } from './config.js?v=23';
+import * as structures from './structures.js?v=23';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -241,11 +241,13 @@ export class MapView {
   // fit the canvas into the parent: width = map width, height = squashed map + room for cliffs
   // below and buildings/rocks above. cached layers are rebuilt lazily
   resize() {
-    const r = this.canvas.parentElement.getBoundingClientRect();
+    // layout size (clientWidth ignores the zoom transform on the parent)
+    const el = this.canvas.parentElement, r = { width: el.clientWidth, height: el.clientHeight };
     this.tilt = 0.8;
     const pad = 0.12;   // extra height (as a share of width): cliffs + raised objects
     const size = Math.max(50, Math.floor(Math.min(r.width, r.height / (this.tilt + pad))));
-    const dpr = window.devicePixelRatio || 1;
+    // zoomed in (boost > 1): render sharper, up to 2 device px per css px (phones already have more)
+    const base = window.devicePixelRatio || 1, dpr = Math.max(base, Math.min(2, base * (this.boost ?? 1)));
     if (size === this.size && dpr === this.dpr && this.under) return;
     this.size = size;
     this.dpr = dpr;
@@ -256,6 +258,7 @@ export class MapView {
     this.canvas.height = Math.round(h * dpr);
     this.canvas.style.width = size + 'px';
     this.canvas.style.height = h + 'px';
+    this.cssH = h;
     this.under = this.base = this.rocks = this.layerGround = this.layerOwner = this.layerObjects = null;
     this.sprites = new Map();
     this.ofsX = this.ofsY = 0;
@@ -888,10 +891,11 @@ export class MapView {
 
   // segment under a screen point (-1 for sea)
   segAt(clientX, clientY) {
+    // screen -> canvas css px (undoing any zoom transform), then -> grid
     const r = this.canvas.getBoundingClientRect();
     const g = this.map.grid;
-    const x = Math.floor((clientX - r.left) / this.scale);
-    const y = Math.floor((clientY - r.top - this.oy) / (this.scale * this.tilt));
+    const x = Math.floor(((clientX - r.left) * this.size) / r.width / this.scale);
+    const y = Math.floor((((clientY - r.top) * this.cssH) / r.height - this.oy) / (this.scale * this.tilt));
     if (x < 0 || y < 0 || x >= g || y >= g) return -1;
     const id = this.map.ids[y * g + x];
     if (id >= 0) return id;

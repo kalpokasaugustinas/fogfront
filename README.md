@@ -16,7 +16,7 @@ Prototype stage.
   - lose a stage and the run is over; best run (stage reached, time) is saved
   - each stage looks further away: lakes, mountain ridges and trees get smaller and more numerous
 - **Battle:** each segment you own grows 1% of its cap per second, up to the cap. Cap scales with segment size: the largest segment on the map holds 400 (+4/s).
-  - Tap your segment, then tap a neighbour to send the chosen % (25/50/75/100): attack an enemy/neutral, or move troops to your own. Tap the selected segment again to deselect. A 3-2-1 countdown runs before every battle; nothing moves until it ends.
+  - Tap your segment, then tap a neighbour to send the chosen % (25/50/75/100): attack an enemy/neutral, or move troops to your own. Tap the selected segment again to deselect. A 3-2-1 countdown runs before every battle; nothing moves until it ends. Tapping your tile that has no structure opens a build wheel around it (tap a sector to build; tap elsewhere to carry on). Pinch or mouse wheel zooms (1–3x), one finger on empty ground pans. On phones the game is landscape only (it asks you to rotate) and goes fullscreen on the first tap.
   - Or drag from your segment to any neighbour.
   - 🔁 Auto toggle (key A): when on, sending to your own neighbour also sets a standing route. Every second the source forwards all troops above its reserve (100% − send %, of its cap) to the target. Chain routes to pipe troops from the back to the front: tap the route's target a second time to select it, then tap its next neighbour. ✕ Stop on the selected tile ends its route; a route also ends when either tile is lost.
   - Troops are shown as small soldiers (1 per 8 troops; battalions of 40 on zoomed-out expedition stages) in each tile and in marching armies.
