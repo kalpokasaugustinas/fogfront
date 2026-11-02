@@ -3,8 +3,8 @@
 //                actions: max moves per think (build, attack or reinforce, shared budget
 //                so a big empire doesn't act faster than a small one),
 //                grudge: extra value for player segments }
-import { rules, buildings, effects } from './config.js?v=34';
-import { hops } from './mapgen.js?v=34';
+import { rules, buildings, effects } from './config.js?v=35';
+import { hops } from './mapgen.js?v=35';
 
 export const personalities = {
   aggressive: { build: 0.25, risk: 1.15, actions: 2, grudge: 0.3 },
@@ -12,10 +12,22 @@ export const personalities = {
   turtle:     { build: 0.5,  risk: 1.6,  actions: 1, grudge: -0.2 },
 };
 
+// the leader = the side with the highest total troop growth per second. kept on the battle and
+// only handed over when another side grows clearly more (no flip-flopping between near-equals)
+export function leader(b) {
+  const growth = b.factions.map(() => 0);
+  for (const s of b.segs) if (s.owner >= 0) growth[s.owner] += s.growth;
+  const top = growth.reduce((best, g, i) => (g > growth[best] ? i : best), 0);
+  const cur = b.aiLeader ?? -1;
+  if (cur < 0 || !b.alive(cur) || growth[top] > growth[cur] * rules.leaderSwitch) b.aiLeader = top;
+  return b.aiLeader;
+}
+
 export function think(b, f) {
   const p = f.personality, me = f.id, segs = b.segs;
   const mine = segs.filter((s) => s.owner === me);
   if (!mine.length) return;
+  const lead = leader(b), gang = lead !== me ? lead : -1;   // whom to gang up on (not yourself)
 
   // front distance: 0 = touches a non-own segment, 1 = one step behind the front, ...
   const front = hops(b.map, mine.filter((s) => s.adj.some((a) => segs[a].owner !== me)).map((s) => s.id));
@@ -50,19 +62,51 @@ export function think(b, f) {
       if (send > s.troops - 1) continue;
       let value = t.cap / 50 + (t.building ? 0.6 : 0) + (t.relic ? 1.2 : 0) + (t.trait === 'river' || t.trait === 'lakeside' ? 0.4 : 0);
       if (t.owner === 0) value += p.grudge;
+      if (t.owner === gang) value *= rules.gangUp;   // gang up on the leader
       if (t.owner < 0) value += 0.2;   // neutrals don't fight back
       options.push({ s, tid, send, score: value / send });
+    }
+  }
+  // gang attack: a leader tile too strong for any one of my tiles, but not for several of my
+  // neighbouring tiles together -> one joint attack (all of them send, one action)
+  if (gang >= 0) {
+    const seen = new Set();
+    for (const s of mine) for (const tid of s.adj) {
+      const t = segs[tid];
+      if (t.owner !== gang || seen.has(tid)) continue;
+      seen.add(tid);
+      const from = t.adj.map((a) => segs[a]).filter((n) => n.owner === me && n.troops >= 3);
+      if (from.length < 2) continue;
+      const def = t.troops * b.defMult(t) * p.risk + 2, power = from.reduce((v, n) => v + (n.troops - 1) * b.atkMult(n), 0);
+      if (power < def) continue;
+      const value = (t.cap / 50 + (t.building ? 0.6 : 0)) * rules.gangUp;
+      options.push({ joint: from, tid, def, power, score: value / (def / 1.5) });
     }
   }
   options.sort((x, y) => y.score - x.score);
   const used = new Set();
   for (const o of options) {
     if (budget <= 0) return;
+    if (o.joint) {
+      // everyone chips in the same share of what they can spare
+      if (used.has('t' + o.tid) || o.joint.some((n) => used.has(n.id))) continue;
+      const share = Math.min(1, o.def / o.power);
+      for (const n of o.joint) { b.send(me, n.id, o.tid, Math.ceil((n.troops - 1) * share)); used.add(n.id); }
+      used.add('t' + o.tid);
+      budget--;
+      continue;
+    }
     if (used.has(o.s.id) || used.has('t' + o.tid)) continue;
     if (b.send(me, o.s.id, o.tid, o.send)) { used.add(o.s.id); used.add('t' + o.tid); budget--; }
   }
 
-  // 3. reinforce with what's left: the fullest interior segment pushes troops one step toward the front
+  // 3. reinforce with what's left: the fullest interior segment pushes troops one step toward the
+  //    front, toward the leader's border when there is one
+  const onLeader = gang >= 0 ? mine.filter((s) => s.adj.some((a) => segs[a].owner === gang)).map((s) => s.id) : [];
+  if (onLeader.length) {
+    const d = hops(b.map, onLeader);
+    for (const s of mine) front[s.id] = Math.min(front[s.id] + 2, d[s.id]);   // leader front counts as nearer
+  }
   const back = mine.filter((s) => !used.has(s.id) && front[s.id] >= 1 && s.troops >= s.cap * 0.5)
     .sort((x, y) => y.troops - x.troops);
   for (const s of back) {

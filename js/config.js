@@ -15,6 +15,10 @@ export const rules = {
   capMax: 400,
   // growth: every tile produces this share of its cap per second (600-cap tile: +6/s).
   growthRate: 0.01,
+  // bots gang up on the leader (side with the highest total troop growth): its tiles are worth
+  // gangUp x more to every other bot (who also pools several border tiles into joint attacks on it); the leader only changes when another side grows leaderSwitch x more
+  gangUp: 2.5,
+  leaderSwitch: 1.1,
   // neutral tiles regrow at this share of that rate (0.2 = 80% slower), only back up to their garrison
   neutralRegrow: 0.2,
 };
