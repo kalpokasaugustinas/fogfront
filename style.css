@@ -261,3 +261,6 @@ html.compact .badge { font-size: 12px; padding: 4px 9px; }
    (fixed-position screens and overlays follow, since the transformed body contains them) */
 html.rotated body { position: fixed; top: 0; left: 0; width: var(--sh); height: var(--sw); transform-origin: top left;
   transform: translateX(var(--sw)) rotate(90deg); }
+
+/* music + sound credits at the bottom of the rules card */
+#help .credits { font-size: 11px; opacity: 0.7; line-height: 1.4; }

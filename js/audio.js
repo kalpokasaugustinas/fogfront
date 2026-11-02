@@ -1,9 +1,12 @@
-// sound effects + generative background music, all synthesized with web audio (no sound files).
-// sfx: marching steps, war cries, sword clashes, capture horns, clicks.
-// music: slow medieval-folk loop in d dorian: drone pad, plucked lute arpeggios, frame drum.
+// sound effects + background music from recorded files in audio/ (credits: audio/CREDITS.md).
+// sfx: short mp3 clips decoded into web audio buffers; a few cues stay synthesized (capture horns).
+// music: playlists streamed through two <audio> decks that crossfade into each other.
 // audio starts on the first tap/key (browser rule); on/off choices are remembered.
 
 const pref_key = 'frontlines.audio';
+const base = new URL('../audio/', import.meta.url);
+const music_vol = 0.55, sfx_vol = 0.8;
+const xfade = 3;   // seconds of overlap between two music tracks
 let ctx = null, master, sfxBus, musicBus, noiseBuf, musicTimer = 0;
 const prefs = loadPrefs();
 
@@ -28,23 +31,65 @@ export function initAudio() {
   comp.ratio.value = 4;
   master.connect(comp).connect(ctx.destination);
   sfxBus = ctx.createGain();
-  sfxBus.gain.value = prefs.sfx ? 0.8 : 0;
+  sfxBus.gain.value = prefs.sfx ? sfx_vol : 0;
   sfxBus.connect(master);
   musicBus = ctx.createGain();
-  musicBus.gain.value = prefs.music ? 0.32 : 0;
-  musicBus.connect(master);
+  musicBus.gain.value = prefs.music ? music_vol : 0;
+  musicBus.connect(ctx.destination);   // music skips the compressor so sfx don't pump it
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  loadSamples();
   startMusic();
   // stop playing in a background tab
-  document.addEventListener('visibilitychange', () => (document.hidden ? ctx.suspend() : ctx.resume()));
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { ctx.suspend(); for (const d of decks) d.el.pause(); }
+    else { ctx.resume(); resumeDecks(); }
+  });
 }
 
-export function setSfx(on) { prefs.sfx = on; savePrefs(); if (ctx) sfxBus.gain.setTargetAtTime(on ? 0.8 : 0, ctx.currentTime, 0.05); }
-export function setMusic(on) { prefs.music = on; savePrefs(); if (ctx) musicBus.gain.setTargetAtTime(on ? 0.32 : 0, ctx.currentTime, 0.3); }
+export function setSfx(on) { prefs.sfx = on; savePrefs(); if (ctx) sfxBus.gain.setTargetAtTime(on ? sfx_vol : 0, ctx.currentTime, 0.05); }
+export function setMusic(on) {
+  prefs.music = on; savePrefs();
+  if (!ctx) return;
+  musicBus.gain.setTargetAtTime(on ? music_vol : 0, ctx.currentTime, 0.3);
+  // pause the streams while music is off (saves data), pick up where they were when it's back
+  if (on) resumeDecks(); else setTimeout(() => { if (!prefs.music) for (const d of decks) d.el.pause(); }, 1200);
+}
 
-// ---------- building blocks ----------
+// ---------- samples ----------
+// name -> number of variants (files name0.mp3, name1.mp3, ...); 0 = a single file name.mp3
+const sample_files = { click: 0, step: 3, build: 3, clash: 10, shout: 5, drums: 0, horn: 0 };
+const buffers = {};
+
+// fetch + decode every clip once; effects play as soon as their clip is ready
+function loadSamples() {
+  for (const [name, n] of Object.entries(sample_files)) {
+    const files = n ? Array.from({ length: n }, (_, i) => `${name}${i}`) : [name];
+    buffers[name] = [];
+    for (const f of files) {
+      fetch(new URL(`sfx/${f}.mp3`, base))
+        .then((r) => r.arrayBuffer())
+        .then((b) => new Promise((ok, fail) => ctx.decodeAudioData(b, ok, fail)))   // callback form for old safari
+        .then((buf) => buffers[name].push(buf))
+        .catch(() => { /* missing or undecodable clip: that effect stays silent */ });
+    }
+  }
+}
+
+// play a random variant of a clip; rate = pitch/speed, jitter = random rate spread
+function play(name, { vol = 0.5, rate = 1, jitter = 0.08, when = 0 } = {}) {
+  const list = buffers[name];
+  if (!ctx || !list?.length) return;
+  const src = ctx.createBufferSource(), g = ctx.createGain();
+  src.buffer = list[Math.floor(Math.random() * list.length)];
+  src.playbackRate.value = rate * (1 + (Math.random() * 2 - 1) * jitter);
+  g.gain.value = vol;
+  src.connect(g).connect(sfxBus);
+  src.start(ctx.currentTime + when);
+}
+
+// ---------- synth building blocks (for the cues without a recording) ----------
 
 // filtered noise burst
 function noise({ when = 0, dur = 0.1, type = 'bandpass', freq = 1000, q = 1, vol = 0.3, attack = 0.005, bus = sfxBus, sweep = 0 }) {
@@ -81,45 +126,12 @@ function note({ when = 0, freq = 440, dur = 0.3, type = 'sine', vol = 0.2, attac
 // ---------- effects ----------
 
 export const sfx = {
-  // one marching step: low thud + gravel shuffle; size 0..1
-  march(size) {
-    const v = 0.08 + 0.22 * size;
-    noise({ type: 'lowpass', freq: 160, q: 0.7, vol: v, dur: 0.12 });
-    noise({ type: 'bandpass', freq: 1400, q: 0.8, vol: v * 0.25, dur: 0.07, when: 0.01 });
-  },
-  // war cry: a few detuned "aaah" voices (saw through vowel formants), rising then falling
-  shout(size) {
-    if (!ctx) return;
-    const voices = 2 + Math.round(size * 3), t = ctx.currentTime;
-    for (let i = 0; i < voices; i++) {
-      const base = 150 + Math.random() * 90, dur = 0.55 + Math.random() * 0.3, start = t + Math.random() * 0.12;
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      o.type = 'sawtooth';
-      o.frequency.setValueAtTime(base, start);
-      o.frequency.linearRampToValueAtTime(base * 1.35, start + dur * 0.35);
-      o.frequency.linearRampToValueAtTime(base * 0.9, start + dur);
-      g.gain.setValueAtTime(0, start);
-      g.gain.linearRampToValueAtTime((0.05 + 0.06 * size) / Math.sqrt(voices), start + 0.06);
-      g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-      // vowel "ah": two formant bandpasses mixed
-      for (const [fq, q] of [[750, 6], [1150, 8]]) {
-        const f = ctx.createBiquadFilter();
-        f.type = 'bandpass'; f.frequency.value = fq * (0.95 + Math.random() * 0.1); f.Q.value = q;
-        o.connect(f).connect(g);
-      }
-      g.connect(sfxBus);
-      o.start(start);
-      o.stop(start + dur + 0.05);
-    }
-    noise({ type: 'bandpass', freq: 900, q: 1.2, vol: 0.05 + 0.05 * size, dur: 0.5, attack: 0.08 });   // crowd breath
-  },
-  // sword clash: bright metallic ping + short noise scrape
-  clash() {
-    const f = 2200 + Math.random() * 2600;
-    note({ freq: f, type: 'triangle', vol: 0.07, dur: 0.12 + Math.random() * 0.1, attack: 0.002 });
-    note({ freq: f * 1.51, type: 'sine', vol: 0.035, dur: 0.08, attack: 0.002 });
-    noise({ type: 'highpass', freq: 3500, q: 0.7, vol: 0.06, dur: 0.05 });
-  },
+  // one marching step on grass; size 0..1 (how many troops are on the move)
+  march(size) { play('step', { vol: 0.1 + 0.3 * size, rate: 0.85, jitter: 0.12 }); },
+  // war cry: a slice of a shouting crowd, louder for bigger fights
+  shout(size) { play('shout', { vol: 0.25 + 0.45 * size, jitter: 0.06 }); },
+  // sword clash: one of 10 recorded clashes, pitch varied so repeats don't stand out
+  clash() { play('clash', { vol: 0.28, jitter: 0.12 }); },
   // horn when a tile changes hands: rising for you, falling when you lose one
   capture(mine) {
     const [a, b] = mine ? [196, 294] : [220, 147];
@@ -132,108 +144,97 @@ export const sfx = {
     noise({ type: 'lowpass', freq: 130, vol: 0.09, dur: 0.22 });
     note({ freq: 147, type: 'sawtooth', vol: 0.03, dur: 0.35, attack: 0.04, cutoff: 700, when: 0.05 });
   },
-  build() {
-    for (let i = 0; i < 3; i++) noise({ type: 'bandpass', freq: 600 + i * 150, q: 3, vol: 0.12, dur: 0.07, when: i * 0.11 });
-  },
-  // countdown war drum: deep boom + skin slap, a little higher on each count (i = 0, 1, 2)
-  drum(i) {
-    note({ freq: 70 + i * 12, type: 'sine', vol: 0.28, dur: 0.45, attack: 0.004, glide: 0.6 });
-    noise({ type: 'lowpass', freq: 240, q: 0.8, vol: 0.22, dur: 0.16 });
-    noise({ type: 'bandpass', freq: 900, q: 1.5, vol: 0.05, dur: 0.05 });
-  },
-  // battle start: two-note horn call with a drum hit
-  horn() {
-    note({ freq: 147, type: 'sawtooth', vol: 0.09, dur: 0.3, attack: 0.04, cutoff: 1200 });
-    note({ freq: 220, type: 'sawtooth', vol: 0.1, dur: 0.7, attack: 0.05, when: 0.25, cutoff: 1400 });
-    note({ freq: 294, type: 'sawtooth', vol: 0.05, dur: 0.6, attack: 0.05, when: 0.3, cutoff: 1600 });
-    noise({ type: 'lowpass', freq: 160, vol: 0.2, dur: 0.3, when: 0.25 });
-  },
-  click() { note({ freq: 880, type: 'sine', vol: 0.05, dur: 0.05, attack: 0.002 }); },
+  // three hammer knocks on wood
+  build() { for (let i = 0; i < 3; i++) play('build', { vol: 0.45, when: i * 0.13 }); },
+  // countdown: the war drum recording runs under all three counts, so only count 0 starts it
+  drum(i) { if (i === 0) play('drums', { vol: 0.7, jitter: 0 }); },
+  // battle start: low war horn
+  horn() { play('horn', { vol: 0.55, jitter: 0 }); },
+  click() { play('click', { vol: 0.5, jitter: 0.05 }); },
 };
 
 // ---------- music ----------
-// two generative tracks, scheduled ~1 s ahead on a timer, one bar at a time:
-//   battle: d dorian folk loop, 72 bpm: drone pad, plucked lute arpeggio, frame drum
-//   menu:   heroic d major theme, 84 bpm (d-a-bm-g): brass-like chord swells, horn melody,
-//           timpani on the downbeat with a roll and cymbal swell every 4th bar
-const mtof = (m) => 440 * 2 ** ((m - 69) / 12);
-const tracks = {
-  battle: { bpm: 72, chords: [[50, 57, 62, 65], [48, 55, 60, 64], [53, 60, 65, 69], [45, 52, 57, 60]], bar: battleBar },
-  menu: { bpm: 84, chords: [[50, 57, 62, 66], [45, 52, 57, 61], [47, 54, 59, 62], [43, 50, 55, 59]], bar: menuBar },
+// playlists of files in audio/music/. loop = keep going (next track, wrapping around);
+// otherwise the track plays once (victory/defeat), then silence until the next setTrack.
+const playlists = {
+  menu: { files: ['menu-aphelion'], loop: true },
+  battle: { files: ['game-forge', 'game-five-armies', 'game-heroic-demise', 'game-battle-theme-a'], loop: true },
+  victory: { files: ['victory'], loop: false },
+  defeat: { files: ['defeat'], loop: false },
 };
-let track = tracks.menu, nextBar = 0, bar = 0;
+// two decks: one playing, the other fading in the next track
+const decks = [];
+let list = 'menu', pos = 0, active = 0;
+const nextPos = { battle: 0 };   // battle music rotates: each battle starts at the next track
+
+// every audio url the game uses (for the smoke test), plus what's playing now
+export function audioFiles() {
+  const sfxUrls = Object.entries(sample_files).flatMap(([name, n]) => (n ? Array.from({ length: n }, (_, i) => `${name}${i}`) : [name]).map((f) => new URL(`sfx/${f}.mp3`, base).href));
+  const musicUrls = Object.values(playlists).flatMap((pl) => pl.files.map((f) => new URL(`music/${f}.mp3`, base).href));
+  return { sfx: sfxUrls, music: musicUrls };
+}
+export function audioState() {
+  const d = decks[active];
+  return { list, pos, ctx: ctx?.state ?? 'none', src: d?.el.src ?? '', playing: !!d && !d.el.paused, time: d?.el.currentTime ?? 0, loaded: Object.fromEntries(Object.entries(buffers).map(([k, v]) => [k, v.length])) };
+}
+
+function makeDeck() {
+  const el = new Audio();
+  el.preload = 'auto';
+  el.crossOrigin = 'anonymous';
+  const g = ctx.createGain();
+  g.gain.value = 0;
+  ctx.createMediaElementSource(el).connect(g).connect(musicBus);
+  return { el, g, live: false };
+}
 
 function startMusic() {
-  nextBar = ctx.currentTime + 0.3;
+  decks.push(makeDeck(), makeDeck());
+  // unlock both decks inside the user gesture (ios only lets gesture-started elements play later)
+  for (const d of decks) { d.el.src = new URL('sfx/click.mp3', base).href; d.el.play().then(() => d.el.pause(), () => {}); }
+  playOn(list, pos, 1.5);
   clearInterval(musicTimer);
-  musicTimer = setInterval(scheduleMusic, 250);
+  musicTimer = setInterval(tickMusic, 250);
 }
 
-// switch tracks: quick dip of the music bus, then the new track starts on a fresh phrase
+// start file #p of playlist name on the idle deck and crossfade the other one out over fade s
+function playOn(name, p, fade) {
+  const pl = playlists[name], t = ctx.currentTime;
+  const out = decks[active], inn = decks[1 - active];
+  active = 1 - active;
+  out.live = false;
+  out.g.gain.cancelScheduledValues(t);
+  out.g.gain.setValueAtTime(out.g.gain.value, t);
+  out.g.gain.linearRampToValueAtTime(0, t + fade);
+  setTimeout(() => { if (!out.live) out.el.pause(); }, fade * 1000 + 100);
+  inn.el.src = new URL(`music/${pl.files[p]}.mp3`, base).href;
+  inn.live = true;
+  inn.g.gain.cancelScheduledValues(t);
+  inn.g.gain.setValueAtTime(0, t);
+  inn.g.gain.linearRampToValueAtTime(1, t + fade);
+  if (prefs.music && !document.hidden) inn.el.play().catch(() => {});
+}
+
+function resumeDecks() {
+  if (!prefs.music) return;
+  for (const d of decks) if (d.live && !d.el.ended) d.el.play().catch(() => {});
+}
+
+// switch playlists: quick crossfade into the new one
 export function setTrack(name) {
-  const next = tracks[name] ?? tracks.menu;
-  if (next === track) return;
-  track = next;
-  bar = 0;
-  if (!ctx) return;
-  const g = musicBus.gain, on = prefs.music ? 0.32 : 0, t = ctx.currentTime;
-  g.cancelScheduledValues(t);
-  g.setTargetAtTime(0, t, 0.15);
-  g.setTargetAtTime(on, t + 0.9, 0.4);
-  nextBar = t + 0.9;
+  if (!playlists[name] || name === list) return;
+  list = name;
+  pos = 0;
+  if (name in nextPos) { pos = nextPos[name]; nextPos[name] = (pos + 1) % playlists[name].files.length; }
+  if (ctx) playOn(list, pos, 1.5);
 }
 
-function scheduleMusic() {
-  if (!ctx || ctx.state !== 'running') return;
-  while (nextBar < ctx.currentTime + 1.2) {
-    const beat = 60 / track.bpm, ch = track.chords[Math.floor(bar / 2) % track.chords.length];
-    track.bar(nextBar - ctx.currentTime, ch, beat, bar);
-    nextBar += beat * 4;
-    bar++;
-  }
-}
-
-function battleBar(when, ch, beat, bar) {
-  const barLen = beat * 4;
-  // drone pad: soft triangles, slow attack
-  for (const m of [ch[0] - 12, ch[1] - 12]) note({ bus: musicBus, when, freq: mtof(m), type: 'triangle', vol: 0.09, attack: 0.8, dur: barLen + 0.6, cutoff: 900 });
-  // plucked arpeggio: 8 eighth notes, chord tones with the odd octave jump
-  for (let i = 0; i < 8; i++) {
-    if (Math.random() < 0.18) continue;
-    const m = ch[(i * 2 + bar) % 4] + (Math.random() < 0.25 ? 12 : 0);
-    note({ bus: musicBus, when: when + i * beat / 2, freq: mtof(m), type: 'sawtooth', vol: 0.05, attack: 0.004, dur: 0.6, cutoff: 1600 });
-    note({ bus: musicBus, when: when + i * beat / 2, freq: mtof(m) * 2.003, type: 'sine', vol: 0.015, attack: 0.004, dur: 0.35 });
-  }
-  // frame drum: beats 1 and 3, softer ghost note before 3
-  for (const [b, v] of [[0, 0.22], [1.5, 0.07], [2, 0.16]]) noise({ bus: musicBus, when: when + b * beat, type: 'lowpass', freq: 140, q: 1, vol: v, dur: 0.25 });
-}
-
-// horn melody: one 2-bar phrase per chord pair, built from chord tones (rhythm in beats)
-const phrases = [[[0, 1], [1, 0.5], [2, 0.5], [3, 2]], [[3, 1.5], [2, 0.5], [1, 1], [0, 1]], [[2, 0.5], [3, 0.5], [2, 1], [1, 2]], [[0, 2], [1, 1], [3, 1]]];
-
-function menuBar(when, ch, beat, bar) {
-  const barLen = beat * 4;
-  // brass-like chord swell: detuned saws through a lowpass, slow attack
-  for (const m of [ch[1], ch[2], ch[3]]) {
-    for (const det of [1, 1.004]) note({ bus: musicBus, when, freq: mtof(m) * det, type: 'sawtooth', vol: 0.022, attack: 0.5, dur: barLen + 0.4, cutoff: 1100 });
-  }
-  note({ bus: musicBus, when, freq: mtof(ch[0] - 12), type: 'triangle', vol: 0.1, attack: 0.05, dur: barLen, cutoff: 600 });   // bass
-  // horn melody on even bars (a phrase spans the next 2 bars' worth of beats when it's long)
-  if (bar % 2 === 0) {
-    let at = 0;
-    for (const [deg, len] of phrases[(bar / 2) % phrases.length]) {
-      const f = mtof(ch[deg] + 12);
-      note({ bus: musicBus, when: when + at * beat, freq: f, type: 'sawtooth', vol: 0.045, attack: 0.06, dur: len * beat * 0.95, cutoff: 1800 });
-      note({ bus: musicBus, when: when + at * beat, freq: f * 0.5, type: 'triangle', vol: 0.03, attack: 0.06, dur: len * beat * 0.95 });
-      at += len;
-    }
-  }
-  // timpani on the downbeat (pitched to the root), roll + cymbal swell into every 4th bar
-  const timp = (w, v) => note({ bus: musicBus, when: w, freq: mtof(ch[0] - 12), type: 'sine', vol: v, attack: 0.005, dur: 0.6, glide: 0.92 });
-  timp(when, 0.22);
-  timp(when + beat * 2, 0.12);
-  if (bar % 4 === 3) {
-    for (let i = 0; i < 8; i++) timp(when + beat * 3 + i * beat / 8, 0.05 + i * 0.012);
-    noise({ bus: musicBus, when: when + beat * 2, type: 'highpass', freq: 5000, q: 0.5, vol: 0.05, dur: beat * 2.2, attack: beat * 2 });
+// near the end of a looping track: crossfade into the next one in the playlist
+function tickMusic() {
+  const d = decks[active], pl = playlists[list];
+  if (!ctx || !d.live || !pl.loop || !d.el.duration || d.el.paused) return;
+  if (d.el.duration - d.el.currentTime < xfade) {
+    pos = (pos + 1) % pl.files.length;
+    playOn(list, pos, xfade);
   }
 }

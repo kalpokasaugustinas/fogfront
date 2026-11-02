@@ -59,6 +59,29 @@ try:
             page.screenshot(path=str(out / f"{name}-menu.png"))
 
             if name == "landscape":
+                # audio: every file loads and decodes; a tap starts the menu music and the sfx buffers
+                chk = page.evaluate("""async () => {
+                  const { sfx, music } = __fl.audioFiles(), ac = new OfflineAudioContext(1, 44100, 44100), bad = [];
+                  for (const u of [...sfx, ...music]) {
+                    try { const r = await fetch(u); if (!r.ok) throw r.status; await ac.decodeAudioData(await r.arrayBuffer()); }
+                    catch (e) { bad.push(u.split('/audio/')[1] + ': ' + e); }
+                  }
+                  return { files: sfx.length + music.length, bad };
+                }""")
+                print("audio files:", chk)
+                page.mouse.click(5, 5)   # first gesture -> initAudio
+                page.wait_for_timeout(2500)
+                st = page.evaluate("__fl.audioState()")
+                print("audio state:", st)
+                if not st["playing"] or "menu-aphelion" not in st["src"] or chk["bad"]:
+                    errors.append(f"audio: {st} {chk['bad']}")
+                page.evaluate("__fl.startSkirmish()")
+                page.wait_for_timeout(2500)
+                st = page.evaluate("__fl.audioState()")
+                print("audio in battle:", {k: st[k] for k in ("list", "src", "playing", "loaded")})
+                if st["list"] != "battle" or not st["playing"] or "game-" not in st["src"]:
+                    errors.append(f"battle audio: {st}")
+                page.evaluate("__fl.skipCountdown()")
                 # every shape: connected maps with enough segments, plus a screenshot each
                 chk = page.evaluate("""async () => {
                   const { generateMap, hops, shapeNames } = await import('./js/mapgen.js');

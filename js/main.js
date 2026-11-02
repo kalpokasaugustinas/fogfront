@@ -1,12 +1,12 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=27';
-import { generateMap, rng } from './mapgen.js?v=27';
-import { Battle } from './battle.js?v=27';
-import { personalities } from './ai.js?v=27';
-import { Campaign } from './campaign.js?v=27';
-import { Expedition, stages, perks } from './expedition.js?v=27';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=27';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=27';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=28';
+import { generateMap, rng } from './mapgen.js?v=28';
+import { Battle } from './battle.js?v=28';
+import { personalities } from './ai.js?v=28';
+import { Campaign } from './campaign.js?v=28';
+import { Expedition, stages, perks } from './expedition.js?v=28';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=28';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=28';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -19,7 +19,7 @@ const neutral = hexToRgb(neutralColor);
 function show(id) {
   for (const s of document.querySelectorAll('.screen')) s.classList.toggle('hidden', s.id !== id);
   screen = id;
-  setTrack(id === 'battle' ? 'battle' : 'menu');   // heroic theme on menus, folk loop in battle
+  setTrack(id === 'battle' ? 'battle' : 'menu');   // aphelion on menus, rotating war tracks in battle
   if (id === 'menu') { renderMenuStats(); requestAnimationFrame(() => mv?.resize()); }
   requestAnimationFrame(() => { if (id === 'battle' && bv) { bv.resize(); key = ''; } if (id === 'campaign') cv.resize(), paintCampaign(); });
 }
@@ -612,6 +612,7 @@ function endBattle() {
   $('end-stats').innerHTML = statsHtml(battle);
   $('end-retry').classList.toggle('hidden', won);
   $('end').classList.remove('hidden');
+  setTrack(won ? 'victory' : 'defeat');
 }
 $('end-continue').onclick = () => { if (mode === 'campaign') show('campaign'); else show('menu'); };
 $('end-retry').onclick = () => {
@@ -643,6 +644,7 @@ function endStage(won) {
     $('end-retry').classList.remove('hidden');
     $('end-continue').classList.remove('hidden');
     $('end').classList.remove('hidden');
+    setTrack(won ? 'victory' : 'defeat');
     return;
   }
   const from = expedition.current, sum = expedition.collapse(battle), b = sum.bonus, pc = (v) => `+${Math.round(v * 100)}%`;
@@ -664,6 +666,7 @@ function endStage(won) {
   $('end-retry').classList.add('hidden');
   $('end-continue').classList.add('hidden');
   $('end').classList.remove('hidden');
+  setTrack('victory');
 }
 
 // zoom-out: the old map shrinks into the new capital while the bigger map fades in around it
@@ -904,4 +907,4 @@ syncAudioButtons();
 renderMenuStats();
 
 // hooks for headless tests
-window.__fl = { skipCountdown: () => { countdown = 0; goFlash = 0; }, campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv };
+window.__fl = { skipCountdown: () => { countdown = 0; goFlash = 0; }, campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv, audioState, audioFiles };
