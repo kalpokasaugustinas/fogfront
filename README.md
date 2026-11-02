@@ -47,6 +47,8 @@ Keys: space = pause, 1–4 = send %, A = auto toggle, Esc = deselect.
 ## Menu
 A live 4-bot battle plays on a decorative island behind the menu (new island when it ends). Glossy logo, 3D mode cards with progress (campaign regions, best expedition stage, quick battle wins), sound/music/help buttons.
 
+Commander panel (👤 on the menu): pick your colour (8), troop style (soldiers, knights, vikings, archers) and building style (classic, nordic, desert, eastern); saved in the browser. Rivals get their own colours and random, distinct styles every battle. The campaign is hidden from the menu for now (code kept).
+
 ## Sound
 Recorded audio files in `audio/` (free licences, credits in [audio/CREDITS.md](audio/CREDITS.md) and the How to play screen):
 - Music: orchestral tracks streamed through two crossfading decks. Menus loop Scott Buckley's "Aphelion" (from 1:45). Battles rotate 4 war tracks ("Song Of The Forge" opening march, "Five Armies", "Heroic Demise", "Battle Theme A"), each battle starting on the next one, with 3 s crossfades. The end card plays a victory or defeat piece once.
