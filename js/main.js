@@ -1,12 +1,12 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=25';
-import { generateMap, rng } from './mapgen.js?v=25';
-import { Battle } from './battle.js?v=25';
-import { personalities } from './ai.js?v=25';
-import { Campaign } from './campaign.js?v=25';
-import { Expedition, stages, perks } from './expedition.js?v=25';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=25';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=25';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=26';
+import { generateMap, rng } from './mapgen.js?v=26';
+import { Battle } from './battle.js?v=26';
+import { personalities } from './ai.js?v=26';
+import { Campaign } from './campaign.js?v=26';
+import { Expedition, stages, perks } from './expedition.js?v=26';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=26';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=26';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -100,7 +100,7 @@ $('campaign-canvas').addEventListener('pointerdown', (e) => {
 // ---------- battle screen ----------
 let battle = null, bv = null, mode = 'skirmish', regionId = -1;
 let countdown = 0, goFlash = 0;   // 3-2-1 before a battle starts (s left), 'Conquer!' banner after
-let auto = false, selected = -1, pct = 0.5, drag = null, hover = -1, speed = 1, paused = false, key = '';
+let auto = true, selected = -1, pct = 0.5, drag = null, hover = -1, speed = 1, paused = false, key = '';
 
 function startBattle(setup, m, rid = -1) {
   // battle maps: random island shape + lakes/mountains (setup.shape can force a shape)
@@ -229,7 +229,9 @@ function drawBattle() {
   paintBattle();
   const ctx = bv.drawBase();
   // selected segment: glowing outline; its neighbours: dashed outlines
-  if (selected >= 0) bv.highlight(ctx, selected, colors[0], battle.segs[selected].adj, performance.now() / 1000);
+  // highlight: the tile you're dragging from (with its neighbours), else the selected tile
+  const hl = drag ? drag.from : selected;
+  if (hl >= 0) bv.highlight(ctx, hl, colors[0], battle.segs[hl].adj, performance.now() / 1000);
   const fs = Math.max(11, Math.min(18, bv.size / 30));
   drawUnits(ctx, bv, battle, acc, true);
   updateWheel();   // follows zoom / pan
@@ -351,7 +353,7 @@ function localPos(e) {
 // mouse wheel zooms (1x-5x) around the fingers / cursor; one finger on empty ground pans. when
 // zooming settles, the view re-renders at a higher resolution so it stays sharp
 const zoomMax = 5, cam = { z: 1, x: 0, y: 0 }, pointers = new Map();
-let pinch = null, pan = null, boostTimer = 0;
+let pinch = null, boostTimer = 0;
 function setCam(z, x, y) {
   const w = $('battle-wrap').clientWidth, h = $('battle-wrap').clientHeight;
   cam.z = Math.min(zoomMax, Math.max(1, z));
@@ -383,23 +385,26 @@ const pinchInfo = () => {
   const [a, b] = [...pointers.values()];
   return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 };
+// one finger = a gesture, decided when it moves or ends:
+// - drag from your tile to a neighbour = send troops there (attack, or move to your own tile;
+//   with auto on, a move also sets a standing route). released anywhere else = nothing sent
+// - drag starting anywhere else = pan the map
+// - tap your tile = select it and open its build wheel; tap anything else = close / deselect
+// two fingers = pinch zoom
+let gesture = null;
 $('battle-canvas').addEventListener('pointerdown', (e) => {
   if (!battle) return;
   bv.canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, wrapPos(e));
   if (pointers.size === 2) {
-    // second finger: pinch zoom (cancels any drag / pan of the first finger)
-    drag = pan = null;
+    gesture = drag = null;
     pinch = { ...pinchInfo(), z0: cam.z, x0: cam.x, y0: cam.y };
     return;
   }
-  if (pointers.size > 2 || battle.state !== 'running' || countdown > 0) return;
+  if (pointers.size > 2) return;
   const sid = bv.segAt(e.clientX, e.clientY);
   hover = sid;
-  // own segment: decide tap vs drag on pointerup
-  if (isMine(sid)) drag = { from: sid, moved: false, ...localPos(e) };
-  else if (canTarget(selected, sid)) sendFrom(selected, sid);
-  else pan = { ...wrapPos(e), x0: cam.x, y0: cam.y, moved: false, sid };   // empty ground: pan (tap = deselect)
+  gesture = { sid, ...wrapPos(e), x0: cam.x, y0: cam.y, mode: null };
 });
 $('battle-canvas').addEventListener('pointermove', (e) => {
   if (!battle) return;
@@ -411,46 +416,41 @@ $('battle-canvas').addEventListener('pointermove', (e) => {
     setCam(nz, p.x - wx * nz, p.y - wy * nz);
     return;
   }
-  if (pan) {
-    const p = wrapPos(e);
-    if (Math.hypot(p.x - pan.x, p.y - pan.y) > 6) pan.moved = true;
-    if (pan.moved) setCam(cam.z, pan.x0 + p.x - pan.x, pan.y0 + p.y - pan.y);
-    return;
-  }
   hover = bv.segAt(e.clientX, e.clientY);
-  if (drag) {
-    Object.assign(drag, localPos(e));
-    if (hover !== drag.from && !drag.moved) { drag.moved = true; selected = drag.from; wheelOn = false; }
+  if (!gesture) return;
+  const p = wrapPos(e);
+  if (!gesture.mode && Math.hypot(p.x - gesture.x, p.y - gesture.y) > 8) {
+    const troopDrag = isMine(gesture.sid) && battle.state === 'running' && countdown <= 0;
+    gesture.mode = troopDrag ? 'drag' : 'pan';
+    if (troopDrag) drag = { from: gesture.sid, moved: true, ...localPos(e) };
   }
+  if (gesture.mode === 'pan') setCam(cam.z, gesture.x0 + p.x - gesture.x, gesture.y0 + p.y - gesture.y);
+  else if (gesture.mode === 'drag') Object.assign(drag, localPos(e));
 });
 function pointerEnd(e) {
   pointers.delete(e.pointerId);
-  if (pinch) { if (pointers.size < 2) pinch = null; drag = pan = null; return; }
-  if (pan) { if (!pan.moved && pan.sid < 0) selected = -1; pan = null; }
+  if (pinch && pointers.size < 2) pinch = null;
 }
-$('battle-canvas').addEventListener('pointercancel', (e) => { pointerEnd(e); drag = null; });
+$('battle-canvas').addEventListener('pointercancel', (e) => { pointerEnd(e); gesture = drag = null; });
 $('battle-canvas').addEventListener('pointerup', (e) => {
-  const wasPinch = !!pinch;
+  const wasPinch = !!pinch, g = gesture;
   pointerEnd(e);
-  if (wasPinch) return;
-  if (drag) {
-    const to = bv.segAt(e.clientX, e.clientY), from = drag.from;
-    if (drag.moved) { if (canTarget(from, to)) sendFrom(from, to); }
-    else if (from === selected) {
-      // tap the selected tile again: open the build wheel (empty tile); with the wheel open, or on
-      // a tile that can't build, it deselects
-      const s = battle.segs[from];
-      if (!wheelOn && !s.building && !s.capital) wheelOn = true;
-      else { selected = -1; wheelOn = false; }
-    }
-    // auto on + second tap on the tile the selected one already feeds: select it (route stays),
-    // so a supply chain can be built tile by tile
-    else if (auto && battle.routes.get(selected)?.to === from) { selected = from; wheelOn = false; }
-    else if (canTarget(selected, from)) sendFrom(selected, from); // tap own neighbour: move troops
-    else { selected = from; wheelOn = false; }                    // tap other own segment: select
-  }
+  gesture = null;
+  if (wasPinch || !g) { drag = null; return; }
+  const playing = battle.state === 'running' && countdown <= 0;
+  if (g.mode === 'drag') {
+    const to = bv.segAt(e.clientX, e.clientY);
+    if (playing && canTarget(g.sid, to)) sendFrom(g.sid, to);
+  } else if (!g.mode && playing) tapAt(g.sid);
   drag = null;
 });
+
+// a tap on tile sid (or -1 = off the map): your tile = select it + build wheel (tiles with a
+// structure or capitals just show their info / route); the same tile again or anything else = close
+function tapAt(sid) {
+  if (isMine(sid) && sid !== selected) { selected = sid; wheelOn = true; }
+  else { selected = -1; wheelOn = false; }
+}
 
 function sendFrom(from, to) {
   const n = Math.floor(battle.segs[from].troops * pct);
@@ -842,6 +842,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 setPct(0.5);
 setSpeed(1);
+setAuto(true);   // auto-send routes on by default
 
 // audio: start on the first gesture, toggles remembered
 addEventListener('pointerdown', initAudio, { capture: true });

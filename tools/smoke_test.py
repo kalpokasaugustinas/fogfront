@@ -152,37 +152,42 @@ try:
                 return box["x"] + sx, box["y"] + sy
             page.wait_for_timeout(1000)
             page.evaluate("__fl.battle.segs[%d].troops = 200" % b["me"])   # enough for a farm + an attack
-            page.mouse.click(*to_px(b["x"], b["y"]))   # select
+            def drag(a, z):
+                # finger drag from grid point a to grid point z, in small steps
+                (x0, y0), (x1, y1) = to_px(*a), to_px(*z)
+                page.mouse.move(x0, y0)
+                page.mouse.down()
+                page.mouse.move(x1, y1, steps=8)
+                page.mouse.up()
+            page.mouse.click(*to_px(b["x"], b["y"]))   # tap own tile: build wheel
             page.wait_for_timeout(150)
-            wheel_early = page.evaluate("!document.getElementById('wheel').classList.contains('hidden')")
-            page.mouse.click(*to_px(b["x"], b["y"]))   # tap again: build wheel
-            page.wait_for_timeout(100)
             wheel_open = page.evaluate("!document.getElementById('wheel').classList.contains('hidden')")
-            print(f"{name}: wheel after 1st tap {wheel_early}, after 2nd {wheel_open}")
+            print(f"{name}: wheel after a tap -> {wheel_open}")
             page.wait_for_timeout(250)
             page.screenshot(path=str(out / f"{name}-wheel.png"))   # build wheel around the tile
             page.click("#wheel .sector[data-type=farm]")
-            page.mouse.click(*to_px(b["target"]["x"], b["target"]["y"]))
+            page.mouse.click(*to_px(b["target"]["x"], b["target"]["y"]))   # tap elsewhere: closes, sends nothing
+            page.wait_for_timeout(100)
+            tapped = page.evaluate("__fl.battle.stats.sent")
+            drag((b["x"], b["y"]), (b["target"]["x"], b["target"]["y"]))   # drag = attack
             page.wait_for_timeout(300)
             state = page.evaluate("({ my_armies: __fl.battle.armies.filter(a => a.owner === 0).length, orders: __fl.battle.stats.sent, building: __fl.battle.segs[%d].building })" % b["me"])
-            print(f"{name}: after tap attack + farm -> {state}")
+            print(f"{name}: tap sends {tapped}; after drag attack + farm -> {state}")
             page.screenshot(path=str(out / f"{name}-battle.png"))
-            # tap-to-move: give the player a 2nd neighbouring segment, then tap it while home is selected
+            # drag-to-move: give the player a 2nd neighbouring segment, then drag home -> it
             mv = page.evaluate("""(() => { const b = __fl.battle, me = b.segs[%d];
                 const n = b.segs[me.adj[me.adj.length - 1]]; n.owner = 0; me.troops = 40; b.version++;
                 return { id: n.id, x: n.x, y: n.y }; })()""" % b["me"])
             page.wait_for_timeout(100)
-            page.mouse.click(*to_px(mv["x"], mv["y"]))
+            drag((b["x"], b["y"]), (mv["x"], mv["y"]))
             moved = page.evaluate("__fl.battle.armies.some(a => a.owner === 0 && a.to === %d)" % mv["id"])
-            print(f"{name}: tap own neighbour moves troops -> {moved}")
-
-            # auto route: toggle on, tap the own neighbour again (home still selected) = send + route
-            page.click("#auto")
-            page.mouse.click(*to_px(mv["x"], mv["y"]))
+            print(f"{name}: drag to own neighbour moves troops -> {moved}")
+            # auto is on by default, so that move also set a standing route
+            auto_on = page.evaluate("document.getElementById('auto').classList.contains('on')")
             r = page.evaluate("""(() => { const b = __fl.battle, me = b.segs[%d];
                 me.troops = me.cap; for (let i = 0; i < 25; i++) b.step(0.1);
                 return { routes: b.routes.size, keep: b.routes.get(%d)?.keep, troops: Math.round(me.troops), cap: me.cap }; })()""" % (b["me"], b["me"]))
-            print(f"{name}: auto route -> {r}")
+            print(f"{name}: auto on by default {auto_on}, route -> {r}")
             page.wait_for_timeout(200)
             page.screenshot(path=str(out / f"{name}-route.png"))
             # frame times: 3 s of real play at 3x speed (bots fighting, captures -> layer rebuilds)

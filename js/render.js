@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=25';
-import * as structures from './structures.js?v=25';
+import { themes } from './config.js?v=26';
+import * as structures from './structures.js?v=26';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -876,13 +876,24 @@ export class MapView {
     for (const t of targets) ctx.stroke(this.segP[t]);
     ctx.setLineDash([]);
     if (targetsOnly) { ctx.restore(); return; }
-    ctx.lineWidth = (7 + 4 * pulse) * px;
-    ctx.strokeStyle = `rgba(255,255,255,${0.25 + 0.2 * pulse})`;
+    // dim every other tile (neighbours you can send to a little less), so the selection pops:
+    // island + selected + targets as one evenodd path = the island with those tiles cut out
+    const dim = new Path2D();
+    dim.addPath(this.islandP);
+    dim.addPath(this.segP[id]);
+    for (const t of targets) dim.addPath(this.segP[t]);
+    ctx.fillStyle = 'rgba(14,24,30,0.24)';
+    ctx.fill(dim, 'evenodd');
+    ctx.fillStyle = 'rgba(14,24,30,0.08)';
+    for (const t of targets) ctx.fill(this.segP[t]);
+    // thick selected outline: pulsing glow, white band, owner colour core
+    ctx.lineWidth = (12 + 5 * pulse) * px;
+    ctx.strokeStyle = `rgba(255,255,255,${0.3 + 0.2 * pulse})`;
     ctx.stroke(this.segP[id]);
-    ctx.lineWidth = 4.5 * px;
+    ctx.lineWidth = 7 * px;
     ctx.strokeStyle = '#fff';
     ctx.stroke(this.segP[id]);
-    ctx.lineWidth = 2.2 * px;
+    ctx.lineWidth = 3.6 * px;
     ctx.strokeStyle = css(color);
     ctx.stroke(this.segP[id]);
     ctx.restore();
