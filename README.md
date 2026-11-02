@@ -12,6 +12,7 @@ Prototype stage.
   - 🔁 Auto toggle (key A): when on, sending to your own neighbour also sets a standing route. Every second the source forwards all troops above its reserve (100% − send %, of its cap) to the target. Chain routes to pipe troops from the back to the front. ✕ Stop on the selected tile ends its route; a route also ends when either tile is lost.
   - Fight: attack = troops × attack bonus, defense = defenders × defense bonus. The higher number wins and keeps the difference.
   - Neutral segments don't grow. Bots also fight each other.
+  - The island floats in fog, seen at a slight angle. Built segments show their building as a scene: farms turn into fields with farmhouses, forts get stone walls and towers, barracks a castle with tents and soldiers, hospitals an infirmary with medical tents, labs an observatory with crystals. Flags and soldiers take the owner's colour.
   - Each battle has a climate theme (summer, autumn, winter, moor): ground, cliffs, rocks and trees change with it. Owner colours show as glowing borders around each segment.
   - Maps vary: island shape (blob, squiggly square, triangle, diamond, peanut, ring) and 1–4 lakes or mountain ranges that nobody can occupy or cross.
   - You win when every enemy faction is gone.
@@ -39,8 +40,12 @@ Vanilla JS modules plus canvas 2D. No build step, no dependencies.
 | `js/battle.js` | battle simulation (fixed 0.1 s step, no drawing, runs headless) |
 | `js/ai.js` | bot decisions and personalities |
 | `js/campaign.js` | world map, empires, region difficulty, save/load |
-| `js/render.js` | island-diorama renderer: cached sea/shadow/foam/cliff layer, ground + owner-border raster, trees, troop pills |
+| `js/render.js` | island-diorama renderer: smooth vector outlines (marching squares), tilted camera, static layers + cached per-segment sprites (overlays, trees, buildings), troop pills |
+| `js/structures.js` | building scenes that fill a segment: farmland, fort walls and towers, castle with soldiers, hospital, lab |
 | `js/main.js` | screens, input, HUD, frame loop |
+
+## Performance
+Runs at the monitor's refresh rate (60, 144 Hz ...). The simulation steps at 10 Hz; armies and route arrows interpolate between steps. Terrain, borders and rocks are drawn once per map; each segment's overlay, trees and building scene is a cached sprite, so captures and new buildings only re-stack sprites (~1 ms). The smoke test prints frame times and the rebuild cost.
 
 ## Run locally
 ```

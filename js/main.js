@@ -1,10 +1,10 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=12';
-import { generateMap, rng } from './mapgen.js?v=12';
-import { Battle } from './battle.js?v=12';
-import { personalities } from './ai.js?v=12';
-import { Campaign } from './campaign.js?v=12';
-import { MapView, hexToRgb, shade, label, pill } from './render.js?v=12';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=13';
+import { generateMap, rng } from './mapgen.js?v=13';
+import { Battle } from './battle.js?v=13';
+import { personalities } from './ai.js?v=13';
+import { Campaign } from './campaign.js?v=13';
+import { MapView, hexToRgb, shade, label, pill } from './render.js?v=13';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -40,7 +40,7 @@ function drawCampaign() {
   const ctx = cv.drawBase();
   const fs = Math.max(10, Math.min(15, cv.size / 36));
   for (const r of campaign.regions) {
-    const s = campaign.map.segs[r.id], x = cv.px(s.x), y = cv.px(s.y);
+    const s = campaign.map.segs[r.id], x = cv.sx(s.x), y = cv.sy(s.y);
     const owned = campaign.owned.has(r.id), open = campaign.attackable(r.id);
     label(ctx, owned ? '🏳️' : open ? '⚔️' : r.capital ? '👑' : '🔒', x, y - fs * 0.9, fs * 1.1);
     label(ctx, r.name, x, y + fs * 0.4, fs * 0.85, owned || open ? '#fff' : '#dde3e3', 700);
@@ -85,6 +85,7 @@ function startBattle(setup, m, rid = -1) {
   mode = m; regionId = rid; selected = -1; drag = null; paused = false; key = '';
   const theme = setup.theme ?? themeNames[setup.seed % themeNames.length];
   if (!bv) bv = new MapView($('battle-canvas'), map, theme); else bv.setMap(map, theme);
+  bv.prewarm(battle.factions.map((f) => colors[f.color]), 0.16);
   $('end').classList.add('hidden');
   renderBuildPanel();
   show('battle');
@@ -112,9 +113,9 @@ function paintBattle() {
   if (selected >= 0 && !isMine(selected)) selected = -1;
   const adj = selected >= 0 ? battle.segs[selected].adj : [];
   bv.paint((id) => {
-    const o = battle.segs[id].owner, hl = id === selected ? 0.3 : adj.includes(id) ? 0.14 : 0;
-    if (o < 0) return { color: null, fill: hl };
-    return { color: colors[battle.factions[o].color], fill: 0.16 + hl };
+    const s = battle.segs[id], o = s.owner;
+    if (o < 0) return { color: null, fill: 0, building: s.building };
+    return { color: colors[battle.factions[o].color], fill: 0.16, building: s.building };
   });
   renderBuildPanel();
 }
@@ -122,18 +123,21 @@ function paintBattle() {
 function drawBattle() {
   paintBattle();
   const ctx = bv.drawBase();
+  // selected segment: glowing outline; its neighbours: dashed outlines
+  if (selected >= 0) bv.highlight(ctx, selected, colors[0], battle.segs[selected].adj, performance.now() / 1000);
   const fs = Math.max(11, Math.min(18, bv.size / 30));
   // segment numbers and building icons
   for (const s of battle.segs) {
-    const x = bv.px(s.x), y = bv.px(s.y);
-    if (s.building) label(ctx, buildings[s.building].icon, x, y - fs * 1.15, fs * 1.05);
+    const x = bv.sx(s.x), y = bv.sy(s.y);
     const own = s.owner >= 0 ? factionColors[battle.factions[s.owner].color] : null;
-    pill(ctx, Math.floor(s.troops), x, y + (s.building ? fs * 0.2 : 0), fs * 0.85, own ?? 'rgba(90,100,95,.55)', own ?? '#4b5552');
+    pill(ctx, Math.floor(s.troops), x, y, fs * 0.85, own ?? 'rgba(90,100,95,.55)', own ?? '#4b5552');
   }
   // armies on the move
   for (const a of battle.armies) {
     const f = battle.segs[a.from], t = battle.segs[a.to];
-    const x = bv.px(f.x + (t.x - f.x) * a.t), y = bv.px(f.y + (t.y - f.y) * a.t);
+    // progress between sim steps: add the not-yet-simulated time, so movement is smooth at any fps
+    const tt = Math.min(1, a.t + acc / a.dur);
+    const x = bv.sx(f.x + (t.x - f.x) * tt), y = bv.sy(f.y + (t.y - f.y) * tt);
     const rad = 5 + Math.sqrt(a.n) * 1.3;
     ctx.beginPath();
     ctx.arc(x, y, rad, 0, Math.PI * 2);
@@ -149,13 +153,13 @@ function drawBattle() {
   for (const [a, r] of battle.routes) {
     const s = battle.segs[a], t = battle.segs[r.to];
     if (s.owner !== 0) continue;
-    const x1 = bv.px(s.x), y1 = bv.px(s.y), x2 = bv.px(t.x), y2 = bv.px(t.y);
+    const x1 = bv.sx(s.x), y1 = bv.sy(s.y), x2 = bv.sx(t.x), y2 = bv.sy(t.y);
     const ang = Math.atan2(y2 - y1, x2 - x1), len = Math.hypot(x2 - x1, y2 - y1);
     const sx = x1 + Math.cos(ang) * fs * 1.2, sy = y1 + Math.sin(ang) * fs * 1.2;
     const ex = x1 + Math.cos(ang) * (len - fs * 1.3), ey = y1 + Math.sin(ang) * (len - fs * 1.3);
     ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.85)';
-    ctx.setLineDash([6, 5]); ctx.lineDashOffset = -battle.time * 20;
+    ctx.setLineDash([6, 5]); ctx.lineDashOffset = -(battle.time + acc) * 20;
     ctx.stroke(); ctx.setLineDash([]);
     ctx.beginPath();   // arrow head
     ctx.moveTo(ex + Math.cos(ang) * 6, ey + Math.sin(ang) * 6);
@@ -166,9 +170,9 @@ function drawBattle() {
   ctx.restore();
   // drag arrow from the selected segment to the pointer
   if (drag && drag.moved) {
-    const f = battle.segs[drag.from], fx = bv.px(f.x), fy = bv.px(f.y);
+    const f = battle.segs[drag.from], fx = bv.sx(f.x), fy = bv.sy(f.y);
     const ok = canTarget(drag.from, hover);
-    const tx = ok ? bv.px(battle.segs[hover].x) : drag.x, ty = ok ? bv.px(battle.segs[hover].y) : drag.y;
+    const tx = ok ? bv.sx(battle.segs[hover].x) : drag.x, ty = ok ? bv.sy(battle.segs[hover].y) : drag.y;
     ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(tx, ty);
     ctx.lineWidth = 4; ctx.setLineDash([8, 6]);
     ctx.strokeStyle = ok ? '#fff' : 'rgba(255,255,255,.4)';
@@ -337,7 +341,10 @@ addEventListener('resize', () => { if (screen === 'battle' && bv) { bv.resize();
 
 // ---------- frame loop: fixed-step simulation, draw every frame ----------
 let last = performance.now(), acc = 0, uiTimer = 0;
+// runs at the monitor's refresh rate (60, 144 Hz ...): the sim advances in fixed steps,
+// drawing interpolates between them (see acc in drawBattle)
 function frame(now) {
+  requestAnimationFrame(frame);   // schedule first, so an error in one frame never stops the loop
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (screen === 'battle' && battle) {
@@ -351,11 +358,10 @@ function frame(now) {
     uiTimer -= dt;
     if (uiTimer <= 0) { updatePanel(); uiTimer = 0.15; }
   } else if (screen === 'campaign') drawCampaign();
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 setPct(0.5);
 setSpeed(1);
 
 // hooks for headless tests
-window.__fl = { campaign, startSkirmish, startBattle, get battle() { return battle; } };
+window.__fl = { campaign, startSkirmish, startBattle, get battle() { return battle; }, get view() { return bv; }, cview: cv };

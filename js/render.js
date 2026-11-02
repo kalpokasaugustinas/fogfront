@@ -3,9 +3,10 @@
 // owner colours as glowing segment borders, low-poly trees on top.
 // all edges (coast, lakes, mountains, segment borders) are smooth vector outlines traced from the
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
-// layers (display resolution, cached): under (shadow, foam, cliff) -> top (ground, owner
-// overlays, borders; repainted on ownership change) -> over (trees)
-import { themes } from './config.js?v=12';
+// layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
+// overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
+import { themes } from './config.js?v=13';
+import * as structures from './structures.js?v=13';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -94,7 +95,7 @@ function outline(test, lab, g, x0 = 0, y0 = 0, x1 = g - 1, y1 = g - 1, angular =
       cur = next;
     }
     if (loop.length < 3) continue;
-    const pts = angular ? rdp(relax(loop, codes), 2.2 * g / 480) : chaikin(chaikin(relax(relax(loop, codes), codes)));
+    const pts = angular ? rdp(relax(loop, codes), 2.2 * g / 480) : chaikin(relax(relax(loop, codes), codes));
     if (pts.length < 3) continue;
     path.moveTo(pts[0][0], pts[0][1]);
     for (let i = 1; i < pts.length; i++) path.lineTo(pts[i][0], pts[i][1]);
@@ -185,35 +186,45 @@ export class MapView {
     const { fogA, fogB } = this.theme;
     this.canvas.parentElement.style.background =
       `radial-gradient(circle at 50% 45%, rgb(${fogA}) 0%, rgb(${fogB}) 75%)`;
-    this.under = this.over = this.topC = null;   // cached layers belong to the old map
-    this.styleOf = null;
+    this.styleOf = this.st = null;
+    this.bkey = this.okey = null;
+    this.size = 0;   // forces resize() to rebuild every cached layer for the new map
     this.resize();
   }
 
-  // fit a square canvas into the parent element; cached display-res layers are rebuilt lazily
+  // fit the canvas into the parent: width = map width, height = squashed map + room for cliffs
+  // below and buildings/rocks above. cached layers are rebuilt lazily
   resize() {
     const r = this.canvas.parentElement.getBoundingClientRect();
-    const size = Math.max(50, Math.floor(Math.min(r.width, r.height)));
+    this.tilt = 0.8;
+    const pad = 0.12;   // extra height (as a share of width): cliffs + raised objects
+    const size = Math.max(50, Math.floor(Math.min(r.width, r.height / (this.tilt + pad))));
     const dpr = window.devicePixelRatio || 1;
     if (size === this.size && dpr === this.dpr && this.under) return;
     this.size = size;
     this.dpr = dpr;
     this.scale = size / this.map.grid;
+    this.oy = size * pad * 0.5;
+    const h = Math.round(size * (this.tilt + pad));
     this.canvas.width = Math.round(size * dpr);
-    this.canvas.height = Math.round(size * dpr);
-    this.canvas.style.width = this.canvas.style.height = size + 'px';
-    this.under = this.over = this.topC = null;
+    this.canvas.height = Math.round(h * dpr);
+    this.canvas.style.width = size + 'px';
+    this.canvas.style.height = h + 'px';
+    this.under = this.base = this.rocks = this.layerGround = this.layerOwner = this.layerObjects = null;
+    this.sprites = new Map();
+    this.ofsX = this.ofsY = 0;
+    this.u = Math.max(3.5, size / 92);   // building scale unit in css px
+    this.spotCache = new Map();
   }
 
-  // two grid-res textures: ground (all solid cells, grass/earth noise) and rock (mountain cells, hillshaded).
-  // they are only seen through the smooth outlines, so their pixel edges never show.
+  // grid-res ground texture (grass/earth noise, shore and scree tints). it is only seen through the
+  // smooth island outline, so its pixel edges never show
   buildGround() {
     const { ids, terrain, relief, near, nearType, grid: g, segs } = this.map, t = this.theme;
     const seed = (this.seed = (segs.length * 7919 + Math.round(segs[0].x * 31)) | 0);
     const mk = () => { const c = document.createElement('canvas'); c.width = c.height = g; return c; };
     this.groundC = mk();
-    this.rockC = mk();
-    const gi = this.groundC.getContext('2d').createImageData(g, g), ri = this.rockC.getContext('2d').createImageData(g, g);
+    const gi = this.groundC.getContext('2d').createImageData(g, g);
     const isMtn = (c) => terrain && terrain[c] === 2;
     const h = (c) => (c >= 0 && c < g * g && isMtn(c) ? relief[c] : 0);
     for (let c = 0; c < g * g; c++) {
@@ -223,20 +234,8 @@ export class MapView {
       let col = mix(t.groundA, t.groundB, n);
       if (near && near[c]) col = mix(col, nearType[c] === 1 ? t.shore : t.scree, 0.5 * (1 - (near[c] - 1) / 10) ** 1.5);
       gi.data[o] = col[0]; gi.data[o + 1] = col[1]; gi.data[o + 2] = col[2]; gi.data[o + 3] = 255;
-      if (isMtn(c)) {
-        // rock: dark base -> light top, caps on the highest points, lit from the north-west
-        const k = relief[c];
-        let rc = k > t.capAt ? t.cap : mix(t.rockDark, t.rockLight, Math.min(1, k / t.capAt));
-        const dx = h(x < g - 1 ? c + 1 : c) - h(x > 0 ? c - 1 : c), dy = h(c + g) - h(c - g);
-        rc = shade(rc, Math.max(-0.35, Math.min(0.25, (dx + dy) * 2.4 / this.k)));
-        ri.data[o] = rc[0]; ri.data[o + 1] = rc[1]; ri.data[o + 2] = rc[2]; ri.data[o + 3] = 255;
-      } else if (ids[c] >= 0 || terrain?.[c] === 1) {
-        // next to rock: copy the rock base colour so the rock texture doesn't fade to transparent at its edge
-        ri.data[o] = t.rockDark[0]; ri.data[o + 1] = t.rockDark[1]; ri.data[o + 2] = t.rockDark[2]; ri.data[o + 3] = 255;
-      }
     }
     this.groundC.getContext('2d').putImageData(gi, 0, 0);
-    this.rockC.getContext('2d').putImageData(ri, 0, 0);
   }
 
   // smooth outlines: island (land + mountains, lakes as holes), outer (incl. lakes), lakes,
@@ -276,6 +275,9 @@ export class MapView {
       if (x < b[0]) b[0] = x; if (y < b[1]) b[1] = y; if (x > b[2]) b[2] = x; if (y > b[3]) b[3] = y;
     }
     this.segP = segs.map((s) => outline((c) => ids[c] === s.id, lab, g, ...box[s.id]));
+    this.boxes = box;
+    this.segCells = segs.map(() => []);
+    for (let c = 0; c < g * g; c++) if (ids[c] >= 0) this.segCells[ids[c]].push(c);
   }
 
   // tree clusters inside segments, away from borders and number labels
@@ -303,28 +305,41 @@ export class MapView {
       for (let j = 0; j < count; j++) {
         const a = hash(i++, 4, this.seed) * Math.PI * 2, d = Math.sqrt(hash(i++, 5, this.seed)) * 14 * k;
         const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
-        if (ok(x, y)) this.trees.push({ x, y, r: (3.4 + hash(i++, 6, this.seed) * 2.2) * k });
+        if (ok(x, y)) this.trees.push({ x, y, r: (3.4 + hash(i++, 6, this.seed) * 2.2) * k, seg: ids[Math.floor(y) * g + Math.floor(x)] });
       }
     }
     this.trees.sort((a, b) => a.y - b.y);   // draw back to front
   }
 
-  // display-res canvas; ctx works in grid units (vector paths) unless reset
+  // ---------- camera: slight tilt ----------
+  // the ground plane is squashed vertically (tilt) so the map is seen at an angle; heights
+  // (cliffs, rocks, buildings, trees) stay upright, which gives the 2.5d diorama look.
+  // grid -> css: x * scale, y * scale * tilt + oy
+
+  sx(gx) { return gx * this.scale; }
+  sy(gy) { return gy * this.scale * this.tilt + this.oy; }
+  px(v) { return v * this.scale; }   // grid length -> css px (sizes)
+
+  // ctx transforms: grid units (with tilt) or css px. ofsX/ofsY shift the origin (device px) while
+  // drawing into a small sprite canvas, so the same drawing code works for sprites and full layers
+  gridT(x) { x.setTransform(this.dpr * this.scale, 0, 0, this.dpr * this.scale * this.tilt, -this.ofsX, this.dpr * this.oy - this.ofsY); }
+  cssT(x) { x.setTransform(this.dpr, 0, 0, this.dpr, -this.ofsX, -this.ofsY); }
+
+  // display-res canvas, ctx in grid units
   newLayer() {
     const c = document.createElement('canvas');
     c.width = this.canvas.width;
     c.height = this.canvas.height;
     const x = c.getContext('2d');
-    x.setTransform(this.dpr * this.scale, 0, 0, this.dpr * this.scale, 0, 0);
+    this.gridT(x);
     x.imageSmoothingQuality = 'high';
     return [c, x];
   }
 
-  // drop shadow, foam rings, lake water and the cliff face (all vector, offset downward)
+  // fog shadow, lake water, cliff face and mist (static per map and size)
   buildUnder() {
-    const [c, x] = this.newLayer(), t = this.theme, g = this.map.grid, px = 1 / this.scale;   // px = one css pixel in grid units
-    const ch = Math.max(3, this.size * 0.018) * px;   // cliff height
-    // the island floats in fog: a faint shadow far below, then mist hugging the cliff foot
+    const [c, x] = this.newLayer(), t = this.theme, g = this.map.grid, px = 1 / this.scale, py = px / this.tilt;
+    const ch = Math.max(4, this.size * 0.022) * py;   // cliff height (css px -> grid y units)
     x.save();
     x.filter = `blur(${this.size * 0.035 * this.dpr}px)`;
     x.translate(g * 0.015, ch + g * 0.05);
@@ -333,22 +348,22 @@ export class MapView {
     x.restore();
     x.save();
     x.translate(0, ch);
-    // lakes: water back in (sea colour, a bit deeper), light rim along the shore
+    // lakes: water (a bit deeper than the old sea colour), light rim along the shore
     x.fillStyle = css(shade(hexToRgb(t.sea), -0.08));
     x.fill(this.lakesP);
     x.lineWidth = Math.max(1.5, this.size * 0.004) * px;
     x.strokeStyle = css(t.foam, 0.8);
     x.stroke(this.lakesP);
     x.restore();
-    // cliff: island shape stacked downward, dark at the waterline, lighter toward the top edge
-    for (let i = ch; i >= px * 0.5; i -= px * 0.5) {
+    // cliff: island shape stacked downward, dark at the foot, lighter toward the top edge
+    for (let i = ch; i >= py * 0.5; i -= py * 0.5) {
       x.save();
       x.translate(0, i);
       x.fillStyle = css(i > ch * 0.45 ? t.cliffDark : t.cliffLight);
       x.fill(this.islandP, 'evenodd');
       x.restore();
     }
-    // mist banks around the island: big blurred blobs at random spots near the coast
+    // mist banks around the island and mist along the cliff foot
     x.save();
     x.filter = `blur(${this.size * 0.03 * this.dpr}px)`;
     const fogc = shade(t.fogA, 0.4);
@@ -360,88 +375,178 @@ export class MapView {
       x.ellipse(fx, fy, g * (0.06 + hash(i, 34, this.seed) * 0.07), g * (0.03 + hash(i, 35, this.seed) * 0.03), 0, 0, Math.PI * 2);
       x.fill();
     }
-    // mist rising along the cliff foot
     x.filter = `blur(${this.size * 0.012 * this.dpr}px)`;
     x.translate(0, ch * 1.4);
     x.lineWidth = g * 0.025;
     x.strokeStyle = css(fogc, 0.75);
     x.stroke(this.outerP);
     x.restore();
+    // fade out toward the canvas edges (elliptical mask), so blurred fog never shows a hard edge
+    x.save();
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.globalCompositeOperation = 'destination-in';
+    x.translate(c.width / 2, c.height / 2);
+    x.scale(1, c.height / c.width);
+    const fadeR = c.width / 2, mask = x.createRadialGradient(0, 0, fadeR * 0.7, 0, 0, fadeR);
+    mask.addColorStop(0, 'rgba(0,0,0,1)');
+    mask.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = mask;
+    x.fillRect(-fadeR, -fadeR, fadeR * 2, fadeR * 2);
+    x.restore();
     this.under = c;
   }
 
-  // ground, rock, owner overlays and borders, all clipped to smooth outlines
-  buildTop() {
+  // ---------- layers ----------
+  // static per map + size: under (fog, cliffs), base (ground, all borders, lip), rocks.
+  // per segment sprites (cached small canvases): building ground scene, owner overlay, trees,
+  // building top scene. the three composite layers below are rebuilt from sprites with a few
+  // drawImage calls when buildings or owners change, so no frame ever re-renders the scenes.
+
+  // small canvas covering segment id's box plus a margin (css px); draw(x) renders into it
+  sprite(id, margin, draw) {
+    const [bx0, by0, bx1, by1] = this.boxes[id], d = this.dpr;
+    const left = Math.floor((this.sx(bx0) - margin) * d), top = Math.floor((this.sy(by0) - margin * 1.6) * d);
+    const right = Math.ceil((this.sx(bx1 + 1) + margin) * d), bottom = Math.ceil((this.sy(by1 + 1) + margin * 0.6) * d);
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, right - left);
+    c.height = Math.max(1, bottom - top);
+    const x = c.getContext('2d');
+    x.imageSmoothingQuality = 'high';
+    this.ofsX = left;
+    this.ofsY = top;
+    try { this.gridT(x); draw(x); } finally { this.ofsX = this.ofsY = 0; }
+    return { c, left, top };
+  }
+
+  cached(key, make) {
+    let s = this.sprites.get(key);
+    if (!s) { s = make(); this.sprites.set(key, s); }
+    return s;
+  }
+
+  // owner overlay: light fill, blurred inner glow, strong colour band at the edge
+  overlaySprite(id, color, fill) {
+    return this.cached(`o${id}|${color}|${fill}`, () => this.sprite(id, 2, (x) => {
+      const p = this.segP[id], px = 1 / this.scale;
+      const band = Math.max(2.2, this.size * 0.007) * px, fade = 16 * this.k;
+      x.clip(p);
+      x.fillStyle = css(color, fill);
+      x.fill(p);
+      x.filter = `blur(${fade * 0.45 * this.scale * this.dpr}px)`;
+      x.strokeStyle = css(color, 0.55);
+      x.lineWidth = fade * 1.3;
+      x.stroke(p);
+      x.filter = 'none';
+      x.lineWidth = band * 2;
+      x.strokeStyle = css(color, 0.9);
+      x.stroke(p);
+    }));
+  }
+
+  groundSprite(id, type) {
+    return this.cached(`g${id}|${type}`, () => this.sprite(id, 2, (x) => structures.ground(this, x, id, type)));
+  }
+
+  topSprite(id, type, color) {
+    return this.cached(`t${id}|${type}|${color}`, () => this.sprite(id, this.u * 7, (x) => structures.top(this, x, id, type, color)));
+  }
+
+  treeSprite(id) {
+    return this.cached(`r${id}`, () => this.sprite(id, this.u * 4, (x) => this.drawTreesOf(x, id)));
+  }
+
+  blit(x, sp) { x.drawImage(sp.c, sp.left, sp.top); }
+
+  // pre-render sprites in small idle-time chunks (trees for every segment, overlays for every
+  // faction colour), so a first capture or build never costs a frame
+  prewarm(colors, fill) {
+    const jobs = [];
+    for (let id = 0; id < this.segP.length; id++) jobs.push(() => this.treeSprite(id));
+    for (const col of colors) for (let id = 0; id < this.segP.length; id++) jobs.push(() => this.overlaySprite(id, col, fill));
+    const map = this.map, size = this.size;
+    const step = () => {
+      if (this.map !== map || this.size !== size) return;   // map or size changed: stop
+      const t0 = performance.now();
+      while (jobs.length && performance.now() - t0 < 4) jobs.shift()();
+      if (jobs.length) setTimeout(step, 16);
+    };
+    setTimeout(step, 50);
+  }
+
+  // static: ground texture, every segment border, light lip along the cliff edge
+  buildBase() {
     const [c, x] = this.newLayer(), t = this.theme, g = this.map.grid, px = 1 / this.scale;
-    const st = this.map.segs.map((s) => this.styleOf(s.id));
     x.save();
     x.clip(this.islandP, 'evenodd');
     x.imageSmoothingEnabled = true;
     x.drawImage(this.groundC, 0, 0, g, g);
-    // owner overlays: light fill, soft inner glow (stacked wide strokes), strong colour band at the edge
-    const band = Math.max(2.2, this.size * 0.007) * px, fade = 16 * this.k;
-    this.segP.forEach((p, id) => {
-      const s = st[id];
-      if (!s.color && !s.fill) return;
-      x.save();
-      x.clip(p);
-      if (s.color) {
-        x.fillStyle = css(s.color, s.fill);
-        x.fill(p);
-        // soft inner glow: one wide blurred stroke (blur radius in device pixels)
-        x.filter = `blur(${fade * 0.45 * this.scale * this.dpr}px)`;
-        x.strokeStyle = css(s.color, 0.55);
-        x.lineWidth = fade * 1.3;
-        x.stroke(p);
-        x.filter = 'none';
-        x.lineWidth = band * 2;
-        x.strokeStyle = css(s.color, 0.9);
-        x.stroke(p);
-      } else {
-        // neutral highlight (e.g. a valid target): whitish wash
-        x.fillStyle = `rgba(255,255,255,${s.fill})`;
-        x.fill(p);
-        x.lineWidth = band * 2;
-        x.strokeStyle = `rgba(255,255,255,${Math.min(0.9, s.fill * 2.5)})`;
-        x.stroke(p);
-      }
-      x.restore();
-    });
-    // thin border lines between all segments
     x.lineJoin = 'round';
     x.lineWidth = Math.max(1, this.size * 0.0022) * px;
-    this.segP.forEach((p, id) => {
-      x.strokeStyle = st[id].color ? css(shade(st[id].color, -0.35), 0.9) : css(t.lineNeutral, 0.45);
-      x.stroke(p);
-    });
-    // light lip along the cliff edge
+    x.strokeStyle = css(t.lineNeutral, 0.45);
+    for (const p of this.segP) x.stroke(p);
     x.lineWidth = Math.max(2, this.size * 0.006) * px;
     x.strokeStyle = css(t.lip, 0.7);
     x.stroke(this.islandP);
     x.restore();
-    this.drawRocks(x, px);
-    this.topC = c;
+    this.base = c;
   }
 
-  // mountains as flat low-poly rock plateaus (like chunky cliffs): soft contact shadow,
-  // stacked slate side walls, a light top face with a gentle gradient, dark cracks and outline
+  // static: rock plateaus
+  buildRocks() {
+    const [c, x] = this.newLayer();
+    this.drawRocks(x, 1 / this.scale);
+    this.rocks = c;
+  }
+
+  // composite 1: base + flat building scenes
+  buildGroundLayer() {
+    if (!this.base) this.buildBase();
+    const [c, x] = this.newLayer();
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.drawImage(this.base, 0, 0);
+    this.st.forEach((s, id) => { if (s.building) this.blit(x, this.groundSprite(id, s.building)); });
+    this.layerGround = c;
+  }
+
+  // composite 2: owner overlays
+  buildOwnerLayer() {
+    const [c, x] = this.newLayer();
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    this.st.forEach((s, id) => { if (s.color) this.blit(x, this.overlaySprite(id, s.color, s.fill)); });
+    this.layerOwner = c;
+  }
+
+  // composite 3: rocks, then trees or building scenes per segment, back to front
+  buildObjectLayer() {
+    if (!this.rocks) this.buildRocks();
+    const [c, x] = this.newLayer();
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.drawImage(this.rocks, 0, 0);
+    const order = this.map.segs.map((s) => s.id).sort((a, b) => this.map.segs[a].y - this.map.segs[b].y);
+    for (const id of order) {
+      const s = this.st[id];
+      this.blit(x, s.building ? this.topSprite(id, s.building, s.color) : this.treeSprite(id));
+    }
+    this.layerObjects = c;
+  }
+
+  // mountains as flat low-poly rock plateaus: soft contact shadow, stacked slate side walls,
+  // a light top face with a gentle gradient, dark cracks and outline
   drawRocks(x, px) {
-    const t = this.theme, g = this.map.grid, hgt = Math.max(4, this.size * 0.028) * px;
+    const t = this.theme, g = this.map.grid, hgt = (Math.max(4, this.size * 0.03) * px) / this.tilt;
     x.save();
     x.filter = `blur(${Math.max(1, this.size * 0.006) * this.dpr}px)`;
     x.fillStyle = 'rgba(25,30,35,0.3)';
     x.translate(hgt * 0.3, hgt * 0.15);
     x.fill(this.mtnP);
     x.restore();
-    // side walls: the outline repeated upward, darker at the foot
-    for (let i = 0; i <= hgt; i += px * 0.5) {
+    for (let i = 0; i <= hgt; i += (px * 0.5) / this.tilt) {
       x.save();
       x.translate(0, -i);
       x.fillStyle = css(i < hgt * 0.55 ? t.rockSideDark : t.rockSide);
       x.fill(this.mtnP);
       x.restore();
     }
-    // top face
     x.save();
     x.translate(0, -hgt);
     const grad = x.createLinearGradient(0, 0, g, g);
@@ -451,7 +556,6 @@ export class MapView {
     x.fill(this.mtnP);
     x.save();
     x.clip(this.mtnP);
-    // a few darker facets: the top face split by the cracks reads as broken rock
     x.lineCap = 'round';
     x.lineJoin = 'round';
     x.strokeStyle = css(t.rockSideDark, 0.9);
@@ -470,16 +574,16 @@ export class MapView {
     x.restore();
   }
 
-  // trees: round crowns or low-poly pines, with a small shadow
-  buildOver() {
-    const [c, x] = this.newLayer(), t = this.theme;
-    x.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);   // trees are drawn in css pixels
-    const sc = this.scale;
+  // trees of one segment: round crowns or low-poly pines with trunk and shadow
+  drawTreesOf(x, id) {
+    const t = this.theme, sc = this.scale;
+    x.save();
+    this.cssT(x);
     for (const tr of this.trees) {
-      const px = tr.x * sc, py = tr.y * sc, r = Math.max(1.6, tr.r * sc);
+      if (tr.seg !== id) continue;
+      const px = this.sx(tr.x), py = this.sy(tr.y), r = Math.max(1.6, tr.r * sc);
       x.fillStyle = 'rgba(20,30,30,0.22)';
-      x.beginPath(); x.ellipse(px + r * 0.45, py + r * 0.35, r * 1.05, r * 0.55, 0, 0, Math.PI * 2); x.fill();
-      // trunk: short brown stem from the ground up into the crown
+      x.beginPath(); x.ellipse(px + r * 0.45, py + r * 0.3, r * 1.05, r * 0.5, 0, 0, Math.PI * 2); x.fill();
       const tw = Math.max(1, r * 0.28);
       x.fillStyle = css(t.trunk ?? [96, 72, 54]);
       x.fillRect(px - tw / 2, py - r * 0.6, tw, r * 0.95);
@@ -500,46 +604,121 @@ export class MapView {
         x.beginPath(); x.arc(px - r * 0.3, py - r * 1.45, r * 0.55, 0, Math.PI * 2); x.fill();
       }
     }
-    this.over = c;
+    x.restore();
   }
 
-  // styleOf(segId) -> { color: [r,g,b] | null, fill: 0..1 }
-  //   color = owner colour: light fill, inner glow, strong band at the border
-  //   null  = neutral; fill > 0 = whitish highlight (e.g. a valid target)
-  // called when ownership or selection changes; the top layer is rebuilt on the next draw
+  // n building spots (css px) inside a segment: deep inside, away from the number label and not
+  // just below it (buildings stand upward), at least sep css px apart
+  spots(id, n, sep) {
+    const key = `${id}:${n}:${Math.round(sep)}`;
+    if (this.spotCache.has(key)) return this.spotCache.get(key);
+    const { bdist, grid: g, segs } = this.map, s = segs[id], sc = this.scale, u = this.u / sc;
+    const cand = [];
+    const cells = this.segCells[id];
+    for (let i = 0; i < cells.length; i += 2) {
+      const c = cells[i], x = (c % g) + 0.5, y = Math.floor(c / g) + 0.5, dx = x - s.x, dy = (y - s.y) * this.tilt;
+      if (Math.hypot(dx, dy) < u * 4.5 || (Math.abs(dx) < u * 4 && dy > 0 && dy < u * 7)) continue;
+      cand.push([Math.min(bdist[c], 40 * this.k) + hash(c, 7, this.seed) * 3, x, y]);
+    }
+    cand.sort((a, b) => b[0] - a[0]);
+    const out = [];
+    const take = (list, gap) => {
+      for (const [, x, y] of list) {
+        if (out.length >= n) break;
+        if (out.every((p) => Math.hypot(this.sx(p[0]) - this.sx(x), this.sy(p[1]) - this.sy(y)) >= gap)) out.push([x, y]);
+      }
+    };
+    take(cand, sep);
+    // small segment: relax (closer together, label area allowed) so there is always at least one spot
+    if (out.length < n) {
+      take(cells.map((c) => [bdist[c], (c % g) + 0.5, Math.floor(c / g) + 0.5]).sort((a, b) => b[0] - a[0]), sep * 0.4);
+    }
+    const res = out.map((p) => [this.sx(p[0]), this.sy(p[1])]);
+    this.spotCache.set(key, res);
+    return res;
+  }
+
+  // spots along the inside of a segment's border (fort towers), sep css px apart
+  edgeSpots(id, sep) {
+    const key = `e${id}:${Math.round(sep)}`;
+    if (this.spotCache.has(key)) return this.spotCache.get(key);
+    const { bdist, grid: g, segs } = this.map, s = segs[id], ring = Math.round(2 * this.k + 1);
+    const out = [], clear = this.u * 4;
+    for (const c of this.segCells[id]) {
+      if (bdist[c] !== ring) continue;
+      const x = this.sx((c % g) + 0.5), y = this.sy(Math.floor(c / g) + 0.5);
+      if (Math.hypot(x - this.sx(s.x), y - this.sy(s.y)) < clear) continue;
+      if (out.every((p) => Math.hypot(p[0] - x, p[1] - y) >= sep)) out.push([x, y]);
+    }
+    this.spotCache.set(key, out);
+    return out;
+  }
+
+  // selected segment: thick white outline with a soft pulsing glow plus the owner colour inside;
+  // targets: moving dashed white outlines. drawn every frame on top of the cached layers
+  highlight(ctx, id, color, targets, time) {
+    const px = 1 / this.scale, pulse = 0.5 + 0.5 * Math.sin(time * 4);
+    ctx.save();
+    this.gridT(ctx);
+    ctx.lineJoin = 'round';
+    ctx.setLineDash([5 * px, 4 * px]);
+    ctx.lineDashOffset = -time * 12 * px;
+    ctx.lineWidth = 1.8 * px;
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    for (const t of targets) ctx.stroke(this.segP[t]);
+    ctx.setLineDash([]);
+    ctx.lineWidth = (7 + 4 * pulse) * px;
+    ctx.strokeStyle = `rgba(255,255,255,${0.25 + 0.2 * pulse})`;
+    ctx.stroke(this.segP[id]);
+    ctx.lineWidth = 4.5 * px;
+    ctx.strokeStyle = '#fff';
+    ctx.stroke(this.segP[id]);
+    ctx.lineWidth = 2.2 * px;
+    ctx.strokeStyle = css(color);
+    ctx.stroke(this.segP[id]);
+    ctx.restore();
+  }
+
+  // styleOf(segId) -> { color: [r,g,b] | null, fill: 0..1, building?: type }
+  // only the layers whose inputs changed are rebuilt on the next draw
   paint(styleOf) {
     this.styleOf = styleOf;
-    this.topC = null;
+    this.st = this.map.segs.map((s) => styleOf(s.id));
+    const bkey = this.st.map((s) => (s.building ? s.building + (s.color ?? '') : '')).join('|');
+    const okey = this.st.map((s) => (s.color ? s.color.join(',') + ':' + s.fill : '')).join('|');
+    if (bkey !== this.bkey) { this.bkey = bkey; this.layerGround = this.layerObjects = null; }
+    if (okey !== this.okey) { this.okey = okey; this.layerOwner = null; }
   }
 
   // clear and draw all layers; returns ctx in css-pixel units
   drawBase() {
     if (!this.under) this.buildUnder();
-    if (!this.topC && this.styleOf) this.buildTop();
-    if (!this.over) this.buildOver();
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.drawImage(this.under, 0, 0);
-    if (this.topC) ctx.drawImage(this.topC, 0, 0);
-    ctx.drawImage(this.over, 0, 0);
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    if (this.st) {
+      if (!this.layerGround) this.buildGroundLayer();
+      if (!this.layerOwner) this.buildOwnerLayer();
+      if (!this.layerObjects) this.buildObjectLayer();
+      ctx.drawImage(this.layerGround, 0, 0);
+      ctx.drawImage(this.layerOwner, 0, 0);
+      ctx.drawImage(this.layerObjects, 0, 0);
+    }
+    this.cssT(ctx);
     return ctx;
   }
-
-  // grid coords -> css pixels
-  px(v) { return v * this.scale; }
 
   // segment under a screen point (-1 for sea)
   segAt(clientX, clientY) {
     const r = this.canvas.getBoundingClientRect();
     const g = this.map.grid;
-    const x = Math.floor(((clientX - r.left) / r.width) * g);
-    const y = Math.floor(((clientY - r.top) / r.height) * g);
+    const x = Math.floor((clientX - r.left) / this.scale);
+    const y = Math.floor((clientY - r.top - this.oy) / (this.scale * this.tilt));
     if (x < 0 || y < 0 || x >= g || y >= g) return -1;
     const id = this.map.ids[y * g + x];
     if (id >= 0) return id;
-    // tapped the sea right next to the coast: take the nearest segment label within reach
+    // tapped just off the coast: take the nearest segment label within reach
     let best = -1, bd = (g * 0.06) ** 2;
     for (const s of this.map.segs) {
       const dd = (s.x - x) ** 2 + (s.y - y) ** 2;

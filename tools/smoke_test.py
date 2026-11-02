@@ -74,6 +74,12 @@ try:
                     page.evaluate("__fl.startBattle({ seed: %d, cells: 22, shape: '%s', neutral: [40, 140], factions: [{ ai: false, color: 0 }, { ai: true, color: 1, think: 3, personality: { build: 0, risk: 2, actions: 0, grudge: 0 } }] }, 'skirmish')" % (900 + i, shape))
                     page.wait_for_timeout(250)
                     page.locator("#battle-canvas").screenshot(path=str(out / f"shape-{shape}.png"))
+                # every building type on one map
+                page.evaluate("__fl.startBattle({ seed: 77, cells: 18, shape: 'blob', theme: 'summer', neutral: [40, 140], factions: [{ ai: false, color: 0 }, { ai: true, color: 1, think: 3, personality: { build: 0, risk: 2, actions: 0, grudge: 0 } }] }, 'skirmish')")
+                page.evaluate("""(() => { const b = __fl.battle, types = ['farm', 'fort', 'barracks', 'hospital', 'lab'];
+                  types.forEach((t, i) => { const s = b.segs[i * 3 + 1]; s.owner = i % 2 ? 1 : 0; s.building = t; }); b.version++; })()""")
+                page.wait_for_timeout(300)
+                page.locator("#battle-canvas").screenshot(path=str(out / "buildings.png"))
                 page.evaluate("document.querySelectorAll('.screen').forEach(s => s.classList.toggle('hidden', s.id !== 'menu'))")
 
             if name == "portrait":
@@ -89,8 +95,8 @@ try:
             home = page.evaluate("__fl.campaign.map.segs.find(s => __fl.campaign.attackable(s.id)).id")
             box = page.locator("#campaign-canvas").bounding_box()
             seg = page.evaluate(f"__fl.campaign.map.segs[{home}]")
-            g = page.evaluate("__fl.campaign.map.grid")
-            page.mouse.click(box["x"] + seg["x"] / g * box["width"], box["y"] + seg["y"] / g * box["height"])
+            cx, cy = page.evaluate("([x, y]) => [__fl.cview.sx(x), __fl.cview.sy(y)]", [seg["x"], seg["y"]])
+            page.mouse.click(box["x"] + cx, box["y"] + cy)
             page.wait_for_timeout(200)
             page.screenshot(path=str(out / f"{name}-campaign.png"))
 
@@ -100,8 +106,10 @@ try:
             b = page.evaluate("""(() => { const b = __fl.battle; const me = b.segs.find(s => s.owner === 0);
                 return { me: me.id, x: me.x, y: me.y, target: b.segs[me.adj[0]] }; })()""")
             box = page.locator("#battle-canvas").bounding_box()
-            bg = page.evaluate("__fl.battle.map.grid")
-            to_px = lambda x, y: (box["x"] + x / bg * box["width"], box["y"] + y / bg * box["height"])
+            # grid -> screen through the view's tilted camera
+            def to_px(x, y):
+                sx, sy = page.evaluate("([x, y]) => [__fl.view.sx(x), __fl.view.sy(y)]", [x, y])
+                return box["x"] + sx, box["y"] + sy
             page.wait_for_timeout(1000)
             page.evaluate("__fl.battle.segs[%d].troops = 200" % b["me"])   # enough for a farm + an attack
             page.mouse.click(*to_px(b["x"], b["y"]))
@@ -129,6 +137,29 @@ try:
             print(f"{name}: auto route -> {r}")
             page.wait_for_timeout(200)
             page.screenshot(path=str(out / f"{name}-route.png"))
+            # frame times: 3 s of real play at 3x speed (bots fighting, captures -> layer rebuilds)
+            page.click("#speed button[data-speed='3']")
+            perf = page.evaluate("""() => new Promise((done) => {
+              const v = __fl.view, gaps = [];
+              // owner-layer rebuild cost: cold (sprites rebuilt) and warm (sprites cached, the usual capture case)
+              let cold = 0, warm = 0;
+              for (let i = 0; i < 3; i++) { v.layerOwner = null; v.sprites.clear(); const a = performance.now(); v.drawBase(); cold += performance.now() - a; }
+              for (let i = 0; i < 5; i++) { v.layerOwner = null; const a = performance.now(); v.drawBase(); warm += performance.now() - a; }
+              const t0 = performance.now();
+              let last = t0;
+              const tick = (now) => {
+                gaps.push(now - last); last = now;
+                if (now - t0 < 3000) requestAnimationFrame(tick);
+                else {
+                  gaps.sort((a, b) => a - b);
+                  done({ frames: gaps.length, avg: +(3000 / gaps.length).toFixed(1), p95: +gaps[Math.floor(gaps.length * 0.95)].toFixed(1),
+                         worst: +gaps[gaps.length - 1].toFixed(1), owner_rebuild_cold_ms: +(cold / 3).toFixed(1), owner_rebuild_warm_ms: +(warm / 5).toFixed(1) });
+                }
+              };
+              requestAnimationFrame(tick);
+            })""")
+            print(f"{name}: frame ms -> {perf}")
+
             # fast-forward to the end and show the result card
             page.evaluate("__fl.battle.simulate(1500)")
             page.wait_for_timeout(300)
@@ -138,6 +169,7 @@ try:
         browser.close()
 finally:
     server.terminate()
+    if errors: print('js errors so far:', errors[:5])
 
 print("js errors:", errors or "none")
 print("screenshots:", out)
