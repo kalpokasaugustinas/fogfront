@@ -6,9 +6,10 @@ Prototype stage.
 
 ## How it plays
 - **Campaign:** a world map of 16 regions held by 3 rival empires. Attack any region next to one you own. Difficulty grows with distance from home: more segments, more enemies, stronger neutrals, faster bots. Progress is saved in the browser.
-- **Battle:** each segment you own grows troops up to its cap. Cap scales with segment size: the largest segment on the map holds 1000. Bigger segments also grow faster (avg +8/s).
+- **Battle:** each segment you own grows troops up to its cap. Cap scales with segment size: the largest segment on the map holds 1000. Bigger segments also grow faster (avg +5.6/s).
   - Tap your segment, then tap a neighbour to send the chosen % (25/50/75/100): attack an enemy/neutral, or move troops to your own. Tap the selected segment again to deselect.
   - Or drag from your segment to any neighbour.
+  - 🔁 Auto toggle (key A): when on, sending to your own neighbour also sets a standing route. Every second the source forwards all troops above its reserve (100% − send %, of its cap) to the target. Chain routes to pipe troops from the back to the front. ✕ Stop on the selected tile ends its route; a route also ends when either tile is lost.
   - Fight: attack = troops × attack bonus, defense = defenders × defense bonus. The higher number wins and keeps the difference.
   - Neutral segments don't grow. Bots also fight each other.
   - You win when every enemy faction is gone.
@@ -24,7 +25,7 @@ Prototype stage.
 
 - **Bots** have personalities (aggressive, builder, turtle). They pick targets by value per troop needed, build according to position (front line: fort or barracks; behind the front: farm, hospital or lab), and push troops from the back to the front.
 
-Keys: space = pause, 1–4 = send %, Esc = deselect.
+Keys: space = pause, 1–4 = send %, A = auto toggle, Esc = deselect.
 
 ## Code
 Vanilla JS modules plus canvas 2D. No build step, no dependencies.

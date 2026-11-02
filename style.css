@@ -63,6 +63,10 @@ canvas { touch-action: none; display: block; }
 .panel p { margin: 6px 0; }
 .panel .big { font-size: 20px; font-weight: 800; }
 .hint { color: var(--muted); font-size: 13px; }
+#auto { margin-left: auto; }
+#auto.on { background: var(--accent); border-color: var(--accent); }
+#route-info { font-size: 13px; margin-top: 6px; }
+#route-info button { padding: 3px 8px; font-size: 12px; }
 #seg-info { min-height: 20px; margin: 8px 0 6px; font-size: 13px; }
 #build { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .bld { display: flex; gap: 8px; align-items: center; text-align: left; padding: 6px 8px; font-size: 13px; line-height: 1.25; }

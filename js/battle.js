@@ -1,8 +1,8 @@
 // battle simulation: segments, troops, buildings, armies. no drawing here,
 // so the same code runs in the browser and in headless tests.
-import { rules, buildings, effects } from './config.js?v=6';
-import { rng, spreadStarts } from './mapgen.js?v=6';
-import { think } from './ai.js?v=6';
+import { rules, buildings, effects } from './config.js?v=7';
+import { rng, spreadStarts } from './mapgen.js?v=7';
+import { think } from './ai.js?v=7';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
@@ -17,6 +17,9 @@ export class Battle {
     this.state = 'running';    // running | won | lost
     this.armies = [];
     this.stats = { sent: 0, captured: 0, built: 0 };
+    // auto-send routes: source segment id -> { to, keep }; keep = fraction of the source cap held back
+    this.routes = new Map();
+    this.routeTimer = rules.routeEvery;
 
     // segments: cap and base growth come from the segment's size
     const [nmin, nmax] = opts.neutral ?? [40, 150];
@@ -58,7 +61,7 @@ export class Battle {
   atkMult(s) { return s.building === 'barracks' ? effects.barracksAttack : 1; }
 
   // faction f sends n troops from segment a to adjacent segment b
-  send(f, a, b, n) {
+  send(f, a, b, n, auto = false) {
     const from = this.segs[a];
     n = Math.floor(Math.min(n, from.troops));
     if (this.state !== 'running' || from.owner !== f || !from.adj.includes(b) || n < 1) return false;
@@ -66,7 +69,7 @@ export class Battle {
     const to = this.segs[b];
     const dur = Math.hypot(to.x - from.x, to.y - from.y) / rules.armySpeed;
     this.armies.push({ owner: f, n, atk: this.atkMult(from), from: a, to: b, t: 0, dur });
-    this.stats.sent += f === 0 ? 1 : 0;
+    if (f === 0 && !auto) this.stats.sent++;
     return true;
   }
 
@@ -100,6 +103,27 @@ export class Battle {
 
   alive(f) { return this.segs.some((s) => s.owner === f) || this.armies.some((a) => a.owner === f); }
 
+  // faction f sets a standing route a -> b between two adjacent own segments
+  setRoute(f, a, b, keep) {
+    const s = this.segs[a], t = this.segs[b];
+    if (s.owner !== f || t.owner !== f || !s.adj.includes(b)) return false;
+    if (this.routes.get(b)?.to === a) this.routes.delete(b);   // no ping-pong between two segments
+    this.routes.set(a, { to: b, keep });
+    return true;
+  }
+
+  clearRoute(a) { this.routes.delete(a); }
+
+  // forward everything above the reserve; drop routes whose segments changed owner
+  runRoutes() {
+    for (const [a, r] of this.routes) {
+      const s = this.segs[a], t = this.segs[r.to];
+      if (s.owner < 0 || s.owner !== t.owner) { this.routes.delete(a); continue; }
+      const extra = s.troops - r.keep * s.cap;
+      if (extra >= rules.routeMin) this.send(s.owner, a, r.to, extra, true);
+    }
+  }
+
   step(dt) {
     if (this.state !== 'running') return;
     this.time += dt;
@@ -113,6 +137,8 @@ export class Battle {
       if (a.t >= 1) this.arrive(a);
     }
     this.armies = this.armies.filter((a) => a.t < 1);
+    this.routeTimer -= dt;
+    if (this.routeTimer <= 0) { this.routeTimer += rules.routeEvery; this.runRoutes(); }
     for (const f of this.factions) {
       if (!f.ai || !this.alive(f.id)) continue;
       f.timer -= dt;

@@ -6,10 +6,12 @@ export const rules = {
   armySpeed: 90,      // army travel speed in grid cells per second (scale with grid)
   startTroops: 25,    // troops in each faction's starting segment
   overCapDecay: 1,    // troops/s lost while a segment is above its cap
+  routeEvery: 1,      // auto-send routes forward troops every N seconds
+  routeMin: 5,        // ...when at least this many troops are above the route's reserve
   // cap scales with segment area: the largest segment on the map holds capMax
   capMax: 1000,
   // growth from size ratio (area / average area, clamped)
-  growthBase: 3, growthPerSize: 5,      // avg segment: 8 troops/s
+  growthBase: 2.1, growthPerSize: 3.5,  // avg segment: 5.6 troops/s
 };
 
 // one building per segment; building costs troops taken from that segment.

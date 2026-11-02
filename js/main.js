@@ -1,10 +1,10 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor } from './config.js?v=6';
-import { generateMap, rng } from './mapgen.js?v=6';
-import { Battle } from './battle.js?v=6';
-import { personalities } from './ai.js?v=6';
-import { Campaign } from './campaign.js?v=6';
-import { MapView, hexToRgb, shade, label } from './render.js?v=6';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor } from './config.js?v=7';
+import { generateMap, rng } from './mapgen.js?v=7';
+import { Battle } from './battle.js?v=7';
+import { personalities } from './ai.js?v=7';
+import { Campaign } from './campaign.js?v=7';
+import { MapView, hexToRgb, shade, label } from './render.js?v=7';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -75,7 +75,7 @@ $('campaign-canvas').addEventListener('pointerdown', (e) => {
 
 // ---------- battle screen ----------
 let battle = null, bv = null, mode = 'skirmish', regionId = -1;
-let selected = -1, pct = 0.5, drag = null, hover = -1, speed = 1, paused = false, key = '';
+let auto = false, selected = -1, pct = 0.5, drag = null, hover = -1, speed = 1, paused = false, key = '';
 
 function startBattle(setup, m, rid = -1) {
   const map = generateMap({ seed: setup.seed, cells: setup.cells, grid: rules.grid });
@@ -142,6 +142,26 @@ function drawBattle() {
     ctx.stroke();
     label(ctx, a.n, x, y, fs * 0.7);
   }
+  // player routes: dashed arrows with a moving dash
+  ctx.save();
+  for (const [a, r] of battle.routes) {
+    const s = battle.segs[a], t = battle.segs[r.to];
+    if (s.owner !== 0) continue;
+    const x1 = bv.px(s.x), y1 = bv.px(s.y), x2 = bv.px(t.x), y2 = bv.px(t.y);
+    const ang = Math.atan2(y2 - y1, x2 - x1), len = Math.hypot(x2 - x1, y2 - y1);
+    const sx = x1 + Math.cos(ang) * fs * 1.2, sy = y1 + Math.sin(ang) * fs * 1.2;
+    const ex = x1 + Math.cos(ang) * (len - fs * 1.3), ey = y1 + Math.sin(ang) * (len - fs * 1.3);
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.setLineDash([6, 5]); ctx.lineDashOffset = -battle.time * 20;
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath();   // arrow head
+    ctx.moveTo(ex + Math.cos(ang) * 6, ey + Math.sin(ang) * 6);
+    ctx.lineTo(ex + Math.cos(ang + 2.5) * 8, ey + Math.sin(ang + 2.5) * 8);
+    ctx.lineTo(ex + Math.cos(ang - 2.5) * 8, ey + Math.sin(ang - 2.5) * 8);
+    ctx.fillStyle = '#fff'; ctx.fill();
+  }
+  ctx.restore();
   // drag arrow from the selected segment to the pointer
   if (drag && drag.moved) {
     const f = battle.segs[drag.from], fx = bv.px(f.x), fy = bv.px(f.y);
@@ -194,8 +214,19 @@ $('battle-canvas').addEventListener('pointerup', (e) => {
 
 function sendFrom(from, to) {
   const n = Math.floor(battle.segs[from].troops * pct);
-  if (!battle.send(0, from, to, n)) flash('Not enough troops');
+  const sent = battle.send(0, from, to, n);
+  // auto on + own target: also set a standing route that keeps (1 - pct) of the cap
+  if (auto && isMine(to) && battle.setRoute(0, from, to, 1 - pct)) {
+    flash(`🔁 Route set: keeps ${Math.round((1 - pct) * 100)}% of cap, forwards the rest`);
+  } else if (!sent) flash('Not enough troops');
 }
+
+function setAuto(on) {
+  auto = on;
+  $('auto').classList.toggle('on', on);
+}
+$('auto').onclick = () => setAuto(!auto);
+$('route-stop').onclick = () => { if (selected >= 0) battle.clearRoute(selected); };
 
 // bottom panel: send %, selected segment info, build buttons
 function renderBuildPanel() {
@@ -221,6 +252,10 @@ function updatePanel() {
     $('seg-info').innerHTML = `<b style="color:${col}">${who}</b>
       · ${Math.floor(s.troops)} / ${s.cap} troops · +${s.growth}/s${s.building ? ' · ' + buildings[s.building].icon + ' ' + buildings[s.building].name : ''}${mult ? ' · ' + mult : ''}`;
   } else $('seg-info').textContent = '';
+  // selected tile's route (if any) with a stop button
+  const route = selected >= 0 ? battle.routes.get(selected) : null;
+  $('route-info').classList.toggle('hidden', !route);
+  if (route) $('route-info').firstElementChild.textContent = `🔁 Route active, keeps ${Math.round(route.keep * 100)}% of cap`;
   for (const btn of $('build').querySelectorAll('.bld')) {
     const s = battle.segs[selected];
     btn.disabled = !s || s.troops < buildings[btn.dataset.type].cost || s.building === btn.dataset.type;
@@ -294,6 +329,7 @@ addEventListener('keydown', (e) => {
   if (e.key === ' ') { setSpeed(paused ? speed : 0); e.preventDefault(); }
   if (['1', '2', '3', '4'].includes(e.key)) setPct(+e.key * 0.25);
   if (e.key === 'Escape') selected = -1;
+  if (e.key === 'a' || e.key === 'A') setAuto(!auto);
 });
 addEventListener('resize', () => { if (screen === 'battle' && bv) { bv.resize(); key = ''; } if (screen === 'campaign') cv.resize(), paintCampaign(); });
 

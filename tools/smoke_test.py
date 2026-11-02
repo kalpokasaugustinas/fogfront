@@ -82,7 +82,8 @@ try:
             box = page.locator("#battle-canvas").bounding_box()
             bg = page.evaluate("__fl.battle.map.grid")
             to_px = lambda x, y: (box["x"] + x / bg * box["width"], box["y"] + y / bg * box["height"])
-            page.wait_for_timeout(3000)   # let troops grow a bit
+            page.wait_for_timeout(1000)
+            page.evaluate("__fl.battle.segs[%d].troops = 200" % b["me"])   # enough for a farm + an attack
             page.mouse.click(*to_px(b["x"], b["y"]))
             page.click("#build .bld[data-type=farm]")
             page.mouse.click(*to_px(b["target"]["x"], b["target"]["y"]))
@@ -98,6 +99,16 @@ try:
             page.mouse.click(*to_px(mv["x"], mv["y"]))
             moved = page.evaluate("__fl.battle.armies.some(a => a.owner === 0 && a.to === %d)" % mv["id"])
             print(f"{name}: tap own neighbour moves troops -> {moved}")
+
+            # auto route: toggle on, tap the own neighbour again (home still selected) = send + route
+            page.click("#auto")
+            page.mouse.click(*to_px(mv["x"], mv["y"]))
+            r = page.evaluate("""(() => { const b = __fl.battle, me = b.segs[%d];
+                me.troops = me.cap; for (let i = 0; i < 25; i++) b.step(0.1);
+                return { routes: b.routes.size, keep: b.routes.get(%d)?.keep, troops: Math.round(me.troops), cap: me.cap }; })()""" % (b["me"], b["me"]))
+            print(f"{name}: auto route -> {r}")
+            page.wait_for_timeout(200)
+            page.screenshot(path=str(out / f"{name}-route.png"))
             # fast-forward to the end and show the result card
             page.evaluate("__fl.battle.simulate(1500)")
             page.wait_for_timeout(300)
