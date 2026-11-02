@@ -12,6 +12,7 @@ Prototype stage.
   - 🔁 Auto toggle (key A): when on, sending to your own neighbour also sets a standing route. Every second the source forwards all troops above its reserve (100% − send %, of its cap) to the target. Chain routes to pipe troops from the back to the front. ✕ Stop on the selected tile ends its route; a route also ends when either tile is lost.
   - Fight: attack = troops × attack bonus, defense = defenders × defense bonus. The higher number wins and keeps the difference.
   - Neutral segments don't grow. Bots also fight each other.
+  - Each battle has a climate theme (summer, autumn, winter, moor): ground, cliffs, rocks and trees change with it. Owner colours show as glowing borders around each segment.
   - Maps vary: island shape (blob, squiggly square, triangle, diamond, peanut, ring) and 1–4 lakes or mountain ranges that nobody can occupy or cross.
   - You win when every enemy faction is gone.
 - **Buildings** (one per segment, paid with that segment's troops; captured buildings switch sides):
@@ -38,7 +39,7 @@ Vanilla JS modules plus canvas 2D. No build step, no dependencies.
 | `js/battle.js` | battle simulation (fixed 0.1 s step, no drawing, runs headless) |
 | `js/ai.js` | bot decisions and personalities |
 | `js/campaign.js` | world map, empires, region difficulty, save/load |
-| `js/render.js` | map drawing (raster painted once, scaled per frame) |
+| `js/render.js` | island-diorama renderer: cached sea/shadow/foam/cliff layer, ground + owner-border raster, trees, troop pills |
 | `js/main.js` | screens, input, HUD, frame loop |
 
 ## Run locally

@@ -61,7 +61,7 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
   const orand = rng(Math.imul(seed ^ 0x5bd1e995, 2654435761));   // hashed so neighbouring seeds differ
   if (shape === 'random') shape = shapeNames[Math.floor(orand() * shapeNames.length)];
   const sdf = shapes[shape] ?? shapes.blob;
-  const sx = noise2(orand, 4), sy = noise2(orand, 4), tn = noise2(orand, 14);
+  const sx = noise2(orand, 4), sy = noise2(orand, 4);
   const squiggle = shape === 'blob' ? 0 : 0.07;   // domain warp makes straight edges wavy
 
   // 1. island mask: shape with a noisy coastline
@@ -69,44 +69,106 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
   for (let y = 0; y < g; y++) {
     for (let x = 0; x < g; x++) {
       const u = (x + 0.5) / g, w = (y + 0.5) / g;
-      const px = u - 0.5 + (sx(u, w) - 0.5) * squiggle, py = w - 0.5 + (sy(u, w) - 0.5) * squiggle;
+      // non-blob shapes are scaled down a little so cliffs and foam fit inside the canvas
+      const zoom = shape === 'blob' ? 1 : 1 / 0.9;
+      const px = (u - 0.5) * zoom + (sx(u, w) - 0.5) * squiggle, py = (w - 0.5) * zoom + (sy(u, w) - 0.5) * squiggle;
       const wobble = (na(u, w) - 0.5) * 0.16 + (nb(u, w) - 0.5) * 0.07;
       if (sdf(px, py) < wobble) mask[y * g + x] = 1;
     }
   }
 
-  // 1b. obstacles: round lakes and chains of mountain blobs, carved out of the land
-  const terrain = new Uint8Array(g * g);
+  // 1b. obstacles carved out of the land:
+  //   lakes = noise-warped irregular blobs (relief = depth, 0 at shore .. 1 deep)
+  //   mountains = winding ridge lines with side spurs (relief = height, 0 foothill .. 1 peak)
+  const terrain = new Uint8Array(g * g), relief = new Float32Array(g * g);
   if (obstacles) {
-    const island = mask.slice(), cellsIn = [];
-    for (let c = 0; c < g * g; c++) if (island[c]) cellsIn.push(c);
+    const cellsIn = [];
+    for (let c = 0; c < g * g; c++) if (mask[c]) cellsIn.push(c);
+    const n1 = noise2(orand, 9), n2 = noise2(orand, 23), lw1 = noise2(orand, 5), lw2 = noise2(orand, 5);
     let lakes = Math.floor(orand() * 3), ranges = Math.floor(orand() * 3);
     if (lakes + ranges === 0) lakes = 1;
-    const blobs = [];
     const pick = () => { const c = cellsIn[Math.floor(orand() * cellsIn.length)]; return [c % g, Math.floor(c / g)]; };
+
+    // lakes: centre + radius, outline warped by two noise octaves (bays and peninsulas)
+    const lakeList = [];
     for (let i = 0; i < lakes; i++) {
       const [x, y] = pick();
-      blobs.push({ x, y, r: g * (0.05 + orand() * 0.045), type: terrainTypes.lake });
+      lakeList.push({ x, y, r: g * (0.06 + orand() * 0.045) });
     }
-    for (let i = 0; i < ranges; i++) {
-      let [x, y] = pick();
-      const ang = orand() * Math.PI, steps = 3 + Math.floor(orand() * 4), r = g * (0.025 + orand() * 0.015);
+
+    // mountain ridges: a meandering spine plus 1-2 short spurs; width tapers toward the ends
+    const ridges = [];
+    const walk = (x, y, ang, steps, width) => {
+      const pts = [];
       for (let k = 0; k < steps; k++) {
-        blobs.push({ x, y, r: r * (0.8 + orand() * 0.5), type: terrainTypes.mountain });
-        x += Math.cos(ang) * r * 1.5 + (orand() - 0.5) * r;
-        y += Math.sin(ang) * r * 1.5 + (orand() - 0.5) * r;
+        pts.push({ x, y, w: width * (0.35 + 0.65 * Math.sin(Math.PI * (k + 0.5) / steps)) });
+        ang += (orand() - 0.5) * 0.7;
+        x += Math.cos(ang) * g * 0.022;
+        y += Math.sin(ang) * g * 0.022;
+      }
+      return pts;
+    };
+    for (let i = 0; i < ranges; i++) {
+      const [x, y] = pick(), ang = orand() * Math.PI * 2, width = g * (0.038 + orand() * 0.02);
+      const spine = walk(x, y, ang, 6 + Math.floor(orand() * 6), width);
+      ridges.push(spine);
+      const spurs = 1 + Math.floor(orand() * 2);
+      for (let s = 0; s < spurs; s++) {
+        const p = spine[1 + Math.floor(orand() * (spine.length - 2))];
+        const side = orand() < 0.5 ? -1 : 1;
+        ridges.push(walk(p.x, p.y, ang + side * (0.9 + orand() * 0.6), 3 + Math.floor(orand() * 3), p.w * 0.7));
       }
     }
+
     for (const c of cellsIn) {
-      const x = c % g, y = Math.floor(c / g), wob = 0.75 + 0.5 * tn(x / g, y / g);
-      for (const b of blobs) {
-        if (Math.hypot(x - b.x, y - b.y) < b.r * wob) { terrain[c] = b.type; mask[c] = 0; break; }
+      const x = c % g, y = Math.floor(c / g), u = x / g, w = y / g;
+      // lake test on a warped position
+      for (const l of lakeList) {
+        const px = x + (lw1(u, w) - 0.5) * l.r * 1.6, py = y + (lw2(u, w) - 0.5) * l.r * 1.6;
+        const d = Math.hypot(px - l.x, py - l.y) / l.r;
+        if (d < 0.8 + (n1(u, w) - 0.5) * 1.1 + (n2(u, w) - 0.5) * 0.35) { terrain[c] = terrainTypes.lake; break; }
+      }
+      if (terrain[c]) continue;
+      // mountain test: distance to the nearest ridge segment, compared to the local width
+      let best = Infinity, bw = 0;
+      for (const pts of ridges) {
+        for (let k = 0; k < pts.length - 1; k++) {
+          const a = pts[k], b = pts[k + 1];
+          const vx = b.x - a.x, vy = b.y - a.y;
+          const t = Math.max(0, Math.min(1, ((x - a.x) * vx + (y - a.y) * vy) / (vx * vx + vy * vy)));
+          const d = Math.hypot(x - a.x - vx * t, y - a.y - vy * t);
+          if (d < best) { best = d; bw = a.w + (b.w - a.w) * t; }
+        }
+      }
+      const rough = 0.8 + (n1(u, w) - 0.5) * 0.9 + (n2(u, w) - 0.5) * 0.6;
+      if (best < bw * rough) {
+        terrain[c] = terrainTypes.mountain;
+        // height: high on the spine, low at the foot, with small bumps
+        relief[c] = Math.max(0.03, Math.min(1, (1 - best / (bw * rough)) ** 0.8 * (0.55 + 0.6 * n2(u, w))));
       }
     }
-    // land cut off by obstacles becomes mountain, so the playable land stays one piece
+    for (const c of cellsIn) if (terrain[c]) mask[c] = 0;
+
+    // land cut off by obstacles becomes mountain foothill, so the playable land stays one piece
     const keepSet = new Uint8Array(g * g);
     for (const c of largestBlob(mask, g)) keepSet[c] = 1;
-    for (const c of cellsIn) if (!keepSet[c] && !terrain[c]) { terrain[c] = terrainTypes.mountain; mask[c] = 0; }
+    for (const c of cellsIn) if (!keepSet[c] && !terrain[c]) { terrain[c] = terrainTypes.mountain; relief[c] = 0.1; mask[c] = 0; }
+
+    // lake depth = steps from the shore (bfs), normalised
+    const q = [], dist = new Int16Array(g * g).fill(-1);
+    for (const c of cellsIn) {
+      if (terrain[c] !== terrainTypes.lake) continue;
+      const x = c % g;
+      const nb4 = [x > 0 ? c - 1 : c, x < g - 1 ? c + 1 : c, c - g, c + g];
+      if (nb4.some((m) => m >= 0 && m < g * g && terrain[m] !== terrainTypes.lake)) { dist[c] = 0; q.push(c); }
+    }
+    for (let k = 0; k < q.length; k++) {
+      const c = q[k], x = c % g;
+      for (const m of [x > 0 ? c - 1 : -1, x < g - 1 ? c + 1 : -1, c - g, c + g]) {
+        if (m >= 0 && m < g * g && dist[m] < 0 && terrain[m] === terrainTypes.lake) { dist[m] = dist[c] + 1; q.push(m); }
+      }
+    }
+    for (const c of q) relief[c] = Math.min(1, dist[c] / (g * 0.03));
   }
   // keep only the largest connected landmass, so every segment is reachable
   const land = largestBlob(mask, g);
@@ -183,7 +245,9 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
     if (id >= 0) { const s = segs[id]; s.area++; s.sx += x; s.sy += Math.floor(c / g); }
     const r = x < g - 1 ? ids[c + 1] : -1, d = c < g * g - g ? ids[c + g] : -1;
     const l = x > 0 ? ids[c - 1] : -1, u = c >= g ? ids[c - g] : -1;
-    if (r !== id || d !== id || l !== id || u !== id) edge[c] = 1;
+    // land next to a lake/mountain gets no hard border (it blends in via the 'near' shading instead)
+    const same = (m, v) => v === id || (id >= 0 && m >= 0 && m < g * g && terrain[m]);
+    if (!same(c + 1, r) || !same(c + g, d) || !same(c - 1, l) || !same(c - g, u)) edge[c] = 1;
     if (id >= 0 && r >= 0 && r !== id) { segs[id].adj.add(r); segs[r].adj.add(id); }
     if (id >= 0 && d >= 0 && d !== id) { segs[id].adj.add(d); segs[d].adj.add(id); }
   }
@@ -209,11 +273,21 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
   }
 
   const avgArea = segs.reduce((a, s) => a + s.area, 0) / segs.length;
-  const rn = noise2(orand, 48);   // fine noise for mountain shading
+  // 8. land near obstacles: steps to the nearest lake/mountain (1..10, 0 = far) and its type,
+  //    so the renderer can tint shores sandy and foothills rocky
+  const near = new Uint8Array(g * g), nearType = new Uint8Array(g * g), nq = [];
+  for (let c = 0; c < g * g; c++) if (terrain[c]) nq.push(c);
+  for (let k = 0; k < nq.length; k++) {
+    const c = nq[k];
+    if (near[c] >= 10) continue;
+    for (const m of nbrs(c)) {
+      if (ids[m] >= 0 && !near[m]) { near[m] = near[c] + 1; nearType[m] = terrain[c] || nearType[c]; nq.push(m); }
+    }
+  }
   return {
-    grid: g, ids, edge, avgArea, shape, terrain,
-    // per-cell 0..1 noise, used to shade mountains
-    relief: Float32Array.from({ length: g * g }, (_, c) => (terrain[c] ? rn((c % g) / g, Math.floor(c / g) / g) : 0)),
+    grid: g, ids, edge, avgArea, shape, terrain, near, nearType,
+    bdist: dist,   // steps from each land cell to its segment's border
+    relief,   // mountain height / lake depth, 0..1
     segs: segs.map((s) => ({ id: s.id, area: s.area, x: s.x, y: s.y, adj: [...s.adj] })),
   };
 }

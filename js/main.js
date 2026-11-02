@@ -1,10 +1,10 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor } from './config.js?v=8';
-import { generateMap, rng } from './mapgen.js?v=8';
-import { Battle } from './battle.js?v=8';
-import { personalities } from './ai.js?v=8';
-import { Campaign } from './campaign.js?v=8';
-import { MapView, hexToRgb, shade, label } from './render.js?v=8';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=9';
+import { generateMap, rng } from './mapgen.js?v=9';
+import { Battle } from './battle.js?v=9';
+import { personalities } from './ai.js?v=9';
+import { Campaign } from './campaign.js?v=9';
+import { MapView, hexToRgb, shade, label, pill } from './render.js?v=9';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -28,10 +28,10 @@ let pickedRegion = -1;
 
 function paintCampaign() {
   cv.paint((id) => {
-    if (campaign.owned.has(id)) return colors[0];
+    const pick = id === pickedRegion ? 0.2 : 0;
+    if (campaign.owned.has(id)) return { color: colors[0], fill: 0.3 + pick };
     const c = colors[campaign.regions[id].empire];
-    if (id === pickedRegion) return shade(c, 0.3);
-    return campaign.attackable(id) ? c : shade(c, -0.5);
+    return { color: campaign.attackable(id) ? c : shade(c, -0.25), fill: (campaign.attackable(id) ? 0.22 : 0.08) + pick };
   });
   renderRegionInfo();
 }
@@ -43,7 +43,7 @@ function drawCampaign() {
     const s = campaign.map.segs[r.id], x = cv.px(s.x), y = cv.px(s.y);
     const owned = campaign.owned.has(r.id), open = campaign.attackable(r.id);
     label(ctx, owned ? '🏳️' : open ? '⚔️' : r.capital ? '👑' : '🔒', x, y - fs * 0.9, fs * 1.1);
-    label(ctx, r.name, x, y + fs * 0.4, fs * 0.85, owned || open ? '#fff' : '#aab', 700);
+    label(ctx, r.name, x, y + fs * 0.4, fs * 0.85, owned || open ? '#fff' : '#dde3e3', 700);
     if (!owned) label(ctx, 'Lv ' + r.level, x, y + fs * 1.4, fs * 0.75, '#ffd76a', 700);
   }
 }
@@ -83,7 +83,8 @@ function startBattle(setup, m, rid = -1) {
   if (autoplay) setup.factions[0] = { ai: true, color: 0, think: 1.5, personality: personalities.aggressive };
   battle = new Battle(map, setup);
   mode = m; regionId = rid; selected = -1; drag = null; paused = false; key = '';
-  if (!bv) bv = new MapView($('battle-canvas'), map); else bv.setMap(map);
+  const theme = setup.theme ?? themeNames[setup.seed % themeNames.length];
+  if (!bv) bv = new MapView($('battle-canvas'), map, theme); else bv.setMap(map, theme);
   $('end').classList.add('hidden');
   renderBuildPanel();
   show('battle');
@@ -111,10 +112,9 @@ function paintBattle() {
   if (selected >= 0 && !isMine(selected)) selected = -1;
   const adj = selected >= 0 ? battle.segs[selected].adj : [];
   bv.paint((id) => {
-    const c = colorOfFaction(battle.segs[id].owner);
-    if (id === selected) return shade(c, 0.4);
-    if (adj.includes(id)) return shade(c, 0.15);
-    return selected >= 0 ? shade(c, -0.15) : c;
+    const o = battle.segs[id].owner, hl = id === selected ? 0.3 : adj.includes(id) ? 0.14 : 0;
+    if (o < 0) return { color: null, fill: hl };
+    return { color: colors[battle.factions[o].color], fill: 0.16 + hl };
   });
   renderBuildPanel();
 }
@@ -126,8 +126,9 @@ function drawBattle() {
   // segment numbers and building icons
   for (const s of battle.segs) {
     const x = bv.px(s.x), y = bv.px(s.y);
-    if (s.building) label(ctx, buildings[s.building].icon, x, y - fs * 0.95, fs * 0.95);
-    label(ctx, Math.floor(s.troops), x, y + (s.building ? fs * 0.15 : 0), fs, s.owner < 0 ? '#e5e7eb' : '#fff');
+    if (s.building) label(ctx, buildings[s.building].icon, x, y - fs * 1.15, fs * 1.05);
+    const own = s.owner >= 0 ? factionColors[battle.factions[s.owner].color] : null;
+    pill(ctx, Math.floor(s.troops), x, y + (s.building ? fs * 0.2 : 0), fs * 0.85, own ?? 'rgba(90,100,95,.55)', own ?? '#4b5552');
   }
   // armies on the move
   for (const a of battle.armies) {
@@ -139,7 +140,7 @@ function drawBattle() {
     ctx.fillStyle = factionColors[battle.factions[a.owner].color];
     ctx.fill();
     ctx.lineWidth = 2;
-    ctx.strokeStyle = a.atk > 1 ? '#ffd76a' : 'rgba(0,0,0,.6)';   // gold ring = barracks bonus
+    ctx.strokeStyle = a.atk > 1 ? '#ffd76a' : '#fff';   // gold ring = barracks bonus
     ctx.stroke();
     label(ctx, a.n, x, y, fs * 0.7);
   }
