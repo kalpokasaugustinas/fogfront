@@ -307,3 +307,16 @@ html.rotated body { position: fixed; top: 0; left: 0; width: var(--sh); height: 
 
 /* music + sound credits at the bottom of the rules card */
 #help .credits { font-size: 11px; opacity: 0.7; line-height: 1.4; }
+
+/* ---------- commander panel ---------- */
+#profile { overflow-y: auto; align-items: flex-start; padding-top: 40px; z-index: 12; }
+.profile-card { max-width: 540px; }
+.profile-card h3 { margin: 10px 0 6px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.pf-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.pf-swatch { width: 40px; height: 40px; border-radius: 50%; padding: 0; border: 3px solid #fff; box-shadow: 0 3px 0 rgba(0,0,0,0.25); }
+.pf-swatch.on { outline: 3px solid #e0a43a; outline-offset: 2px; transform: scale(1.1); }
+.pf-card { width: 108px; padding: 6px 6px 8px; border: 0; border-radius: 14px; background: #fff; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  box-shadow: 0 3px 0 rgba(154,100,32,0.25), 0 4px 8px rgba(0,0,0,0.06); font-weight: 600; font-size: 13px; }
+.pf-card canvas { width: 96px; height: 56px; border-radius: 10px; background: linear-gradient(180deg, #dfe9d8, #b9cda8); }
+.pf-card.on { box-shadow: 0 0 0 3px #e0a43a, 0 3px 0 #9a6420; background: #fff6dc; }
+html.compact .pf-card { width: 92px; } html.compact .pf-card canvas { width: 80px; height: 46px; }

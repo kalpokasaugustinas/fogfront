@@ -15,7 +15,19 @@ function rnd(i, j, s) {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-const stone = [196, 192, 182], stoneDark = [140, 136, 128], roofRed = [178, 92, 70], wallWhite = [244, 240, 230];
+// building styles: wall / roof / stone colours (the scenes read these, set per sprite by usePalette)
+export const palettes = {
+  classic: { wall: [244, 240, 230], roof: [178, 92, 70], stone: [196, 192, 182], stoneDark: [140, 136, 128] },
+  nordic: { wall: [156, 116, 82], roof: [96, 126, 86], stone: [150, 156, 160], stoneDark: [94, 100, 108] },
+  desert: { wall: [236, 210, 164], roof: [200, 156, 100], stone: [224, 198, 152], stoneDark: [172, 142, 100] },
+  eastern: { wall: [238, 228, 216], roof: [58, 82, 122], stone: [206, 192, 172], stoneDark: [128, 74, 62] },
+};
+let stone, stoneDark, roofRed, wallWhite;
+function usePalette(name) {
+  const p = palettes[name] ?? palettes.classic;
+  ({ stone, stoneDark, roof: roofRed, wall: wallWhite } = p);
+}
+usePalette('classic');
 
 // clip to a segment path (paths are in grid units, drawing continues in css px)
 function clipSeg(v, x, id) {
@@ -104,6 +116,7 @@ function cross(x, cx, cy, s, col) {
 const fieldColors = [[226, 198, 112], [150, 172, 92], [176, 132, 92], [184, 196, 112], [212, 184, 96]];
 
 export function ground(v, x, id, type, owner) {
+  usePalette('classic');
   const s = v.map.segs[id], u = v.u, cx = v.sx(s.x), cy = v.sy(s.y), seed = v.seed + id * 31;
   const snow = v.theme === v.themes?.winter || v.theme.groundA[0] > 215;
   x.save();
@@ -197,7 +210,8 @@ export function ground(v, x, id, type, owner) {
   x.restore();
 }
 
-export function top(v, x, id, type, owner) {
+export function top(v, x, id, type, owner, skin) {
+  usePalette(skin);
   const u = v.u, seed = v.seed + id * 31, col = owner ?? [140, 140, 140];
   x.save();
   v.cssT(x);
@@ -398,4 +412,14 @@ export function top(v, x, id, type, owner) {
     }
   }
   x.restore();
+}
+
+// small preview for the commander panel: a house and a tower in the given style and colour
+export function previewBuildings(x, w, h, style, color) {
+  usePalette(style);
+  const u = h / 9;
+  tower(x, w * 0.72, h * 0.86, u, 2.2, 5.2);
+  flag(x, w * 0.72, h * 0.86 - u * 5.2 - u * 0.45, u, color);
+  house(x, w * 0.34, h * 0.88, u * 1.2, wallWhite, roofRed);
+  usePalette('classic');
 }

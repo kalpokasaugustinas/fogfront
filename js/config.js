@@ -49,8 +49,14 @@ export const traits = {
 export const relicGarrison = 1.6;   // relic tiles: neutral garrison x1.6
 
 // faction colours: index 0 = player
-export const factionColors = ['#2f74d6', '#d1403a', '#e09a1a', '#8b55c9', '#23966a'];
-export const factionNames = ['You', 'Crimson', 'Amber', 'Violet', 'Jade'];
+export const factionColors = ['#2f74d6', '#d1403a', '#e09a1a', '#8b55c9', '#23966a', '#d6528f', '#1c9db3', '#7cb32a'];
+export const factionNames = ['You', 'Crimson', 'Amber', 'Violet', 'Jade', 'Rose', 'Teal', 'Lime'];
+// display names of the colours (bots are named after theirs)
+export const colorNames = ['Azure', 'Crimson', 'Amber', 'Violet', 'Jade', 'Rose', 'Teal', 'Lime'];
+
+// looks a side can pick (commander panel for the player, random and distinct for bots)
+export const troopStyles = { soldier: 'Soldiers', knight: 'Knights', viking: 'Vikings', archer: 'Archers' };
+export const buildingStyles = { classic: 'Classic', nordic: 'Nordic', desert: 'Desert', eastern: 'Eastern' };
 export const neutralColor = '#7d8580';
 
 // island climates (picked per battle). colours are [r, g, b] except sea (css)
