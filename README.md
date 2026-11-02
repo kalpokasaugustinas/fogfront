@@ -12,12 +12,12 @@ Prototype stage.
   - pick 1 of 3 perks at every zoom-out (12 in the pool: faster armies, cheaper buildings, stronger farms, plunder, ...)
   - bots scale with you: each starts with 25 + 70% of your carried people and its own capital with a shuffled bonus mix
   - lose a stage and the run is over; best run (stage reached, time) is saved
-- **Battle:** each segment you own grows troops up to its cap. Cap scales with segment size: the largest segment on the map holds 1000. Bigger segments also grow faster (avg +3.9/s).
+- **Battle:** each segment you own grows 1% of its cap per second, up to the cap. Cap scales with segment size: the largest segment on the map holds 1000 (+10/s).
   - Tap your segment, then tap a neighbour to send the chosen % (25/50/75/100): attack an enemy/neutral, or move troops to your own. Tap the selected segment again to deselect.
   - Or drag from your segment to any neighbour.
   - 🔁 Auto toggle (key A): when on, sending to your own neighbour also sets a standing route. Every second the source forwards all troops above its reserve (100% − send %, of its cap) to the target. Chain routes to pipe troops from the back to the front. ✕ Stop on the selected tile ends its route; a route also ends when either tile is lost.
   - Fight: attack = troops × attack bonus, defense = defenders × defense bonus. The higher number wins and keeps the difference.
-  - Neutral segments don't grow. Bots also fight each other.
+  - Neutral segments start with a garrison that is a share of their cap (bigger tiles hold more) and regrow back to it at 1% of cap per second. Bots also fight each other.
   - Fair starts: you and every bot start on the coast, spread evenly around the island at about the same distance from each other.
   - The island floats in fog, seen at a slight angle. Built segments show their building as a scene: farms turn into fields with farmhouses, forts get stone walls and towers, barracks a castle with tents and soldiers, hospitals an infirmary with medical tents, labs an observatory with crystals. Flags and soldiers take the owner's colour.
   - Each battle has a climate theme (summer, autumn, winter, moor): ground, cliffs, rocks and trees change with it. Owner colours show as glowing borders around each segment.

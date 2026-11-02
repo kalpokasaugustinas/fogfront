@@ -35,7 +35,7 @@ sim_js = """async () => {
   for (let i = 0; i < 12; i++) {
     const map = generateMap({ seed: 100 + i, cells: 22, grid: 480, shape: 'random', obstacles: true });
     const factions = [0, 1, 2, 3].map((c) => ({ ai: true, color: c, think: 3, personality: personalities[types[(i + c) % 3]] }));
-    const b = new Battle(map, { seed: i, factions, neutral: [40, 140] });
+    const b = new Battle(map, { seed: i, factions, neutral: [0.15, 0.35] });
     const t0 = performance.now();
     b.simulate(1200);
     const owners = b.segs.map((s) => s.owner);
@@ -73,11 +73,11 @@ try:
                 }""")
                 print("map check:", {k: f"{min(v)}-{max(v)} segs x{len(v)}" for k, v in chk["sizes"].items()}, "bad:", chk["bad"])
                 for i, shape in enumerate(chk["shapes"]):
-                    page.evaluate("__fl.startBattle({ seed: %d, cells: 22, shape: '%s', neutral: [40, 140], factions: [{ ai: false, color: 0 }, { ai: true, color: 1, think: 3, personality: { build: 0, risk: 2, actions: 0, grudge: 0 } }] }, 'skirmish')" % (900 + i, shape))
+                    page.evaluate("__fl.startBattle({ seed: %d, cells: 22, shape: '%s', neutral: [0.15, 0.35], factions: [{ ai: false, color: 0 }, { ai: true, color: 1, think: 3, personality: { build: 0, risk: 2, actions: 0, grudge: 0 } }] }, 'skirmish')" % (900 + i, shape))
                     page.wait_for_timeout(250)
                     page.locator("#battle-canvas").screenshot(path=str(out / f"shape-{shape}.png"))
                 # every building type on one map
-                page.evaluate("__fl.startBattle({ seed: 77, cells: 18, shape: 'blob', theme: 'summer', neutral: [40, 140], factions: [{ ai: false, color: 0 }, { ai: true, color: 1, think: 3, personality: { build: 0, risk: 2, actions: 0, grudge: 0 } }] }, 'skirmish')")
+                page.evaluate("__fl.startBattle({ seed: 77, cells: 18, shape: 'blob', theme: 'summer', neutral: [0.15, 0.35], factions: [{ ai: false, color: 0 }, { ai: true, color: 1, think: 3, personality: { build: 0, risk: 2, actions: 0, grudge: 0 } }] }, 'skirmish')")
                 page.evaluate("""(() => { const b = __fl.battle, types = ['farm', 'fort', 'barracks', 'hospital', 'lab'];
                   types.forEach((t, i) => { const s = b.segs[i * 3 + 1]; s.owner = i % 2 ? 1 : 0; s.building = t; }); b.version++; })()""")
                 page.wait_for_timeout(300)

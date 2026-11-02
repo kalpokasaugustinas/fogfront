@@ -1,11 +1,11 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=15';
-import { generateMap, rng } from './mapgen.js?v=15';
-import { Battle } from './battle.js?v=15';
-import { personalities } from './ai.js?v=15';
-import { Campaign } from './campaign.js?v=15';
-import { Expedition, stages } from './expedition.js?v=15';
-import { MapView, hexToRgb, shade, label, pill } from './render.js?v=15';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=16';
+import { generateMap, rng } from './mapgen.js?v=16';
+import { Battle } from './battle.js?v=16';
+import { personalities } from './ai.js?v=16';
+import { Campaign } from './campaign.js?v=16';
+import { Expedition, stages } from './expedition.js?v=16';
+import { MapView, hexToRgb, shade, label, pill } from './render.js?v=16';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -82,7 +82,7 @@ function renderRegionInfo() {
   box.innerHTML = `
     <p class="big">${r.capital ? '👑 ' : ''}${r.name}</p>
     <p>Held by <b style="color:${factionColors[r.empire]}">${factionNames[r.empire]}</b> · level ${r.level}</p>
-    <p>${r.segments} segments · ${r.bots} enem${r.bots > 1 ? 'ies' : 'y'} · neutral troops ${r.neutral[0]}–${r.neutral[1]}</p>
+    <p>${r.segments} segments · ${r.bots} enem${r.bots > 1 ? 'ies' : 'y'} · neutral garrisons ${Math.round(r.neutral[0] * 100)}–${Math.round(r.neutral[1] * 100)}% of tile size</p>
     ${open ? '<button id="attack-btn" class="primary">⚔️ Attack</button>'
            : campaign.owned.has(r.id) ? '<p>✅ Yours</p>' : '<p>🔒 Conquer a neighbouring region first</p>'}`;
   if (open) $('attack-btn').onclick = () => startBattle(campaign.battleSetup(r.id), 'campaign', r.id);
@@ -117,7 +117,7 @@ function startBattle(setup, m, rid = -1) {
 function startSkirmish() {
   const seed = Math.floor(Math.random() * 1e9), r = rng(seed), types = Object.keys(personalities);
   startBattle({
-    seed, cells: 22, neutral: [40, 140],
+    seed, cells: 22, neutral: [0.15, 0.35],
     factions: [{ ai: false, color: 0 }, ...[1, 2, 3].map((color) => ({
       ai: true, color, think: 3, personality: personalities[types[Math.floor(r() * types.length)]],
     }))],
@@ -301,7 +301,7 @@ function updatePanel() {
     const mult = [s.building === 'fort' && `🛡️ defense x${effects.fortDefense}`, s.building === 'barracks' && `⚔️ attack x${effects.barracksAttack}`].filter(Boolean).join(' · ');
     const col = s.owner < 0 ? neutralColor : factionColors[battle.factions[s.owner].color];
     $('seg-info').innerHTML = `<b style="color:${col}">${who}</b>
-      · ${Math.floor(s.troops)} / ${s.cap} troops · +${s.growth}/s${s.capital ? ' · 🏰 Capital' : s.building ? ' · ' + buildings[s.building].icon + ' ' + buildings[s.building].name : ''}${mult ? ' · ' + mult : ''}`;
+      · ${Math.floor(s.troops)} / ${s.owner < 0 ? s.garrison + ' (regrows to it at +' + s.baseGrowth + '/s)' : s.cap + ' troops · +' + s.growth + '/s'}${s.capital ? ' · 🏰 Capital' : s.building ? ' · ' + buildings[s.building].icon + ' ' + buildings[s.building].name : ''}${mult ? ' · ' + mult : ''}`;
   } else $('seg-info').textContent = '';
   // selected tile's route (if any) with a stop button
   const route = selected >= 0 ? battle.routes.get(selected) : null;

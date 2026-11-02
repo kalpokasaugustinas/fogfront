@@ -1,13 +1,13 @@
 // battle simulation: segments, troops, buildings, armies. no drawing here,
 // so the same code runs in the browser and in headless tests.
-import { rules, buildings, effects } from './config.js?v=15';
-import { rng, spreadStarts } from './mapgen.js?v=15';
-import { think } from './ai.js?v=15';
+import { rules, buildings, effects } from './config.js?v=16';
+import { rng, spreadStarts } from './mapgen.js?v=16';
+import { think } from './ai.js?v=16';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
 export class Battle {
-  // map: from generateMap. opts: { seed, factions: [...], neutral: [min, max] }
+  // map: from generateMap. opts: { seed, factions: [...], neutral: [min, max] share of each tile's cap }
   // faction: { ai, personality, think, mods?, capital? }
   //   mods    = perk modifiers (expedition): speed, atk, farm, hospital, lab, growth, cost, fort,
   //             neutralDef, capitalDef, reserve, loot (see expedition.js)
@@ -27,19 +27,14 @@ export class Battle {
     this.routes = new Map();
     this.routeTimer = rules.routeEvery;
 
-    // segments: cap and base growth come from the segment's size
-    const [nmin, nmax] = opts.neutral ?? [40, 150];
+    // segments: cap from size (largest = capMax), growth = growthRate x cap,
+    // neutral garrison = a random share of the cap (bigger tiles hold more)
+    const [nmin, nmax] = opts.neutral ?? [0.15, 0.35];
     const maxArea = Math.max(...map.segs.map((s) => s.area));
     this.segs = map.segs.map((s) => {
-      const size = Math.min(2, Math.max(0.4, s.area / map.avgArea));
-      return {
-        ...s,
-        owner: -1,
-        troops: Math.round(nmin + this.rand() * (nmax - nmin)),
-        cap: Math.round((rules.capMax * s.area) / maxArea / 5) * 5,   // largest segment = capMax
-        baseGrowth: round1(rules.growthBase + rules.growthPerSize * size),
-        building: null,
-      };
+      const cap = Math.round((rules.capMax * s.area) / maxArea / 5) * 5;
+      const garrison = Math.round(cap * (nmin + this.rand() * (nmax - nmin)));
+      return { ...s, owner: -1, troops: garrison, garrison, cap, baseGrowth: round1(cap * rules.growthRate), building: null };
     });
     spreadStarts(map, this.factions.length, this.rand).forEach((sid, f) => {
       const s = this.segs[sid], fac = this.factions[f];
@@ -50,6 +45,7 @@ export class Battle {
         s.capital = true;
         s.building = 'capital';
         s.cap = rules.capMax;
+        s.baseGrowth = round1(s.cap * rules.growthRate);
         s.bonus = { growth: 0, hosp: 0, lab: 0, def: 0, atk: 0, ...fac.capital.bonus };
         s.troops = Math.min(s.cap, fac.capital.troops);
         fac.reserve = Math.max(0, fac.capital.troops - s.cap);
@@ -176,7 +172,11 @@ export class Battle {
     if (this.state !== 'running') return;
     this.time += dt;
     for (const s of this.segs) {
-      if (s.owner < 0) continue;
+      if (s.owner < 0) {
+        // neutrals regrow (same rate as owned tiles) but only back to their starting garrison
+        if (s.troops < s.garrison) s.troops = Math.min(s.garrison, s.troops + s.baseGrowth * dt);
+        continue;
+      }
       if (s.troops < s.cap) s.troops = Math.min(s.cap, s.troops + s.growth * dt);
       else s.troops = Math.max(s.cap, s.troops - rules.overCapDecay * dt);
     }

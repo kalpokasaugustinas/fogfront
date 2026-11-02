@@ -7,16 +7,16 @@
 //   - pick 1 of 3 perks
 // bots scale with you: base troops + 70% of your carried people, and capitals with the same
 // total bonus strength in a random mix. losing a stage ends the run.
-import { effects } from './config.js?v=15';
-import { personalities } from './ai.js?v=15';
-import { rng } from './mapgen.js?v=15';
+import { effects } from './config.js?v=16';
+import { personalities } from './ai.js?v=16';
+import { rng } from './mapgen.js?v=16';
 
 export const stages = [
-  { name: 'Valley', area: '5 km²', cells: 12, bots: 1, shape: 'random', neutral: [40, 140] },
-  { name: 'Region', area: '800 km²', cells: 16, bots: 2, shape: 'random', neutral: [80, 230] },
-  { name: 'Country', area: '90,000 km²', cells: 20, bots: 3, shape: 'random', neutral: [120, 320] },
-  { name: 'Continent', area: '10 million km²', cells: 26, bots: 3, shape: 'world', neutral: [160, 400] },
-  { name: 'World', area: '510 million km²', cells: 34, bots: 4, shape: 'world', neutral: [200, 480] },
+  { name: 'Valley', area: '5 km²', cells: 12, bots: 1, shape: 'random', neutral: [0.12, 0.3] },
+  { name: 'Region', area: '800 km²', cells: 16, bots: 2, shape: 'random', neutral: [0.18, 0.38] },
+  { name: 'Country', area: '90,000 km²', cells: 20, bots: 3, shape: 'random', neutral: [0.24, 0.46] },
+  { name: 'Continent', area: '10 million km²', cells: 26, bots: 3, shape: 'world', neutral: [0.3, 0.55] },
+  { name: 'World', area: '510 million km²', cells: 34, bots: 4, shape: 'world', neutral: [0.36, 0.64] },
 ];
 
 export const botCarry = 0.7;   // share of the player's carried people each bot starts with

@@ -10,8 +10,9 @@ export const rules = {
   routeMin: 5,        // ...when at least this many troops are above the route's reserve
   // cap scales with segment area: the largest segment on the map holds capMax
   capMax: 1000,
-  // growth from size ratio (area / average area, clamped)
-  growthBase: 1.47, growthPerSize: 2.45,  // avg segment: 3.9 troops/s
+  // growth: every tile produces this share of its cap per second (600-cap tile: +6/s).
+  // neutral tiles regrow at the same rate, but only back up to their starting garrison
+  growthRate: 0.01,
 };
 
 // one building per segment; building costs troops taken from that segment.
