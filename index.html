@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0b1220">
+  <title>Frontlines</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- main menu -->
+  <section id="menu" class="screen">
+    <h1>Frontlines</h1>
+    <p class="tag">Conquer the map, one region at a time. Do the math, pick your fights.</p>
+    <button id="btn-campaign" class="primary">🗺️ Campaign</button>
+    <button id="btn-skirmish">⚔️ Quick battle</button>
+    <button id="btn-help">❔ How to play</button>
+  </section>
+
+  <!-- campaign world map -->
+  <section id="campaign" class="screen hidden">
+    <header class="bar">
+      <button id="campaign-back">←</button>
+      <b>Campaign</b>
+      <span id="campaign-progress"></span>
+      <button id="campaign-reset" title="Reset progress">⟲</button>
+    </header>
+    <div class="layout">
+      <div class="mapwrap"><canvas id="campaign-canvas"></canvas></div>
+      <aside class="panel" id="region-info"></aside>
+    </div>
+  </section>
+
+  <!-- battle -->
+  <section id="battle" class="screen hidden">
+    <header class="bar">
+      <button id="battle-quit">←</button>
+      <span id="factions"></span>
+      <span id="clock">0:00</span>
+      <span id="speed" class="seg">
+        <button data-speed="0">⏸</button><button data-speed="1">1x</button><button data-speed="2">2x</button><button data-speed="3">3x</button>
+      </span>
+    </header>
+    <div class="layout">
+      <div class="mapwrap"><canvas id="battle-canvas"></canvas></div>
+      <aside class="panel">
+        <div class="row">Send <span id="pct" class="seg">
+          <button data-pct="0.25">25%</button><button data-pct="0.5">50%</button><button data-pct="0.75">75%</button><button data-pct="1">100%</button>
+        </span></div>
+        <div id="seg-info"></div>
+        <div id="build"></div>
+      </aside>
+    </div>
+    <div id="end" class="overlay hidden">
+      <div class="card">
+        <h2 id="end-title"></h2>
+        <p id="end-stats"></p>
+        <button id="end-retry">↻ Retry</button>
+        <button id="end-continue" class="primary">Continue</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- rules -->
+  <div id="help" class="overlay hidden">
+    <div class="card scroll">
+      <h2>How to play</h2>
+      <ul>
+        <li>The map is split into segments. Each one you own grows troops up to its cap. Bigger segments grow faster and hold more.</li>
+        <li><b>Tap</b> your segment to select it, then <b>tap a neighbour</b> to attack it with the chosen % of troops.</li>
+        <li><b>Drag</b> from your segment to any neighbour, including your own, to send troops there.</li>
+        <li>Fight: attack = troops × attack bonus, defense = defenders × defense bonus. Higher number wins; the winner keeps the difference.</li>
+        <li>Neutral (grey) segments don't grow. Bots fight each other too: let them weaken each other.</li>
+        <li>Each segment can hold one building, paid with its own troops. Captured buildings switch sides.</li>
+      </ul>
+      <ul id="help-buildings"></ul>
+      <p>Win: wipe out every enemy faction. Keys: space = pause, 1–4 = send %, Esc = deselect.</p>
+      <button id="help-close" class="primary">Got it</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

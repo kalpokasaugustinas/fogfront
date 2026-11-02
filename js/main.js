@@ -1,0 +1,313 @@
+// app shell: menu, campaign map, battle screen, input and the frame loop
+import { rules, buildings, effects, factionColors, factionNames, neutralColor } from './config.js';
+import { generateMap, rng } from './mapgen.js';
+import { Battle } from './battle.js';
+import { personalities } from './ai.js';
+import { Campaign } from './campaign.js';
+import { MapView, hexToRgb, shade, label } from './render.js';
+
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const autoplay = params.has('autoplay');   // test mode: the player side is played by a bot too
+
+const colors = factionColors.map(hexToRgb);
+const neutral = hexToRgb(neutralColor);
+
+// ---------- screens ----------
+function show(id) {
+  for (const s of document.querySelectorAll('.screen')) s.classList.toggle('hidden', s.id !== id);
+  screen = id;
+  requestAnimationFrame(() => { if (id === 'battle' && bv) { bv.resize(); key = ''; } if (id === 'campaign') cv.resize(), paintCampaign(); });
+}
+let screen = 'menu';
+
+// ---------- campaign screen ----------
+const campaign = new Campaign();
+const cv = new MapView($('campaign-canvas'), campaign.map);
+let pickedRegion = -1;
+
+function paintCampaign() {
+  cv.paint((id) => {
+    if (campaign.owned.has(id)) return colors[0];
+    const c = colors[campaign.regions[id].empire];
+    if (id === pickedRegion) return shade(c, 0.3);
+    return campaign.attackable(id) ? c : shade(c, -0.5);
+  });
+  renderRegionInfo();
+}
+
+function drawCampaign() {
+  const ctx = cv.drawBase();
+  const fs = Math.max(10, Math.min(15, cv.size / 36));
+  for (const r of campaign.regions) {
+    const s = campaign.map.segs[r.id], x = cv.px(s.x), y = cv.px(s.y);
+    const owned = campaign.owned.has(r.id), open = campaign.attackable(r.id);
+    label(ctx, owned ? '🏳️' : open ? '⚔️' : r.capital ? '👑' : '🔒', x, y - fs * 0.9, fs * 1.1);
+    label(ctx, r.name, x, y + fs * 0.4, fs * 0.85, owned || open ? '#fff' : '#aab', 700);
+    if (!owned) label(ctx, 'Lv ' + r.level, x, y + fs * 1.4, fs * 0.75, '#ffd76a', 700);
+  }
+}
+
+function renderRegionInfo() {
+  const box = $('region-info');
+  $('campaign-progress').textContent = `${campaign.owned.size} / ${campaign.regions.length} regions`;
+  if (pickedRegion < 0) {
+    box.innerHTML = campaign.done()
+      ? '<p class="big">🏆 World conquered!</p><p>Reset the campaign to play again.</p>'
+      : '<p>Tap a region marked ⚔️ next to your territory to attack it.</p>';
+    return;
+  }
+  const r = campaign.regions[pickedRegion], open = campaign.attackable(r.id);
+  box.innerHTML = `
+    <p class="big">${r.capital ? '👑 ' : ''}${r.name}</p>
+    <p>Held by <b style="color:${factionColors[r.empire]}">${factionNames[r.empire]}</b> · level ${r.level}</p>
+    <p>${r.segments} segments · ${r.bots} enem${r.bots > 1 ? 'ies' : 'y'} · neutral troops ${r.neutral[0]}–${r.neutral[1]}</p>
+    ${open ? '<button id="attack-btn" class="primary">⚔️ Attack</button>'
+           : campaign.owned.has(r.id) ? '<p>✅ Yours</p>' : '<p>🔒 Conquer a neighbouring region first</p>'}`;
+  if (open) $('attack-btn').onclick = () => startBattle(campaign.battleSetup(r.id), 'campaign', r.id);
+}
+
+$('campaign-canvas').addEventListener('pointerdown', (e) => {
+  const id = cv.segAt(e.clientX, e.clientY);
+  pickedRegion = id;
+  paintCampaign();
+});
+
+// ---------- battle screen ----------
+let battle = null, bv = null, mode = 'skirmish', regionId = -1;
+let selected = -1, pct = 0.5, drag = null, hover = -1, speed = 1, paused = false, key = '';
+
+function startBattle(setup, m, rid = -1) {
+  const map = generateMap({ seed: setup.seed, cells: setup.cells, grid: rules.grid });
+  if (autoplay) setup.factions[0] = { ai: true, color: 0, think: 1.5, personality: personalities.aggressive };
+  battle = new Battle(map, setup);
+  mode = m; regionId = rid; selected = -1; drag = null; paused = false; key = '';
+  if (!bv) bv = new MapView($('battle-canvas'), map); else bv.setMap(map);
+  $('end').classList.add('hidden');
+  renderBuildPanel();
+  show('battle');
+}
+
+function startSkirmish() {
+  const seed = Math.floor(Math.random() * 1e9), r = rng(seed), types = Object.keys(personalities);
+  startBattle({
+    seed, cells: 22, neutral: [8, 28],
+    factions: [{ ai: false, color: 0 }, ...[1, 2, 3].map((color) => ({
+      ai: true, color, think: 2, personality: personalities[types[Math.floor(r() * types.length)]],
+    }))],
+  }, 'skirmish');
+}
+
+const colorOfFaction = (f) => (f < 0 ? neutral : colors[battle.factions[f].color]);
+const isMine = (sid) => sid >= 0 && battle.segs[sid].owner === 0;
+const canTarget = (from, to) => from >= 0 && to >= 0 && from !== to && battle.segs[from].adj.includes(to);
+
+// repaint the map raster when ownership, buildings or the selection changed
+function paintBattle() {
+  const k = `${battle.version}:${selected}`;
+  if (k === key) return;
+  key = k;
+  if (selected >= 0 && !isMine(selected)) selected = -1;
+  const adj = selected >= 0 ? battle.segs[selected].adj : [];
+  bv.paint((id) => {
+    const c = colorOfFaction(battle.segs[id].owner);
+    if (id === selected) return shade(c, 0.4);
+    if (adj.includes(id)) return shade(c, 0.15);
+    return selected >= 0 ? shade(c, -0.15) : c;
+  });
+  renderBuildPanel();
+}
+
+function drawBattle() {
+  paintBattle();
+  const ctx = bv.drawBase();
+  const fs = Math.max(11, Math.min(18, bv.size / 30));
+  // segment numbers and building icons
+  for (const s of battle.segs) {
+    const x = bv.px(s.x), y = bv.px(s.y);
+    if (s.building) label(ctx, buildings[s.building].icon, x, y - fs * 0.95, fs * 0.95);
+    label(ctx, Math.floor(s.troops), x, y + (s.building ? fs * 0.15 : 0), fs, s.owner < 0 ? '#e5e7eb' : '#fff');
+  }
+  // armies on the move
+  for (const a of battle.armies) {
+    const f = battle.segs[a.from], t = battle.segs[a.to];
+    const x = bv.px(f.x + (t.x - f.x) * a.t), y = bv.px(f.y + (t.y - f.y) * a.t);
+    const rad = 5 + Math.sqrt(a.n) * 1.3;
+    ctx.beginPath();
+    ctx.arc(x, y, rad, 0, Math.PI * 2);
+    ctx.fillStyle = factionColors[battle.factions[a.owner].color];
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = a.atk > 1 ? '#ffd76a' : 'rgba(0,0,0,.6)';   // gold ring = barracks bonus
+    ctx.stroke();
+    label(ctx, a.n, x, y, fs * 0.7);
+  }
+  // drag arrow from the selected segment to the pointer
+  if (drag && drag.moved) {
+    const f = battle.segs[drag.from], fx = bv.px(f.x), fy = bv.px(f.y);
+    const ok = canTarget(drag.from, hover);
+    const tx = ok ? bv.px(battle.segs[hover].x) : drag.x, ty = ok ? bv.px(battle.segs[hover].y) : drag.y;
+    ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(tx, ty);
+    ctx.lineWidth = 4; ctx.setLineDash([8, 6]);
+    ctx.strokeStyle = ok ? '#fff' : 'rgba(255,255,255,.4)';
+    ctx.stroke(); ctx.setLineDash([]);
+    if (ok) label(ctx, '→ ' + Math.floor(battle.segs[drag.from].troops * pct), (fx + tx) / 2, (fy + ty) / 2 - fs, fs * 0.8, '#ffd76a');
+  }
+}
+
+// battle input: tap own = select, tap adjacent enemy/neutral = attack, drag own -> any adjacent = send
+function localPos(e) {
+  const r = bv.canvas.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+$('battle-canvas').addEventListener('pointerdown', (e) => {
+  if (!battle || battle.state !== 'running') return;
+  bv.canvas.setPointerCapture(e.pointerId);
+  const sid = bv.segAt(e.clientX, e.clientY);
+  hover = sid;
+  if (isMine(sid)) { selected = sid; drag = { from: sid, moved: false, ...localPos(e) }; }
+  else if (canTarget(selected, sid)) sendFrom(selected, sid);
+  else if (sid < 0) selected = -1;
+});
+$('battle-canvas').addEventListener('pointermove', (e) => {
+  if (!battle) return;
+  hover = bv.segAt(e.clientX, e.clientY);
+  if (drag) { Object.assign(drag, localPos(e)); if (hover !== drag.from) drag.moved = true; }
+});
+$('battle-canvas').addEventListener('pointerup', (e) => {
+  if (drag) {
+    const to = bv.segAt(e.clientX, e.clientY);
+    if (drag.moved && canTarget(drag.from, to)) sendFrom(drag.from, to);
+  }
+  drag = null;
+});
+
+function sendFrom(from, to) {
+  const n = Math.floor(battle.segs[from].troops * pct);
+  if (!battle.send(0, from, to, n)) flash('Not enough troops');
+}
+
+// bottom panel: send %, selected segment info, build buttons
+function renderBuildPanel() {
+  const box = $('build');
+  if (selected < 0 || !battle) {
+    box.innerHTML = '<p class="hint">Tap your segment to select it. Tap a neighbour to attack, or drag to send troops (also to your own segments).</p>';
+    return;
+  }
+  box.innerHTML = Object.entries(buildings).map(([type, b]) =>
+    `<button class="bld" data-type="${type}"><span class="ico">${b.icon}</span><span><b>${b.name}</b> · ${b.cost}<br><small>${b.desc}</small></span></button>`).join('');
+  for (const btn of box.querySelectorAll('.bld')) btn.onclick = () => {
+    if (!battle.build(0, selected, btn.dataset.type)) flash('Need more troops in this segment');
+  };
+}
+
+function updatePanel() {
+  // segment info line: selected segment, or the hovered one
+  const sid = selected >= 0 ? selected : hover;
+  if (sid >= 0) {
+    const s = battle.segs[sid], who = s.owner < 0 ? 'Neutral' : factionNames[battle.factions[s.owner].color];
+    const mult = [s.building === 'fort' && `🛡️ defense x${effects.fortDefense}`, s.building === 'barracks' && `⚔️ attack x${effects.barracksAttack}`].filter(Boolean).join(' · ');
+    const col = s.owner < 0 ? neutralColor : factionColors[battle.factions[s.owner].color];
+    $('seg-info').innerHTML = `<b style="color:${col}">${who}</b>
+      · ${Math.floor(s.troops)} / ${s.cap} troops · +${s.growth}/s${s.building ? ' · ' + buildings[s.building].icon + ' ' + buildings[s.building].name : ''}${mult ? ' · ' + mult : ''}`;
+  } else $('seg-info').textContent = '';
+  for (const btn of $('build').querySelectorAll('.bld')) {
+    const s = battle.segs[selected];
+    btn.disabled = !s || s.troops < buildings[btn.dataset.type].cost || s.building === btn.dataset.type;
+    btn.classList.toggle('current', !!s && s.building === btn.dataset.type);
+  }
+  // faction chips: segments and total troops (on map + marching)
+  $('factions').innerHTML = battle.factions.map((f) => {
+    const segs = battle.segs.filter((s) => s.owner === f.id);
+    const troops = segs.reduce((v, s) => v + s.troops, 0) + battle.armies.filter((a) => a.owner === f.id).reduce((v, a) => v + a.n, 0);
+    const dead = !battle.alive(f.id);
+    return `<span class="chip ${dead ? 'dead' : ''}"><i style="background:${factionColors[f.color]}"></i>${segs.length}▣ ${Math.floor(troops)}</span>`;
+  }).join('');
+  $('clock').textContent = fmtTime(battle.time);
+}
+
+for (const b of document.querySelectorAll('#pct button')) {
+  b.onclick = () => setPct(+b.dataset.pct);
+}
+function setPct(p) {
+  pct = p;
+  for (const b of document.querySelectorAll('#pct button')) b.classList.toggle('on', +b.dataset.pct === p);
+}
+
+for (const b of document.querySelectorAll('#speed button')) b.onclick = () => setSpeed(+b.dataset.speed);
+function setSpeed(s) {
+  paused = s === 0;
+  if (s > 0) speed = s;
+  for (const b of document.querySelectorAll('#speed button')) b.classList.toggle('on', +b.dataset.speed === (paused ? 0 : speed));
+}
+
+function endBattle() {
+  const won = battle.state === 'won';
+  if (won && mode === 'campaign') { campaign.conquer(regionId); pickedRegion = -1; }
+  const st = battle.stats;
+  $('end-title').textContent = won ? (mode === 'campaign' ? '🏳️ Region conquered!' : '🏆 Victory!') : '💀 Defeated';
+  $('end-stats').textContent = `Time ${fmtTime(battle.time)} · ${st.captured} captures · ${st.built} buildings · ${st.sent} orders`;
+  $('end-retry').classList.toggle('hidden', won);
+  $('end').classList.remove('hidden');
+}
+$('end-continue').onclick = () => { if (mode === 'campaign') show('campaign'); else show('menu'); };
+$('end-retry').onclick = () => {
+  if (mode === 'campaign') startBattle(campaign.battleSetup(regionId), 'campaign', regionId); else startSkirmish();
+};
+
+let flashTimer = 0;
+function flash(msg) {
+  $('toast').textContent = msg;
+  $('toast').classList.add('show');
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => $('toast').classList.remove('show'), 1200);
+}
+
+const fmtTime = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+
+// ---------- menu, help, keyboard ----------
+$('btn-campaign').onclick = () => show('campaign');
+$('btn-skirmish').onclick = startSkirmish;
+$('btn-help').onclick = () => $('help').classList.remove('hidden');
+$('help-close').onclick = () => $('help').classList.add('hidden');
+$('campaign-back').onclick = () => show('menu');
+$('campaign-reset').onclick = () => {
+  if (confirm('Reset campaign progress?')) { campaign.reset(); pickedRegion = -1; paintCampaign(); }
+};
+$('battle-quit').onclick = () => {
+  if (battle.state !== 'running' || confirm('Leave this battle?')) show(mode === 'campaign' ? 'campaign' : 'menu');
+};
+$('help-buildings').innerHTML = Object.values(buildings).map((b) => `<li>${b.icon} <b>${b.name}</b> (cost ${b.cost}): ${b.desc}</li>`).join('');
+
+addEventListener('keydown', (e) => {
+  if (screen !== 'battle') return;
+  if (e.key === ' ') { setSpeed(paused ? speed : 0); e.preventDefault(); }
+  if (['1', '2', '3', '4'].includes(e.key)) setPct(+e.key * 0.25);
+  if (e.key === 'Escape') selected = -1;
+});
+addEventListener('resize', () => { if (screen === 'battle' && bv) { bv.resize(); key = ''; } if (screen === 'campaign') cv.resize(), paintCampaign(); });
+
+// ---------- frame loop: fixed-step simulation, draw every frame ----------
+let last = performance.now(), acc = 0, uiTimer = 0;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  if (screen === 'battle' && battle) {
+    if (!paused && battle.state === 'running') {
+      acc += dt * speed;
+      while (acc >= rules.step) { battle.step(rules.step); acc -= rules.step; }
+    }
+    // show the result card once, however the battle ended
+    if (battle.state !== 'running' && !battle.endShown) { battle.endShown = true; endBattle(); }
+    drawBattle();
+    uiTimer -= dt;
+    if (uiTimer <= 0) { updatePanel(); uiTimer = 0.15; }
+  } else if (screen === 'campaign') drawCampaign();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+setPct(0.5);
+setSpeed(1);
+
+// hooks for headless tests
+window.__fl = { campaign, startSkirmish, startBattle, get battle() { return battle; } };
