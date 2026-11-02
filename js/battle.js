@@ -1,8 +1,10 @@
 // battle simulation: segments, troops, buildings, armies. no drawing here,
 // so the same code runs in the browser and in headless tests.
-import { rules, buildings, effects } from './config.js?v=20';
-import { rng, spreadStarts } from './mapgen.js?v=20';
-import { think } from './ai.js?v=20';
+import { rules, buildings, effects, traits, relicGarrison } from './config.js?v=21';
+import { perks, combineMods } from './expedition.js?v=21';
+import { hops } from './mapgen.js?v=21';
+import { rng, spreadStarts } from './mapgen.js?v=21';
+import { think } from './ai.js?v=21';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
@@ -57,18 +59,29 @@ export class Battle {
         fac.capitalSeg = sid;
       }
     });
+    // relic tiles: neutral tiles away from every start hold a perk shrine; the holder gets the perk
+    const starts = this.segs.filter((s) => s.owner >= 0).map((s) => s.id), far = hops(map, starts);
+    const pool = this.segs.filter((s) => s.owner < 0 && far[s.id] >= 2 && !s.capital);
+    const count = opts.relics ?? Math.max(1, Math.round(this.segs.length / 11));
+    for (let i = 0; i < count && pool.length; i++) {
+      const s = pool.splice(Math.floor(this.rand() * pool.length), 1)[0];
+      s.relic = perks[Math.floor(this.rand() * perks.length)].id;
+      s.garrison = s.troops = Math.min(s.cap, Math.round(s.troops * relicGarrison));
+    }
     this.updateGrowth();
   }
 
-  mods(f) { return f >= 0 ? this.factions[f].mods : {}; }
+  // live modifiers: the faction's own perks plus the perks of every relic tile it holds
+  mods(f) { return f >= 0 ? (this.modsCache?.[f] ?? this.factions[f].mods) : {}; }
 
   // growth multiplier per segment: farm (own), hospitals (adjacent own), labs (whole faction),
   // capital bonuses (own growth, hospital-like aura, faction-wide lab part), perk modifiers
   updateGrowth() {
+    this.modsCache = this.factions.map((f) => combineMods([f.mods, ...this.segs.filter((s) => s.owner === f.id && s.relic).map((s) => perks.find((p) => p.id === s.relic).mods)]));
     const labBonus = this.factions.map((f) => {
       const labs = this.segs.filter((s) => s.owner === f.id && s.building === 'lab').length;
       const caps = this.segs.filter((s) => s.owner === f.id && s.capital).reduce((v, s) => v + s.bonus.lab, 0);
-      return labs * effects.labGrowth * (f.mods.lab ?? 1) + caps;
+      return labs * effects.labGrowth * (this.mods(f.id).lab ?? 1) + caps;
     });
     for (const s of this.segs) {
       if (s.owner < 0) { s.growth = 0; continue; }
@@ -76,6 +89,7 @@ export class Battle {
       let mult = 1 + labBonus[s.owner];
       if (s.building === 'farm') mult += effects.farmGrowth * (m.farm ?? 1);
       if (s.capital) mult += s.bonus.growth;
+      if (s.trait) mult += traits[s.trait].growth ?? 0;
       for (const a of s.adj) {
         const n = this.segs[a];
         if (n.owner !== s.owner) continue;
@@ -90,6 +104,7 @@ export class Battle {
     const m = this.mods(s.owner);
     let d = s.building === 'fort' ? (m.fort ?? effects.fortDefense) : 1;
     if (s.capital) d += s.bonus.def + (m.capitalDef ?? 0);
+    if (s.trait) d *= 1 + (traits[s.trait].def ?? 0);   // highland / forest
     return d;
   }
 

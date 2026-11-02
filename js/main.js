@@ -1,12 +1,12 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=20';
-import { generateMap, rng } from './mapgen.js?v=20';
-import { Battle } from './battle.js?v=20';
-import { personalities } from './ai.js?v=20';
-import { Campaign } from './campaign.js?v=20';
-import { Expedition, stages } from './expedition.js?v=20';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=20';
-import { MapView, hexToRgb, shade, label, pill, unitSprite } from './render.js?v=20';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=21';
+import { generateMap, rng } from './mapgen.js?v=21';
+import { Battle } from './battle.js?v=21';
+import { personalities } from './ai.js?v=21';
+import { Campaign } from './campaign.js?v=21';
+import { Expedition, stages, perks } from './expedition.js?v=21';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=21';
+import { MapView, hexToRgb, shade, label, pill, unitSprite } from './render.js?v=21';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -139,9 +139,9 @@ function paintBattle() {
   if (selected >= 0 && !isMine(selected)) selected = -1;
   const adj = selected >= 0 ? battle.segs[selected].adj : [];
   bv.paint((id) => {
-    const s = battle.segs[id], o = s.owner;
-    if (o < 0) return { color: null, fill: 0, building: s.building };
-    return { color: colors[battle.factions[o].color], fill: 0.16, building: s.building };
+    const s = battle.segs[id], o = s.owner, building = s.building ?? (s.relic ? 'relic' : null);   // shrine shows until something is built
+    if (o < 0) return { color: null, fill: 0, building };
+    return { color: colors[battle.factions[o].color], fill: 0.16, building };
   });
   renderBuildPanel();
 }
@@ -160,9 +160,16 @@ function drawUnits(ctx, v, b, ac, numbers) {
     const u = unitSprite(kind, s.owner < 0 ? '#8a8f86' : factionColors[b.factions[s.owner].color], z, dpr);
     for (let i = 0; i < n; i++) ctx.drawImage(u.c, spots[i][0] - u.w / 2, spots[i][1] - u.h, u.w, u.h);
   }
-  // segment numbers
+  // segment numbers, with the terrain trait icon to the left and the relic perk above
+  const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 300);
   if (numbers) for (const s of b.segs) {
     const x = v.sx(s.x), y = v.sy(s.y);
+    if (s.trait) label(ctx, traits[s.trait].icon, x - fs * 1.75, y, fs * 0.8);
+    if (s.relic) {
+      ctx.fillStyle = `rgba(255, 215, 106, ${0.25 + 0.25 * pulse})`;
+      ctx.beginPath(); ctx.arc(x, y - fs * 1.35, fs * (0.75 + 0.12 * pulse), 0, Math.PI * 2); ctx.fill();
+      label(ctx, perks.find((p) => p.id === s.relic).icon, x, y - fs * 1.35, fs * 0.9);
+    }
     const own = s.owner >= 0 ? factionColors[b.factions[s.owner].color] : null;
     pill(ctx, Math.floor(s.troops), x, y, fs * 0.85, own ?? 'rgba(90,100,95,.55)', own ?? '#4b5552');
   }
@@ -339,7 +346,7 @@ function updatePanel() {
     const mult = [s.building === 'fort' && `🛡️ defense x${effects.fortDefense}`, s.building === 'barracks' && `⚔️ attack x${effects.barracksAttack}`].filter(Boolean).join(' · ');
     const col = s.owner < 0 ? neutralColor : factionColors[battle.factions[s.owner].color];
     $('seg-info').innerHTML = `<b style="color:${col}">${who}</b>
-      · ${Math.floor(s.troops)} / ${s.owner < 0 ? s.garrison + ' (regrows to it at +' + s.baseGrowth + '/s)' : s.cap + ' troops · +' + s.growth + '/s'}${s.capital ? ' · 🏰 Capital' : s.building ? ' · ' + buildings[s.building].icon + ' ' + buildings[s.building].name : ''}${mult ? ' · ' + mult : ''}`;
+      ${s.trait ? `· ${traits[s.trait].icon} ${traits[s.trait].name} (${traits[s.trait].desc}) ` : ''}${s.relic ? `· ✨ Relic: ${perks.find((p) => p.id === s.relic).name} (${perks.find((p) => p.id === s.relic).desc}, for whoever holds it) ` : ''}· ${Math.floor(s.troops)} / ${s.owner < 0 ? s.garrison + ' (regrows to it at +' + s.baseGrowth + '/s)' : s.cap + ' troops · +' + s.growth + '/s'}${s.capital ? ' · 🏰 Capital' : s.building ? ' · ' + buildings[s.building].icon + ' ' + buildings[s.building].name : ''}${mult ? ' · ' + mult : ''}`;
   } else $('seg-info').textContent = '';
   // selected tile's route (if any) with a stop button
   const route = selected >= 0 ? battle.routes.get(selected) : null;
@@ -535,7 +542,7 @@ function drawMenu(dt) {
   demo.events.length = 0;   // demo is silent
   mv.paint((id) => {
     const s = demo.segs[id];
-    return { color: s.owner < 0 ? null : colors[demo.factions[s.owner].color], fill: s.owner < 0 ? 0 : 0.16, building: s.building };
+    return { color: s.owner < 0 ? null : colors[demo.factions[s.owner].color], fill: s.owner < 0 ? 0 : 0.16, building: s.building ?? (s.relic ? 'relic' : null) };
   });
   drawUnits(mv.drawBase(), mv, demo, demoAcc, false);
 }

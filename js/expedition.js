@@ -7,9 +7,9 @@
 //   - pick 1 of 3 perks
 // bots scale with you: base troops + 70% of your carried people, and capitals with the same
 // total bonus strength in a random mix. losing a stage ends the run.
-import { effects } from './config.js?v=20';
-import { personalities } from './ai.js?v=20';
-import { rng } from './mapgen.js?v=20';
+import { effects } from './config.js?v=21';
+import { personalities } from './ai.js?v=21';
+import { rng } from './mapgen.js?v=21';
 
 export const stages = [
   { name: 'Valley', detail: 1, area: '5 km²', cells: 12, bots: 1, shape: 'random', neutral: [0.12, 0.3] },
@@ -37,6 +37,19 @@ export const perks = [
   { id: 'masons', icon: '🛡️', name: 'Stonemasons', desc: 'Forts defend x1.8 instead of x1.5', mods: { fort: 1.8 } },
 ];
 
+// merge modifier sets: multipliers multiply, capitalDef/loot add, fort takes the best
+export function combineMods(list) {
+  const m = {};
+  for (const mods of list) {
+    for (const [k, v] of Object.entries(mods)) {
+      if (k === 'capitalDef' || k === 'loot') m[k] = (m[k] ?? 0) + v;
+      else if (k === 'fort') m[k] = Math.max(m[k] ?? 0, v);
+      else m[k] = (m[k] ?? 1) * v;
+    }
+  }
+  return m;
+}
+
 const best_key = 'frontlines.expedition.best';
 
 export class Expedition {
@@ -53,17 +66,7 @@ export class Expedition {
   done() { return this.stage >= stages.length; }
 
   // combined perk modifiers
-  mods() {
-    const m = {};
-    for (const id of this.perks) {
-      for (const [k, v] of Object.entries(perks.find((p) => p.id === id).mods)) {
-        if (k === 'capitalDef' || k === 'loot') m[k] = (m[k] ?? 0) + v;
-        else if (k === 'fort') m[k] = Math.max(m[k] ?? 0, v);
-        else m[k] = (m[k] ?? 1) * v;
-      }
-    }
-    return m;
-  }
+  mods() { return combineMods(this.perks.map((id) => perks.find((p) => p.id === id).mods)); }
 
   // battle setup for the current stage
   setup() {

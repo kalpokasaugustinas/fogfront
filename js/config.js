@@ -36,6 +36,17 @@ export const effects = {
   fortDefense: 1.5,     // defense multiplier of fort segments
 };
 
+// terrain traits: each segment gets at most one, from what's on the map around it
+//   highland = next to mountains, river = a river runs through, lakeside = next to a lake,
+//   forest = picked at random among the rest (the renderer plants its woods there)
+export const traits = {
+  highland: { icon: '🏔️', name: 'Highland', def: 0.3, desc: 'defenders +30%' },
+  forest:   { icon: '🌲', name: 'Forest',   def: 0.15, desc: 'defenders +15%' },
+  river:    { icon: '🌊', name: 'River',    growth: 0.25, desc: '+25% growth' },
+  lakeside: { icon: '💧', name: 'Lakeside', growth: 0.15, desc: '+15% growth' },
+};
+export const relicGarrison = 1.6;   // relic tiles: neutral garrison x1.6
+
 // faction colours: index 0 = player
 export const factionColors = ['#2f74d6', '#d1403a', '#e09a1a', '#8b55c9', '#23966a'];
 export const factionNames = ['You', 'Crimson', 'Amber', 'Violet', 'Jade'];

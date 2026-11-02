@@ -419,12 +419,28 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
       if (pts.length > 12) { rivers.push(pts); r++; }
     }
   }
+  // 10. terrain traits per segment (one each at most): highland > river > lakeside > forest
+  const nearMtn = new Int32Array(segs.length), nearLake = new Int32Array(segs.length), riverHit = new Uint8Array(segs.length);
+  for (const c of land) {
+    const id = ids[c];
+    if (id < 0 || !near[c] || near[c] > 2) continue;
+    if (nearType[c] === terrainTypes.mountain) nearMtn[id]++;
+    else if (nearType[c] === terrainTypes.lake) nearLake[id]++;
+  }
+  for (const pts of rivers) for (const [x, y] of pts) { const id = ids[Math.floor(y) * g + Math.floor(x)]; if (id >= 0) riverHit[id] = 1; }
+  const trait = segs.map((s) => {
+    const need = Math.max(4, s.area * 0.01);
+    if (nearMtn[s.id] >= need) return 'highland';
+    if (riverHit[s.id]) return 'river';
+    if (nearLake[s.id] >= need) return 'lakeside';
+    return orand() < 0.3 ? 'forest' : null;
+  });
   return {
     grid: g, ids, edge, avgArea, shape, terrain, near, nearType, bridges, islands: islands.length, detail, rivers,
     stampSeg: stampSeed >= 0 && remap.has(stampSeed) ? remap.get(stampSeed) : -1,
     bdist: dist,   // steps from each land cell to its segment's border
     relief,   // mountain height / lake depth, 0..1
-    segs: segs.map((s) => ({ id: s.id, area: s.area, x: s.x, y: s.y, adj: [...s.adj], coast: !!s.coast })),
+    segs: segs.map((s) => ({ id: s.id, area: s.area, x: s.x, y: s.y, adj: [...s.adj], coast: !!s.coast, trait: trait[s.id] })),
   };
 }
 

@@ -3,8 +3,8 @@
 //                actions: max moves per think (build, attack or reinforce, shared budget
 //                so a big empire doesn't act faster than a small one),
 //                grudge: extra value for player segments }
-import { rules, buildings, effects } from './config.js?v=20';
-import { hops } from './mapgen.js?v=20';
+import { rules, buildings, effects } from './config.js?v=21';
+import { hops } from './mapgen.js?v=21';
 
 export const personalities = {
   aggressive: { build: 0.25, risk: 1.15, actions: 2, grudge: 0.3 },
@@ -48,7 +48,7 @@ export function think(b, f) {
       if (need <= 0) continue;
       const send = Math.ceil(need * p.risk + 2);
       if (send > s.troops - 1) continue;
-      let value = t.cap / 50 + (t.building ? 0.6 : 0);
+      let value = t.cap / 50 + (t.building ? 0.6 : 0) + (t.relic ? 1.2 : 0) + (t.trait === 'river' || t.trait === 'lakeside' ? 0.4 : 0);
       if (t.owner === 0) value += p.grudge;
       if (t.owner < 0) value += 0.2;   // neutrals don't fight back
       options.push({ s, tid, send, score: value / send });

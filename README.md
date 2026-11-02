@@ -25,6 +25,8 @@ Prototype stage.
   - The island floats in fog, seen at a slight angle. Built segments show their building as a scene: farms turn into fields with farmhouses, forts get stone walls and towers, barracks a castle with tents and soldiers, hospitals an infirmary with medical tents, labs an observatory with crystals. Flags and soldiers take the owner's colour.
   - Each battle has a climate theme (summer, autumn, winter, moor): ground, cliffs, rocks and trees change with it. Owner colours show as glowing borders around each segment.
   - Rivers (visual only) run from the mountains and inland to the coast or a lake.
+  - Terrain traits (icon left of the number): 🏔️ Highland, next to mountains: defenders +30% · 🌲 Forest (where the woods are): defenders +15% · 🌊 River runs through: +25% growth · 💧 Lakeside: +15% growth.
+  - ✨ Relic tiles: 1-3 neutral tiles per map (away from every start) hold a shrine with one of the 12 expedition perks and a 1.6x garrison. Whoever holds the tile gets the perk; lose it, lose the perk.
   - Maps vary: island shape (blob, squiggly square, triangle, diamond, peanut, ring) and 1–4 lakes or mountain ranges that nobody can occupy or cross.
   - You win when every enemy faction is gone.
 - **Buildings** (one per segment, paid with that segment's troops; captured buildings switch sides):

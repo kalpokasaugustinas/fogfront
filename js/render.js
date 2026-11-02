@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=20';
-import * as structures from './structures.js?v=20';
+import { themes } from './config.js?v=21';
+import * as structures from './structures.js?v=21';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -298,11 +298,13 @@ export class MapView {
     let land = 0;
     for (let c = 0; c < g * g; c++) if (ids[c] >= 0) land++;
     const dt = this.map.detail ?? 1;   // zoomed-out maps: smaller trees, more woods
-    const clusters = Math.round((land / (g * g)) * 45 * t.trees / Math.sqrt(dt));
+    const clusters = Math.round((land / (g * g)) * 60 * t.trees / Math.sqrt(dt));
     let i = 0;
     for (let n = 0, tries = 0; n < clusters && tries < clusters * 30; tries++) {
       const cx = hash(i++, 1, this.seed) * g, cy = hash(i++, 2, this.seed) * g;
       if (!ok(cx, cy)) continue;
+      // forest tiles get the woods; elsewhere only the odd copse
+      if (segs[ids[Math.floor(cy) * g + Math.floor(cx)]].trait !== 'forest' && hash(i++, 7, this.seed) < 0.8) continue;
       n++;
       // a cluster = a small wood: 6-17 trees packed together
       const count = 6 + Math.floor(hash(i++, 3, this.seed) * 12);

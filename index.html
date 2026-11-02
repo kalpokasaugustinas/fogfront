@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#a9bcbc">
   <title>Frontlines</title>
-  <link rel="stylesheet" href="style.css?v=20">
+  <link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
   <!-- main menu -->
@@ -31,7 +31,7 @@
       <button id="btn-expedition" class="mode gold"><span class="m-ico">🧭</span><span class="m-txt"><b>Expedition</b><small id="m-expedition">Valley → World roguelite</small></span><span class="play">GO</span></button>
       <button id="btn-skirmish" class="mode green"><span class="m-ico">⚔️</span><span class="m-txt"><b>Quick battle</b><small>Random island · 3 rivals</small></span><span class="play">FIGHT</span></button>
     </div>
-    <span id="version">build 20 · 2026-11-02 17:41</span>
+    <span id="version">build 21 · 2026-11-02 17:48</span>
   </section>
 
   <!-- campaign world map -->
@@ -93,6 +93,8 @@
         <li><b>🔁 Auto</b> on: sending to your own neighbour also sets a <b>route</b>. Every second the source tile forwards all troops above its reserve (100% − send %, of its cap) to the target. Chain routes to pipe troops from the back to the front. Select a tile and tap ✕ Stop to end its route.</li>
         <li>Fight: attackers stop at the border and fight for 1–3 seconds. Attack = troops × attack bonus, defense = defenders × defense bonus. Higher number wins; the winner keeps the difference.</li>
         <li>Lakes and mountains can't be occupied or crossed.</li>
+        <li>Terrain: 🏔️ Highland (next to mountains) defenders +30% · 🌲 Forest defenders +15% · 🌊 River +25% growth · 💧 Lakeside +15% growth.</li>
+        <li>✨ Relic tiles: a few neutral tiles hold a shrine with a perk (shown above the number) and a stronger garrison. Whoever holds the tile gets the perk; lose the tile, lose the perk.</li>
         <li>Neutral (grey) tiles start with a garrison that matches their size and regrow back to it (1% of cap per second) if you only damage them. Bots fight each other too: let them weaken each other.</li>
         <li>Each segment can hold one building, paid with its own troops. Captured buildings switch sides.</li>
       </ul>
@@ -105,6 +107,6 @@
 
   <div id="zoom-banner"></div>
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=20"></script>
+  <script type="module" src="js/main.js?v=21"></script>
 </body>
 </html>

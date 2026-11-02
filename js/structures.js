@@ -156,6 +156,15 @@ export function ground(v, x, id, type, owner) {
       const a = rnd(i, 21, seed) * Math.PI * 2, d = Math.sqrt(rnd(i, 22, seed));
       x.fillRect(p[0] + Math.cos(a) * d * u * 6.5, p[1] - u * 0.4 + Math.sin(a) * d * u * 3.6, u * 0.5, u * 0.3);
     }
+  } else if (type === 'relic') {
+    // glowing ring of standing stones on the ground
+    const [p] = v.spots(id, 1, 0);
+    if (!p) { x.restore(); return; }
+    x.fillStyle = 'rgba(255, 215, 106, 0.28)';
+    x.beginPath(); x.ellipse(p[0], p[1] - u * 0.3, u * 5, u * 3, 0, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = 'rgba(255, 235, 170, 0.8)';
+    x.lineWidth = Math.max(1, u * 0.18);
+    x.beginPath(); x.ellipse(p[0], p[1] - u * 0.3, u * 3.6, u * 2.1, 0, 0, Math.PI * 2); x.stroke();
   } else if (type === 'lab') {
     // paved plaza with a ring pattern
     const [p] = v.spots(id, 1, 0);
@@ -250,6 +259,25 @@ export function top(v, x, id, type, owner) {
     tower(x, c[0] - u * 2.2, c[1] + u * 0.3, u, 1.5, 3.6);
     tower(x, c[0] + u * 2.2, c[1] + u * 0.3, u, 1.5, 3.6);
     flag(x, c[0], ty, u * 1.5, col);
+  } else if (type === 'relic') {
+    // standing stones around a tall obelisk with a glowing gold gem
+    const [p] = v.spots(id, 1, 0);
+    if (!p) { x.restore(); return; }
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2, sx = p[0] + Math.cos(a) * u * 3.6, sy = p[1] - u * 0.3 + Math.sin(a) * u * 2.1;
+      shadow(x, sx + u * 0.3, sy, u * 0.5, u * 0.2);
+      x.fillStyle = css(i % 2 ? stone : stoneDark);
+      x.fillRect(sx - u * 0.35, sy - u * 1.3, u * 0.7, u * 1.3);
+    }
+    shadow(x, p[0] + u * 0.8, p[1], u * 1.4, u * 0.45);
+    x.fillStyle = css(lt(stone, 0.1));
+    x.beginPath(); x.moveTo(p[0] - u * 0.8, p[1]); x.lineTo(p[0] - u * 0.45, p[1] - u * 4.6); x.lineTo(p[0] + u * 0.45, p[1] - u * 4.6); x.lineTo(p[0] + u * 0.8, p[1]); x.fill();
+    x.fillStyle = css(stoneDark);
+    x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(p[0] + u * 0.8, p[1]); x.lineTo(p[0] + u * 0.45, p[1] - u * 4.6); x.lineTo(p[0], p[1] - u * 4.6); x.fill();
+    x.fillStyle = 'rgba(255, 215, 106, 0.45)';
+    x.beginPath(); x.arc(p[0], p[1] - u * 5.3, u * 1.5, 0, Math.PI * 2); x.fill();
+    x.fillStyle = css([255, 205, 80]);
+    x.beginPath(); x.moveTo(p[0], p[1] - u * 6.2); x.lineTo(p[0] - u * 0.6, p[1] - u * 5.3); x.lineTo(p[0], p[1] - u * 4.5); x.lineTo(p[0] + u * 0.6, p[1] - u * 5.3); x.fill();
   } else if (type === 'hospital') {
     // white infirmary with a red cross, medical tents
     const [c, ...rest] = v.spots(id, 3, u * 6);
