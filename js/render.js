@@ -1,9 +1,11 @@
 // map renderer in a soft "island diorama" style:
 // misty sea, foam at the waterline, cliffs under the island edge, natural ground colours,
 // owner colours as glowing segment borders, low-poly trees on top.
-// layers: under (sea, shadow, foam, cliff; display-res, cached) -> top (ground + owner tint,
-// grid-res raster, repainted on ownership change) -> over (trees; display-res, cached)
-import { themes } from './config.js?v=9';
+// all edges (coast, lakes, mountains, segment borders) are smooth vector outlines traced from the
+// map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
+// layers (display resolution, cached): under (shadow, foam, cliff) -> top (ground, owner
+// overlays, borders; repainted on ownership change) -> over (trees)
+import { themes } from './config.js?v=10';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -36,6 +38,69 @@ function vnoise(x, y, s) {
   return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
 }
 
+// ---------- outline tracing ----------
+
+// marching squares over a 0/1 test on grid cells (sampled at cell centres) inside a bounding box.
+// returns a Path2D (grid units) of all closed outlines, smoothed; fill it with 'evenodd' for holes.
+function outline(test, g, x0 = 0, y0 = 0, x1 = g - 1, y1 = g - 1) {
+  const inside = (x, y) => x >= 0 && y >= 0 && x < g && y < g && test(y * g + x);
+  // point keys use doubled coordinates so every edge midpoint is an integer
+  const links = new Map();
+  const link = (a, b) => {
+    (links.get(a) ?? links.set(a, []).get(a)).push(b);
+    (links.get(b) ?? links.set(b, []).get(b)).push(a);
+  };
+  const key = (x2, y2) => x2 * 4096 + y2;
+  for (let y = y0 - 1; y <= y1; y++) {
+    for (let x = x0 - 1; x <= x1; x++) {
+      const a = inside(x, y), b = inside(x + 1, y), c = inside(x + 1, y + 1), d = inside(x, y + 1);
+      if (a === b && b === c && c === d) continue;
+      // crossing midpoints of the square's edges (doubled coords)
+      const top = key(2 * x + 2, 2 * y + 1), right = key(2 * x + 3, 2 * y + 2);
+      const bottom = key(2 * x + 2, 2 * y + 3), left = key(2 * x + 1, 2 * y + 2);
+      const cross = [];
+      if (a !== b) cross.push(top);
+      if (b !== c) cross.push(right);
+      if (c !== d) cross.push(bottom);
+      if (d !== a) cross.push(left);
+      if (cross.length === 2) link(cross[0], cross[1]);
+      else if (a) { link(top, left); link(right, bottom); }   // saddle: cut off the inside corners
+      else { link(top, right); link(bottom, left); }
+    }
+  }
+  const path = new Path2D(), seen = new Set();
+  for (const start of links.keys()) {
+    if (seen.has(start)) continue;
+    // walk the loop
+    const loop = [];
+    let prev = -1, cur = start;
+    while (!seen.has(cur)) {
+      seen.add(cur);
+      loop.push([Math.floor(cur / 4096) / 2, (cur % 4096) / 2]);
+      const nb = links.get(cur);
+      const next = nb[0] !== prev ? nb[0] : nb[1];
+      prev = cur;
+      cur = next;
+    }
+    if (loop.length < 3) continue;
+    const pts = chaikin(chaikin(loop));
+    path.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) path.lineTo(pts[i][0], pts[i][1]);
+    path.closePath();
+  }
+  return path;
+}
+
+// one round of chaikin corner cutting on a closed loop (rounds the 45° marching-squares steps)
+function chaikin(p) {
+  const out = [];
+  for (let i = 0; i < p.length; i++) {
+    const a = p[i], b = p[(i + 1) % p.length];
+    out.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+  }
+  return out;
+}
+
 export class MapView {
   constructor(canvas, map, theme) {
     this.canvas = canvas;
@@ -48,20 +113,16 @@ export class MapView {
   setMap(map, theme = 'summer') {
     this.map = map;
     this.theme = themes[theme] ?? themes.summer;
-    const g = map.grid;
-    this.k = g / 480;   // feature sizes are tuned for a 480 grid
-    this.top = document.createElement('canvas');
-    this.top.width = this.top.height = g;
-    this.tctx = this.top.getContext('2d');
-    this.img = this.tctx.createImageData(g, g);
+    this.k = map.grid / 480;   // feature sizes are tuned for a 480 grid
     this.buildGround();
-    this.buildSilhouette();
+    this.buildOutlines();
     this.placeTrees();
     // sea + soft light around the island live on the container, so there's no square edge
     const sl = this.theme.seaLight;
     this.canvas.parentElement.style.background =
       `radial-gradient(circle at 50% 50%, rgb(${sl}) 0%, ${this.theme.sea} 65%)`;
-    this.under = this.over = null;   // cached layers belong to the old map
+    this.under = this.over = this.topC = null;   // cached layers belong to the old map
+    this.styleOf = null;
     this.resize();
   }
 
@@ -77,67 +138,61 @@ export class MapView {
     this.canvas.width = Math.round(size * dpr);
     this.canvas.height = Math.round(size * dpr);
     this.canvas.style.width = this.canvas.style.height = size + 'px';
-    this.under = this.over = null;
+    this.under = this.over = this.topC = null;
   }
 
-  // per-cell ground colour (land + mountains), independent of owners
+  // two grid-res textures: ground (all solid cells, grass/earth noise) and rock (mountain cells, hillshaded).
+  // they are only seen through the smooth outlines, so their pixel edges never show.
   buildGround() {
     const { ids, terrain, relief, near, nearType, grid: g, segs } = this.map, t = this.theme;
     const seed = (this.seed = (segs.length * 7919 + Math.round(segs[0].x * 31)) | 0);
-    const gr = (this.ground = new Uint8ClampedArray(g * g * 4));
+    const mk = () => { const c = document.createElement('canvas'); c.width = c.height = g; return c; };
+    this.groundC = mk();
+    this.rockC = mk();
+    const gi = this.groundC.getContext('2d').createImageData(g, g), ri = this.rockC.getContext('2d').createImageData(g, g);
     const isMtn = (c) => terrain && terrain[c] === 2;
-    const solid = (c) => c >= 0 && c < g * g && (ids[c] >= 0 || isMtn(c));
     const h = (c) => (c >= 0 && c < g * g && isMtn(c) ? relief[c] : 0);
     for (let c = 0; c < g * g; c++) {
       const x = c % g, y = Math.floor(c / g), o = c * 4;
-      let col;
-      if (ids[c] >= 0) {
-        // grass/earth patches from two noise octaves
-        const n = vnoise(x / (22 * this.k), y / (22 * this.k), seed) * 0.7 + vnoise(x / (6 * this.k), y / (6 * this.k), seed + 1) * 0.3;
-        col = mix(t.groundA, t.groundB, n);
-        if (near && near[c]) col = mix(col, nearType[c] === 1 ? t.shore : t.scree, 0.5 * (1 - (near[c] - 1) / 10) ** 1.5);
-        // light lip along the cliff edge (land next to sea or lake)
-        const edge = !solid(x > 0 ? c - 1 : -1) || !solid(x < g - 1 ? c + 1 : -1) || !solid(c - g) || !solid(c + g);
-        if (edge) col = mix(col, t.lip, 0.55);
-      } else if (isMtn(c)) {
+      // ground everywhere (also under mountains and a bit into the sea, so edges never fade out)
+      const n = vnoise(x / (22 * this.k), y / (22 * this.k), seed) * 0.7 + vnoise(x / (6 * this.k), y / (6 * this.k), seed + 1) * 0.3;
+      let col = mix(t.groundA, t.groundB, n);
+      if (near && near[c]) col = mix(col, nearType[c] === 1 ? t.shore : t.scree, 0.5 * (1 - (near[c] - 1) / 10) ** 1.5);
+      gi.data[o] = col[0]; gi.data[o + 1] = col[1]; gi.data[o + 2] = col[2]; gi.data[o + 3] = 255;
+      if (isMtn(c)) {
         // rock: dark base -> light top, caps on the highest points, lit from the north-west
         const k = relief[c];
-        col = k > t.capAt ? t.cap : mix(t.rockDark, t.rockLight, Math.min(1, k / t.capAt));
+        let rc = k > t.capAt ? t.cap : mix(t.rockDark, t.rockLight, Math.min(1, k / t.capAt));
         const dx = h(x < g - 1 ? c + 1 : c) - h(x > 0 ? c - 1 : c), dy = h(c + g) - h(c - g);
-        col = shade(col, Math.max(-0.35, Math.min(0.25, (dx + dy) * 2.4 / this.k)));
-      } else continue;
-      gr[o] = col[0]; gr[o + 1] = col[1]; gr[o + 2] = col[2]; gr[o + 3] = 255;
+        rc = shade(rc, Math.max(-0.35, Math.min(0.25, (dx + dy) * 2.4 / this.k)));
+        ri.data[o] = rc[0]; ri.data[o + 1] = rc[1]; ri.data[o + 2] = rc[2]; ri.data[o + 3] = 255;
+      } else if (ids[c] >= 0 || terrain?.[c] === 1) {
+        // next to rock: copy the rock base colour so the rock texture doesn't fade to transparent at its edge
+        ri.data[o] = t.rockDark[0]; ri.data[o + 1] = t.rockDark[1]; ri.data[o + 2] = t.rockDark[2]; ri.data[o + 3] = 255;
+      }
     }
+    this.groundC.getContext('2d').putImageData(gi, 0, 0);
+    this.rockC.getContext('2d').putImageData(ri, 0, 0);
   }
 
-  // white masks: sil = land + mountains (lakes are holes, for cliffs), outer = sil + lakes
-  // (for shadow and foam, so foam stays outside the coast), lakes = lake water only
-  buildSilhouette() {
-    const { grid: g, terrain } = this.map;
-    const mask = (test) => {
-      const cv = document.createElement('canvas');
-      cv.width = cv.height = g;
-      const x = cv.getContext('2d'), im = x.createImageData(g, g);
-      for (let c = 0; c < g * g; c++) if (test(c)) { const o = c * 4; im.data[o] = im.data[o + 1] = im.data[o + 2] = im.data[o + 3] = 255; }
-      x.putImageData(im, 0, 0);
-      return cv;
-    };
-    const lake = (c) => terrain && terrain[c] === 1;
-    this.sil = mask((c) => this.ground[c * 4 + 3]);
-    this.outer = mask((c) => this.ground[c * 4 + 3] || lake(c));
-    this.lakes = mask(lake);
-  }
-
-  // copy of a mask (default: the island silhouette) in one colour
-  tint(col, src = this.sil) {
-    const c = document.createElement('canvas');
-    c.width = c.height = this.map.grid;
-    const x = c.getContext('2d');
-    x.drawImage(src, 0, 0);
-    x.globalCompositeOperation = 'source-in';
-    x.fillStyle = css(col);
-    x.fillRect(0, 0, c.width, c.height);
-    return c;
+  // smooth outlines: island (land + mountains, lakes as holes), outer (incl. lakes), lakes,
+  // mountains and one per segment
+  buildOutlines() {
+    const { ids, terrain, grid: g, segs } = this.map;
+    const lake = (c) => terrain && terrain[c] === 1, mtn = (c) => terrain && terrain[c] === 2;
+    this.islandP = outline((c) => ids[c] >= 0 || mtn(c), g);
+    this.outerP = outline((c) => ids[c] >= 0 || mtn(c) || lake(c), g);
+    this.lakesP = outline(lake, g);
+    this.mtnP = outline(mtn, g);
+    // per-segment bounding boxes keep the tracing fast
+    const box = segs.map(() => [g, g, -1, -1]);
+    for (let c = 0; c < g * g; c++) {
+      const id = ids[c];
+      if (id < 0) continue;
+      const b = box[id], x = c % g, y = Math.floor(c / g);
+      if (x < b[0]) b[0] = x; if (y < b[1]) b[1] = y; if (x > b[2]) b[2] = x; if (y > b[3]) b[3] = y;
+    }
+    this.segP = segs.map((s) => outline((c) => ids[c] === s.id, g, ...box[s.id]));
   }
 
   // tree clusters inside segments, away from borders and number labels
@@ -171,52 +226,121 @@ export class MapView {
     this.trees.sort((a, b) => a.y - b.y);   // draw back to front
   }
 
+  // display-res canvas; ctx works in grid units (vector paths) unless reset
   newLayer() {
     const c = document.createElement('canvas');
     c.width = this.canvas.width;
     c.height = this.canvas.height;
     const x = c.getContext('2d');
-    x.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    x.setTransform(this.dpr * this.scale, 0, 0, this.dpr * this.scale, 0, 0);
     x.imageSmoothingQuality = 'high';
     return [c, x];
   }
 
-  // sea glow, drop shadow, foam rings and the cliff face
+  // drop shadow, foam rings, lake water and the cliff face (all vector, offset downward)
   buildUnder() {
-    const [c, x] = this.newLayer(), t = this.theme, s = this.size;
-    const ch = Math.max(3, s * 0.018);   // cliff height in css px
-    this.ch = ch;
+    const [c, x] = this.newLayer(), t = this.theme, g = this.map.grid, px = 1 / this.scale;   // px = one css pixel in grid units
+    const ch = Math.max(3, this.size * 0.018) * px;   // cliff height
     // soft shadow in the water
-    x.filter = `blur(${s * 0.02}px)`;
-    x.globalAlpha = 0.35;
-    x.drawImage(this.tint(t.shadow, this.outer), s * 0.01, ch + s * 0.02, s, s);
-    // wide faint foam halo, then a crisp foam rim at the waterline (outline dilated by offsets)
-    x.globalAlpha = 0.35;
-    x.filter = `blur(${s * 0.025}px)`;
-    const foam = this.tint(t.foam, this.outer);
-    x.drawImage(foam, 0, ch, s, s);
-    x.filter = `blur(${Math.max(0.6, s * 0.0025)}px)`;
-    x.globalAlpha = 0.9;
-    const e = Math.max(1.5, s * 0.006);
-    for (let a = 0; a < 8; a++) x.drawImage(foam, Math.cos(a * Math.PI / 4) * e, ch + Math.sin(a * Math.PI / 4) * e, s, s);
+    x.save();
+    x.filter = `blur(${this.size * 0.02 * this.dpr}px)`;
+    x.translate(g * 0.01, ch + g * 0.02);
+    x.fillStyle = css(t.shadow, 0.35);
+    x.fill(this.outerP);
+    x.restore();
+    // wide faint foam halo + crisp foam rim at the waterline
+    x.save();
+    x.translate(0, ch);
+    x.filter = `blur(${this.size * 0.025 * this.dpr}px)`;
+    x.fillStyle = css(t.foam, 0.35);
+    x.fill(this.outerP);
+    x.filter = `blur(${Math.max(0.5, this.size * 0.002) * this.dpr}px)`;
+    x.lineJoin = 'round';
+    x.lineWidth = Math.max(3, this.size * 0.012) * px;
+    x.strokeStyle = css(t.foam, 0.95);
+    x.stroke(this.outerP);
+    x.fill(this.outerP);
     x.filter = 'none';
-    x.globalAlpha = 1;
-    // lakes: water back in (sea colour, a bit deeper), with a light rim along the shore
-    const sea = hexToRgb(t.sea);
-    x.filter = `blur(${Math.max(0.6, s * 0.003)}px)`;
-    x.drawImage(this.tint(t.foam, this.lakes), 0, ch * 0.6, s, s);
-    x.filter = 'none';
-    x.drawImage(this.tint(shade(sea, -0.08), this.lakes), 0, ch + e * 0.8, s, s);
-    // cliff: dark at the waterline, lighter toward the top edge
-    const dark = this.tint(t.cliffDark), light = this.tint(t.cliffLight);
-    x.drawImage(dark, 0, ch, s, s);
-    for (let i = ch - 1; i >= 1; i -= 0.5) x.drawImage(i > ch * 0.45 ? dark : light, 0, i, s, s);
+    // lakes: water back in (sea colour, a bit deeper), light rim along the shore
+    x.fillStyle = css(shade(hexToRgb(t.sea), -0.08));
+    x.fill(this.lakesP);
+    x.lineWidth = Math.max(1.5, this.size * 0.004) * px;
+    x.strokeStyle = css(t.foam, 0.8);
+    x.stroke(this.lakesP);
+    x.restore();
+    // cliff: island shape stacked downward, dark at the waterline, lighter toward the top edge
+    for (let i = ch; i >= px * 0.5; i -= px * 0.5) {
+      x.save();
+      x.translate(0, i);
+      x.fillStyle = css(i > ch * 0.45 ? t.cliffDark : t.cliffLight);
+      x.fill(this.islandP, 'evenodd');
+      x.restore();
+    }
     this.under = c;
+  }
+
+  // ground, rock, owner overlays and borders, all clipped to smooth outlines
+  buildTop() {
+    const [c, x] = this.newLayer(), t = this.theme, g = this.map.grid, px = 1 / this.scale;
+    const st = this.map.segs.map((s) => this.styleOf(s.id));
+    x.save();
+    x.clip(this.islandP, 'evenodd');
+    x.imageSmoothingEnabled = true;
+    x.drawImage(this.groundC, 0, 0, g, g);
+    // owner overlays: light fill, soft inner glow (stacked wide strokes), strong colour band at the edge
+    const band = Math.max(2.2, this.size * 0.007) * px, fade = 16 * this.k;
+    this.segP.forEach((p, id) => {
+      const s = st[id];
+      if (!s.color && !s.fill) return;
+      x.save();
+      x.clip(p);
+      if (s.color) {
+        x.fillStyle = css(s.color, s.fill);
+        x.fill(p);
+        // soft inner glow: one wide blurred stroke (blur radius in device pixels)
+        x.filter = `blur(${fade * 0.45 * this.scale * this.dpr}px)`;
+        x.strokeStyle = css(s.color, 0.55);
+        x.lineWidth = fade * 1.3;
+        x.stroke(p);
+        x.filter = 'none';
+        x.lineWidth = band * 2;
+        x.strokeStyle = css(s.color, 0.9);
+        x.stroke(p);
+      } else {
+        // neutral highlight (e.g. a valid target): whitish wash
+        x.fillStyle = `rgba(255,255,255,${s.fill})`;
+        x.fill(p);
+        x.lineWidth = band * 2;
+        x.strokeStyle = `rgba(255,255,255,${Math.min(0.9, s.fill * 2.5)})`;
+        x.stroke(p);
+      }
+      x.restore();
+    });
+    // thin border lines between all segments
+    x.lineJoin = 'round';
+    x.lineWidth = Math.max(1, this.size * 0.0022) * px;
+    this.segP.forEach((p, id) => {
+      x.strokeStyle = st[id].color ? css(shade(st[id].color, -0.35), 0.9) : css(t.lineNeutral, 0.45);
+      x.stroke(p);
+    });
+    // mountains on top of everything inside the island
+    x.save();
+    x.clip(this.mtnP);
+    x.drawImage(this.rockC, 0, 0, g, g);
+    x.restore();
+    // light lip along the cliff edge
+    x.lineWidth = Math.max(2, this.size * 0.006) * px;
+    x.strokeStyle = css(t.lip, 0.7);
+    x.stroke(this.islandP);
+    x.restore();
+    this.topC = c;
   }
 
   // trees: round crowns or low-poly pines, with a small shadow
   buildOver() {
-    const [c, x] = this.newLayer(), t = this.theme, sc = this.scale;
+    const [c, x] = this.newLayer(), t = this.theme;
+    x.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);   // trees are drawn in css pixels
+    const sc = this.scale;
     for (const tr of this.trees) {
       const px = tr.x * sc, py = tr.y * sc, r = Math.max(1.6, tr.r * sc);
       x.fillStyle = 'rgba(20,30,30,0.22)';
@@ -242,46 +366,26 @@ export class MapView {
   }
 
   // styleOf(segId) -> { color: [r,g,b] | null, fill: 0..1 }
-  //   color = owner colour: thin dark border, strong colour band, glow fading inward, light fill
-  //   null  = neutral: ground with a soft line; fill > 0 = whitish highlight (e.g. a valid target)
+  //   color = owner colour: light fill, inner glow, strong band at the border
+  //   null  = neutral; fill > 0 = whitish highlight (e.g. a valid target)
+  // called when ownership or selection changes; the top layer is rebuilt on the next draw
   paint(styleOf) {
-    const { ids, bdist, grid: g, segs } = this.map, d = this.img.data, gr = this.ground, t = this.theme;
-    const st = segs.map((s) => styleOf(s.id));
-    const band = 2.2 * this.k, fade = 9 * this.k;
-    for (let c = 0; c < g * g; c++) {
-      const o = c * 4;
-      if (!gr[o + 3]) { d[o + 3] = 0; continue; }
-      let col = [gr[o], gr[o + 1], gr[o + 2]];
-      const id = ids[c];
-      if (id >= 0) {
-        const s = st[id], b = bdist ? bdist[c] : 9;
-        if (s.color) {
-          if (b < 1) col = mix(col, shade(s.color, -0.35), 0.9);
-          else if (b <= band) col = mix(col, s.color, 0.88);
-          else col = mix(col, s.color, s.fill + (0.6 - s.fill) * Math.max(0, 1 - (b - band) / fade));
-        } else {
-          if (b < 1) col = mix(col, t.lineNeutral, 0.5);
-          else if (b < 2) col = mix(col, t.lineNeutral, 0.15);
-          if (s.fill) col = mix(col, [255, 255, 255], s.fill * (b <= band ? 1.6 : 1));
-        }
-      }
-      d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255;
-    }
-    this.tctx.putImageData(this.img, 0, 0);
+    this.styleOf = styleOf;
+    this.topC = null;
   }
 
   // clear and draw all layers; returns ctx in css-pixel units
   drawBase() {
     if (!this.under) this.buildUnder();
+    if (!this.topC && this.styleOf) this.buildTop();
     if (!this.over) this.buildOver();
     const ctx = this.ctx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.drawImage(this.under, 0, 0);
+    if (this.topC) ctx.drawImage(this.topC, 0, 0);
+    ctx.drawImage(this.over, 0, 0);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.clearRect(0, 0, this.size, this.size);
-    ctx.drawImage(this.under, 0, 0, this.size, this.size);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(this.top, 0, 0, this.size, this.size);
-    ctx.drawImage(this.over, 0, 0, this.size, this.size);
     return ctx;
   }
 

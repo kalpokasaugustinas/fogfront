@@ -1,10 +1,10 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=9';
-import { generateMap, rng } from './mapgen.js?v=9';
-import { Battle } from './battle.js?v=9';
-import { personalities } from './ai.js?v=9';
-import { Campaign } from './campaign.js?v=9';
-import { MapView, hexToRgb, shade, label, pill } from './render.js?v=9';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=10';
+import { generateMap, rng } from './mapgen.js?v=10';
+import { Battle } from './battle.js?v=10';
+import { personalities } from './ai.js?v=10';
+import { Campaign } from './campaign.js?v=10';
+import { MapView, hexToRgb, shade, label, pill } from './render.js?v=10';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
