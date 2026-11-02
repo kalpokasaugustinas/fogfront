@@ -1,13 +1,13 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=37';
-import { generateMap, rng } from './mapgen.js?v=37';
-import { Battle } from './battle.js?v=37';
-import { personalities } from './ai.js?v=37';
-import { Campaign } from './campaign.js?v=37';
-import { Expedition, stages, perks } from './expedition.js?v=37';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=37';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=37';
-import { previewBuildings } from './structures.js?v=37';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=38';
+import { generateMap, rng } from './mapgen.js?v=38';
+import { Battle } from './battle.js?v=38';
+import { personalities } from './ai.js?v=38';
+import { Campaign } from './campaign.js?v=38';
+import { Expedition, stages, perks } from './expedition.js?v=38';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=38';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=38';
+import { previewBuildings } from './structures.js?v=38';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -733,6 +733,12 @@ function endStage(won) {
 const zoomSteps = { hold: 0.5, shrink: 2.2, glow: 0.7, reveal: 1.8 };   // seconds
 function zoomOut() {
   const wrap = bv.canvas.parentElement, old = bv.canvas;
+  // the player may be zoomed in / panned (pinch, drag) or mid-gesture: put the camera back to the
+  // whole map first and drop the zoom render boost, so the snapshot and the new map line up
+  pointers.clear(); pinch = gesture = null;
+  setCam(1, 0, 0);
+  clearTimeout(boostTimer);
+  if (bv.boost !== 1) { bv.boost = 1; bv.resize(); key = ''; }
   // old island: bounding box of its tiles, in canvas css px
   const om = bv.map, g = om.grid;
   let x0 = g, y0 = g, x1 = 0, y1 = 0;
@@ -748,16 +754,16 @@ function zoomOut() {
   const snap = document.createElement('canvas');
   snap.width = old.width; snap.height = old.height;
   snap.getContext('2d').drawImage(old, 0, 0);
-  const wr = pageRect(wrap), or = pageRect(old);
-  const so = { x: or.left - wr.left, y: or.top - wr.top };   // snapshot's place in the wrap
-  Object.assign(snap.style, { position: 'absolute', left: so.x + 'px', top: so.y + 'px', width: or.width + 'px', height: or.height + 'px', transformOrigin: '0 0' });
+  // layout px (offset*/client*): unaffected by the page rotation on phones and the camera
+  const so = { x: old.offsetLeft, y: old.offsetTop };   // snapshot's place in the wrap
+  Object.assign(snap.style, { position: 'absolute', left: so.x + 'px', top: so.y + 'px', width: old.clientWidth + 'px', height: old.clientHeight + 'px', transformOrigin: '0 0' });
   snap.className = 'zoom-snap';
   wrap.appendChild(snap);
   startBattle(expedition.setup(), 'expedition');
   paused = true;
   old.style.opacity = '0';
   requestAnimationFrame(() => {
-    const capId = battle.factions[0].capitalSeg, nr = pageRect(old), no = { x: nr.left - wr.left, y: nr.top - wr.top };
+    const capId = battle.factions[0].capitalSeg, nr = { width: old.clientWidth, height: old.clientHeight }, no = { x: old.offsetLeft, y: old.offsetTop };
     const box = bv.boxes[capId] ?? [0, 0, g - 1, g - 1];
     const cc = { x: bv.sx((box[0] + box[2] + 1) / 2), y: bv.sy((box[1] + box[3] + 1) / 2), w: (box[2] - box[0] + 1) * bv.scale };
     const ratio = Math.min(1, cc.w / Math.max(1, oc.w));   // old island -> capital tile size
@@ -991,4 +997,4 @@ syncAudioButtons();
 renderMenuStats();
 
 // hooks for headless tests
-window.__fl = { skipCountdown: () => { countdown = 0; goFlash = 0; }, campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv, audioState, audioFiles };
+window.__fl = { skipCountdown: () => { countdown = 0; goFlash = 0; }, setCam, campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv, audioState, audioFiles };
