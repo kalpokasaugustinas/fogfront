@@ -1,11 +1,12 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=18';
-import { generateMap, rng } from './mapgen.js?v=18';
-import { Battle } from './battle.js?v=18';
-import { personalities } from './ai.js?v=18';
-import { Campaign } from './campaign.js?v=18';
-import { Expedition, stages } from './expedition.js?v=18';
-import { MapView, hexToRgb, shade, label, pill, unitSprite } from './render.js?v=18';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=19';
+import { generateMap, rng } from './mapgen.js?v=19';
+import { Battle } from './battle.js?v=19';
+import { personalities } from './ai.js?v=19';
+import { Campaign } from './campaign.js?v=19';
+import { Expedition, stages } from './expedition.js?v=19';
+import { initAudio, sfx, setSfx, setMusic, audioPrefs } from './audio.js?v=19';
+import { MapView, hexToRgb, shade, label, pill, unitSprite } from './render.js?v=19';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -317,7 +318,7 @@ function renderBuildPanel() {
   box.innerHTML = Object.entries(buildings).map(([type, b]) =>
     `<button class="bld" data-type="${type}"><span class="ico">${b.icon}</span><span><b>${b.name}</b> · ${battle.costOf(0, type)}<br><small>${b.desc}</small></span></button>`).join('');
   for (const btn of box.querySelectorAll('.bld')) btn.onclick = () => {
-    if (!battle.build(0, selected, btn.dataset.type)) flash('Need more troops in this segment');
+    if (battle.build(0, selected, btn.dataset.type)) sfx.build(); else flash('Need more troops in this segment');
   };
 }
 
@@ -368,6 +369,20 @@ function setSpeed(s) {
   for (const b of document.querySelectorAll('#speed button')) b.classList.toggle('on', +b.dataset.speed === (paused ? 0 : speed));
 }
 
+// stats grid for end screens: fights, economy, territory, buildings by type
+function statsHtml(b) {
+  const st = b.stats, n = (v) => Math.round(v).toLocaleString();
+  const mine = b.segs.filter((s) => s.owner === 0);
+  const blds = Object.entries(buildings).map(([k, v]) => [v.icon, mine.filter((s) => s.building === k).length]).filter(([, c]) => c);
+  const cells = [
+    ['⏱️', fmtTime(b.time), 'time'], ['🗡️', n(st.killed), 'killed'], ['💀', n(st.deaths), 'troops lost'],
+    ['🌱', n(st.made), 'troops raised'], ['🏳️', st.captured, 'tiles taken'], ['🏚️', st.lost, 'tiles lost'],
+    ['🗺️', `${mine.length} / ${Math.max(st.peak, mine.length)}`, 'tiles held / peak'], ['🏗️', st.built, 'built'], ['📣', st.sent, 'orders'],
+  ];
+  return `<div class="stats">${cells.map(([i, v, l]) => `<div><span>${i}</span><b>${v}</b><small>${l}</small></div>`).join('')}</div>`
+    + (blds.length ? `<p class="blds">Standing buildings: ${blds.map(([i, c]) => `${i} ${c}`).join(' · ')}</p>` : '');
+}
+
 function endBattle() {
   const won = battle.state === 'won';
   if (mode === 'expedition') return endStage(won);
@@ -378,7 +393,7 @@ function endBattle() {
   if (won && mode === 'campaign') { campaign.conquer(regionId); pickedRegion = -1; }
   const st = battle.stats;
   $('end-title').textContent = won ? (mode === 'campaign' ? '🏳️ Region conquered!' : '🏆 Victory!') : '💀 Defeated';
-  $('end-stats').textContent = `Time ${fmtTime(battle.time)} · ${st.captured} captures · ${st.built} buildings · ${st.sent} orders`;
+  $('end-stats').innerHTML = statsHtml(battle);
   $('end-retry').classList.toggle('hidden', won);
   $('end').classList.remove('hidden');
 }
@@ -407,7 +422,7 @@ function endStage(won) {
     const reached = won ? stages.length : expedition.stage + 1;
     const record = expedition.saveBest(reached);
     $('end-title').textContent = won ? '🌍 The world is yours!' : `💀 Expedition over: ${expedition.current.name}`;
-    $('end-stats').textContent = `Reached stage ${reached}/${stages.length} · total time ${fmtTime(expedition.time + (won ? 0 : battle.time))}${record ? ' · 🏆 new best' : ''}`;
+    $('end-stats').innerHTML = `<p>Reached stage ${reached}/${stages.length} · total time ${fmtTime(expedition.time + (won ? 0 : battle.time))}${record ? ' · 🏆 new best' : ''}</p>` + statsHtml(battle);
     $('end-retry').textContent = '↻ New expedition';
     $('end-retry').classList.remove('hidden');
     $('end-continue').classList.remove('hidden');
@@ -417,7 +432,7 @@ function endStage(won) {
   const from = expedition.current, sum = expedition.collapse(battle), b = sum.bonus, pc = (v) => `+${Math.round(v * 100)}%`;
   const share = (k, label, eff) => (k ? `<li>${label}: ${k}/${sum.segments} → ${eff}</li>` : '');
   $('end-title').textContent = `🏳️ ${from.name} conquered`;
-  $('end-stats').innerHTML = `Your ${sum.segments} segments become one capital with <b>${sum.troops.toLocaleString()}</b> people.
+  $('end-stats').innerHTML = statsHtml(battle) + `Your ${sum.segments} segments become one capital with <b>${sum.troops.toLocaleString()}</b> people.
     <ul class="carry">
       ${share(sum.farms, '🌾 Farms', pc(b.growth) + ' growth')}${share(sum.hosp, '➕ Hospitals', pc(b.hosp) + ' neighbour growth')}
       ${share(sum.labs, '🔬 Labs', pc(b.lab) + ' growth everywhere')}${share(sum.forts, '🛡️ Forts', pc(b.def) + ' defense')}
@@ -512,6 +527,26 @@ addEventListener('resize', () => { if (screen === 'battle' && bv) { bv.resize();
 
 // ---------- frame loop: fixed-step simulation, draw every frame ----------
 let last = performance.now(), acc = 0, uiTimer = 0;
+// battle sounds: war cry when a fight starts, horns on captures that involve you, a marching beat
+// while armies walk (louder for bigger armies), random sword clashes while fights last
+let marchTimer = 0, clashTimer = 0, shoutCool = 0;
+function playBattleSounds(dt) {
+  shoutCool -= dt;
+  for (const e of battle.events.splice(0)) {
+    if (e.type === 'fight' && shoutCool <= 0) { sfx.shout(Math.min(1, e.size / 150)); shoutCool = 0.35; }
+    if (e.type === 'capture') { if (e.owner === 0 || e.prev === 0) sfx.capture(e.owner === 0); else sfx.captureFar(); }
+  }
+  if (paused || battle.state !== 'running') return;
+  const marching = battle.armies.filter((a) => !a.fight), fights = battle.armies.filter((a) => a.fight).length;
+  marchTimer -= dt;
+  if (marching.length && marchTimer <= 0) {
+    sfx.march(Math.min(1, marching.reduce((v, a) => v + a.n, 0) / 200));
+    marchTimer = 0.42 / Math.sqrt(speed);
+  }
+  clashTimer -= dt;
+  if (fights && clashTimer <= 0) { sfx.clash(); clashTimer = (0.09 + Math.random() * 0.25) / Math.min(3, fights); }
+}
+
 // runs at the monitor's refresh rate (60, 144 Hz ...): the sim advances in fixed steps,
 // drawing interpolates between them (see acc in drawBattle)
 function frame(now) {
@@ -525,6 +560,7 @@ function frame(now) {
     }
     // show the result card once, however the battle ended
     if (battle.state !== 'running' && !battle.endShown) { battle.endShown = true; endBattle(); }
+    playBattleSounds(dt);
     drawBattle();
     uiTimer -= dt;
     if (uiTimer <= 0) { updatePanel(); uiTimer = 0.15; }
@@ -533,6 +569,18 @@ function frame(now) {
 requestAnimationFrame(frame);
 setPct(0.5);
 setSpeed(1);
+
+// audio: start on the first gesture, toggles remembered
+addEventListener('pointerdown', initAudio, { capture: true });
+addEventListener('keydown', initAudio, { capture: true });
+function syncAudioButtons() {
+  $('btn-sfx').classList.toggle('off', !audioPrefs.sfx);
+  $('btn-music').classList.toggle('off', !audioPrefs.music);
+  $('bar-music').classList.toggle('off', !audioPrefs.music);
+}
+$('btn-sfx').onclick = () => { setSfx(!audioPrefs.sfx); syncAudioButtons(); sfx.click(); };
+$('btn-music').onclick = $('bar-music').onclick = () => { setMusic(!audioPrefs.music); syncAudioButtons(); };
+syncAudioButtons();
 
 // hooks for headless tests
 window.__fl = { campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv };

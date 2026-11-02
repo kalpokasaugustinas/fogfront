@@ -90,6 +90,14 @@ canvas { touch-action: none; display: block; }
 
 /* expedition: stage label, carry-over list, perk choices, zoom-out transition */
 #stage { font-size: 12px; color: var(--muted); white-space: nowrap; }
+/* end-screen stats grid */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+.stats div { background: rgba(30, 50, 55, 0.06); border-radius: 10px; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; }
+.stats span { font-size: 16px; }
+.stats b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.stats small { color: var(--muted); font-size: 11px; }
+.blds { font-size: 13px; color: var(--muted); margin: 4px 0 8px; }
+#end .card { max-height: 92vh; overflow-y: auto; }
 .carry { text-align: left; margin: 6px 0; font-size: 14px; }
 #end-perks { display: grid; gap: 6px; margin-top: 8px; }
 .perk { display: flex; gap: 10px; align-items: center; text-align: left; padding: 8px 10px; }
@@ -104,6 +112,11 @@ canvas { touch-action: none; display: block; }
 }
 #zoom-banner.show { opacity: 1; }
 #zoom-banner b { font-size: 24px; }
+
+.row-btns { display: flex; gap: 8px; width: min(280px, 100%); }
+#menu .row-btns button { flex: 1; padding: 10px; font-size: 15px; width: auto; }
+.toggle.off { opacity: 0.45; text-decoration: line-through; }
+.toggle.small { padding: 4px 8px; font-size: 13px; }
 
 #toast {
   color: #fff;

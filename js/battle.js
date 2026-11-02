@@ -1,8 +1,8 @@
 // battle simulation: segments, troops, buildings, armies. no drawing here,
 // so the same code runs in the browser and in headless tests.
-import { rules, buildings, effects } from './config.js?v=18';
-import { rng, spreadStarts } from './mapgen.js?v=18';
-import { think } from './ai.js?v=18';
+import { rules, buildings, effects } from './config.js?v=19';
+import { rng, spreadStarts } from './mapgen.js?v=19';
+import { think } from './ai.js?v=19';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
@@ -22,7 +22,10 @@ export class Battle {
     this.version = 0;          // bumps on ownership/building change (renderer repaints the map)
     this.state = 'running';    // running | won | lost
     this.armies = [];
-    this.stats = { sent: 0, captured: 0, built: 0 };
+    this.events = [];   // { type: 'fight' | 'capture', owner, prev, size } for sounds; the ui drains it
+    // player stats for the end screen: troops killed / lost in fights, troops raised by growth,
+    // tiles taken / lost, most tiles held at once
+    this.stats = { sent: 0, captured: 0, built: 0, lost: 0, killed: 0, deaths: 0, made: 0, peak: 1 };
     // auto-send routes: source segment id -> { to, keep }; keep = fraction of the source cap held back
     this.routes = new Map();
     this.routeTimer = rules.routeEvery;
@@ -145,6 +148,7 @@ export class Battle {
     const A = a.n * a.atk, D = t.troops * this.fightDef(t, a.owner);
     const dur = Math.min(rules.fightMax, rules.fightMin + (rules.fightMax - rules.fightMin) * Math.min(1, Math.min(A, D) / rules.fightScale));
     a.fight = { k: Math.max(1, Math.min(A, D) / dur), time: 0 };
+    this.events.push({ type: 'fight', owner: a.owner, prev: t.owner, size: Math.min(A, D) });
   }
 
   // one step of a running fight
@@ -156,6 +160,8 @@ export class Battle {
     const d = Math.min(a.fight.k * dt, a.n * a.atk, t.troops * dm);
     a.n -= d / a.atk;
     t.troops -= d / dm;
+    if (a.owner === 0) { this.stats.deaths += d / a.atk; this.stats.killed += d / dm; }
+    else if (t.owner === 0) { this.stats.deaths += d / dm; this.stats.killed += d / a.atk; }
     if (t.troops <= 1e-6) {
       // defenders gone: capture with what's left of the army
       const prev = t.owner;
@@ -163,9 +169,14 @@ export class Battle {
       t.troops = Math.max(0, a.n);
       // perk: plunder adds part of an enemy segment's cap when it's taken
       if (prev >= 0) t.troops += t.cap * (this.mods(a.owner).loot ?? 0);
+      this.events.push({ type: 'capture', owner: a.owner, prev, size: t.cap });
       this.version++;
       this.updateGrowth();
-      if (a.owner === 0) this.stats.captured++;
+      if (a.owner === 0) {
+        this.stats.captured++;
+        this.stats.peak = Math.max(this.stats.peak, this.segs.filter((s) => s.owner === 0).length);
+      }
+      if (prev === 0) this.stats.lost++;
       a.done = true;
     } else if (a.n <= 1e-6) {
       a.done = true;   // attack beaten back
@@ -204,7 +215,11 @@ export class Battle {
         if (s.troops < s.garrison) s.troops = Math.min(s.garrison, s.troops + s.baseGrowth * dt);
         continue;
       }
-      if (s.troops < s.cap) s.troops = Math.min(s.cap, s.troops + s.growth * dt);
+      if (s.troops < s.cap) {
+        const add = Math.min(s.cap - s.troops, s.growth * dt);
+        s.troops += add;
+        if (s.owner === 0) this.stats.made += add;
+      }
       else s.troops = Math.max(s.cap, s.troops - rules.overCapDecay * dt);
     }
     // reserves flow into each faction's capital while it has room (and is still theirs)

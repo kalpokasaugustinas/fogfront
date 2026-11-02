@@ -41,6 +41,9 @@ Prototype stage.
 
 Keys: space = pause, 1–4 = send %, A = auto toggle, Esc = deselect.
 
+## Sound
+All synthesized with Web Audio, no sound files: marching steps while armies walk, war cries when fights start, sword clashes during fights, horns when you take or lose a tile, and a generative medieval-folk music loop (D dorian: drone, plucked arpeggios, frame drum). Sound and music toggles on the menu (music also in the battle bar), remembered per browser.
+
 ## Code
 Vanilla JS modules plus canvas 2D. No build step, no dependencies.
 
@@ -53,6 +56,7 @@ Vanilla JS modules plus canvas 2D. No build step, no dependencies.
 | `js/campaign.js` | world map, empires, region difficulty, save/load |
 | `js/render.js` | island-diorama renderer: smooth vector outlines (marching squares), tilted camera, static layers + cached per-segment sprites (overlays, trees, buildings), troop pills |
 | `js/expedition.js` | expedition stages, perks, carry-over maths, bot scaling, best run |
+| `js/audio.js` | synthesized sound effects and generative background music |
 | `js/structures.js` | building scenes that fill a segment: farmland, fort walls and towers, castle with soldiers, hospital, lab |
 | `js/main.js` | screens, input, HUD, frame loop |
 
