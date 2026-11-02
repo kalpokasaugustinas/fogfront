@@ -105,10 +105,14 @@ try:
                     if stage == 0:
                         page.screenshot(path=str(out / "expedition-card.png"))
                     page.locator("#end-perks .perk").first.click()
-                    page.wait_for_timeout(700)
                     if stage == 0:
-                        page.screenshot(path=str(out / "expedition-zoom.png"))
-                    page.wait_for_timeout(1500)
+                        # frames of the zoom-out: still frame, early, middle, late pull-back
+                        for i, ms in enumerate([300, 1200, 1300, 1200]):
+                            page.wait_for_timeout(ms)
+                            page.screenshot(path=str(out / f"expedition-zoom{i}.png"))
+                        page.wait_for_timeout(1400)
+                    else:
+                        page.wait_for_timeout(5400)
                     info = page.evaluate("""(() => { const b = __fl.battle, e = __fl.expedition, me = b.segs[b.factions[0].capitalSeg];
                       return { stage: e.stage + 1, segs: b.segs.length, capital_troops: Math.round(me.troops), reserve: Math.round(b.factions[0].reserve),
                         bonus: Object.fromEntries(Object.entries(me.bonus).map(([k, v]) => [k, +v.toFixed(3)])),

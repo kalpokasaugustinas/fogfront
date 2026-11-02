@@ -10,6 +10,7 @@ Prototype stage.
   - the new capital is one tile with the outline of the island you just won, placed on the coast of the bigger map
   - all your people come along: the capital starts full (400), the rest is a reserve that flows in when there's room
   - buildings become capital bonuses = effect × share of your segments that had them (4 farms of 10 segments → +60% × 40% = +24% growth); nothing can be built in a capital, and old capital bonuses count as one segment, so they fade unless you build again
+  - the zoom-out is one slow camera pull-back (~5 s): the won island sits on the new capital tile (same outline), shrinks with the new map and blends into that tile while the bigger stage appears around it
   - pick 1 of 3 perks at every zoom-out (12 in the pool: faster armies, cheaper buildings, stronger farms, plunder, ...)
   - bots scale with you: each starts with 10 + 70% of your carried people and its own capital with a shuffled bonus mix
   - neutrals scale with you too (stage 2 on): garrisons × √(carried people / 150), at most ×4; the biggest 30% of open neutral tiles are fortified camps (×1.5 more, drawn as 2–4 houses behind a palisade)

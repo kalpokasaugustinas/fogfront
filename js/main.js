@@ -1,12 +1,12 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=26';
-import { generateMap, rng } from './mapgen.js?v=26';
-import { Battle } from './battle.js?v=26';
-import { personalities } from './ai.js?v=26';
-import { Campaign } from './campaign.js?v=26';
-import { Expedition, stages, perks } from './expedition.js?v=26';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=26';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=26';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=27';
+import { generateMap, rng } from './mapgen.js?v=27';
+import { Battle } from './battle.js?v=27';
+import { personalities } from './ai.js?v=27';
+import { Campaign } from './campaign.js?v=27';
+import { Expedition, stages, perks } from './expedition.js?v=27';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=27';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=27';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -667,43 +667,67 @@ function endStage(won) {
 }
 
 // zoom-out: the old map shrinks into the new capital while the bigger map fades in around it
+// expedition stage change as one continuous camera pull-back:
+// 1. the won island (a snapshot) stays put; the new map fades in behind it, zoomed in so that the
+//    new capital (which has the old island's outline) lies exactly under the old island
+// 2. the camera pulls back slowly: the new map shrinks to its normal size and the snapshot shrinks
+//    with it, riding on the capital tile, and blends into it, so the old battlefield visibly
+//    becomes one tile of the bigger map
+const zoomHold = 0.7, zoomTime = 4.2;   // seconds: still frame + fade-in, then the pull-back
 function zoomOut() {
   const wrap = bv.canvas.parentElement, old = bv.canvas;
+  // old island: bounding box of its tiles, in canvas css px
+  const om = bv.map, g = om.grid;
+  let x0 = g, y0 = g, x1 = 0, y1 = 0;
+  for (let c = 0; c < g * g; c++) {
+    if (om.ids[c] < 0) continue;
+    const x = c % g, y = Math.floor(c / g);
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  const oc = { x: bv.sx((x0 + x1 + 1) / 2), y: bv.sy((y0 + y1 + 1) / 2), w: (x1 - x0 + 1) * bv.scale };
+  // redraw the old map clean (no selection, drag arrow or banner) and keep a snapshot of it
+  selected = -1; drag = null; goFlash = 0; wheelOn = false;
+  drawBattle();
   const snap = document.createElement('canvas');
   snap.width = old.width; snap.height = old.height;
   snap.getContext('2d').drawImage(old, 0, 0);
   const wr = pageRect(wrap), or = pageRect(old);
-  Object.assign(snap.style, { position: 'absolute', left: or.left - wr.left + 'px', top: or.top - wr.top + 'px', width: or.width + 'px', height: or.height + 'px' });
+  const so = { x: or.left - wr.left, y: or.top - wr.top };   // snapshot's place in the wrap
+  Object.assign(snap.style, { position: 'absolute', left: so.x + 'px', top: so.y + 'px', width: or.width + 'px', height: or.height + 'px', transformOrigin: '0 0' });
   snap.className = 'zoom-snap';
   wrap.appendChild(snap);
   startBattle(expedition.setup(), 'expedition');
   paused = true;
+  old.style.opacity = '0';
   requestAnimationFrame(() => {
-    const cap = battle.segs[battle.factions[0].capitalSeg];
-    const nr = pageRect(old), tx = cap ? bv.sx(cap.x) : nr.width / 2, ty = cap ? bv.sy(cap.y) : nr.height / 2;
-    // new map starts zoomed in on the capital, old map sits on top and shrinks into it
-    old.style.transformOrigin = `${tx}px ${ty}px`;
-    old.style.transform = 'scale(3)';
-    old.style.opacity = '0';
-    const dx = nr.left - wr.left + tx - (or.left - wr.left + or.width / 2), dy = nr.top - wr.top + ty - (or.top - wr.top + or.height / 2);
+    const capId = battle.factions[0].capitalSeg, nr = pageRect(old), no = { x: nr.left - wr.left, y: nr.top - wr.top };
+    const box = bv.boxes[capId] ?? [0, 0, g - 1, g - 1];
+    const cc = { x: bv.sx((box[0] + box[2] + 1) / 2), y: bv.sy((box[1] + box[3] + 1) / 2), w: (box[2] - box[0] + 1) * bv.scale };
+    const ratio = Math.min(1, cc.w / Math.max(1, oc.w)), z0 = 1 / Math.max(0.04, ratio);   // new map's start zoom
+    const start = so.x + oc.x, startY = so.y + oc.y, end = no.x + cc.x, endY = no.y + cc.y;   // capital centre: from / to
     $('zoom-banner').innerHTML = `Zooming out…<br><b>${expedition.current.name}</b>`;
     $('zoom-banner').classList.add('show');
-    requestAnimationFrame(() => {
-      old.classList.add('zooming');
-      snap.classList.add('zooming');
-      old.style.transform = 'scale(1)';
-      old.style.opacity = '1';
-      snap.style.transform = `translate(${dx}px, ${dy}px) scale(0.06)`;
-      snap.style.opacity = '0';
-    });
-    setTimeout(() => {
+    const t0 = performance.now();
+    const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);   // slow in, slow out
+    const tick = (now) => {
+      const t = (now - t0) / 1000, k = ease(Math.min(1, Math.max(0, (t - zoomHold) / zoomTime)));
+      // zoom falls off exponentially (feels like a steady camera speed); the capital centre glides
+      // from where the old island was to its place on the new map
+      const z = z0 ** (1 - k), px = start + (end - start) * k, py = startY + (endY - startY) * k;
+      old.style.transformOrigin = '0 0';
+      old.style.transform = `translate(${px - no.x - z * cc.x}px, ${py - no.y - z * cc.y}px) scale(${z})`;
+      old.style.opacity = String(Math.min(1, t / zoomHold));
+      const sz = z * ratio;   // the old island keeps covering the capital tile
+      snap.style.transform = `translate(${px - so.x - sz * oc.x}px, ${py - so.y - sz * oc.y}px) scale(${sz})`;
+      snap.style.opacity = String(1 - Math.min(1, Math.max(0, (k - 0.2) / 0.45)));
+      if (t < zoomHold + zoomTime) { requestAnimationFrame(tick); return; }
       snap.remove();
-      old.classList.remove('zooming');
       old.style.transform = old.style.opacity = old.style.transformOrigin = '';
       $('zoom-banner').classList.remove('show');
       paused = false;
       setSpeed(speed);
-    }, 1900);
+    };
+    requestAnimationFrame(tick);
   });
 }
 
