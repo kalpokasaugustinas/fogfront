@@ -1,8 +1,8 @@
 // campaign: a world map of regions. each region is one battle.
 // you start with a home region and can attack any region next to one you own.
 // regions belong to rival empires; difficulty grows with distance from home.
-import { generateMap, hops, rng } from './mapgen.js?v=10';
-import { personalities } from './ai.js?v=10';
+import { generateMap, hops, rng } from './mapgen.js?v=11';
+import { personalities } from './ai.js?v=11';
 
 const save_key = 'frontlines.campaign.v1';
 const world_seed = 20261102;

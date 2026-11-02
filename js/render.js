@@ -5,7 +5,7 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (shadow, foam, cliff) -> top (ground, owner
 // overlays, borders; repainted on ownership change) -> over (trees)
-import { themes } from './config.js?v=10';
+import { themes } from './config.js?v=11';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -42,15 +42,24 @@ function vnoise(x, y, s) {
 
 // marching squares over a 0/1 test on grid cells (sampled at cell centres) inside a bounding box.
 // returns a Path2D (grid units) of all closed outlines, smoothed; fill it with 'evenodd' for holes.
-function outline(test, g, x0 = 0, y0 = 0, x1 = g - 1, y1 = g - 1) {
+// lab(c) labels every cell (segment id, sea, lake, ...): each outline point remembers the pair of
+// labels it separates, so a border shared by two outlines is smoothed the same way in both and
+// points where 3 areas meet stay pinned (no gaps or overlaps between neighbours).
+function outline(test, lab, g, x0 = 0, y0 = 0, x1 = g - 1, y1 = g - 1) {
   const inside = (x, y) => x >= 0 && y >= 0 && x < g && y < g && test(y * g + x);
+  const label = (x, y) => (x >= 0 && y >= 0 && x < g && y < g ? lab(y * g + x) : -1);
   // point keys use doubled coordinates so every edge midpoint is an integer
-  const links = new Map();
+  const links = new Map(), pair = new Map();
   const link = (a, b) => {
     (links.get(a) ?? links.set(a, []).get(a)).push(b);
     (links.get(b) ?? links.set(b, []).get(b)).push(a);
   };
   const key = (x2, y2) => x2 * 4096 + y2;
+  // remember which two cell labels a crossing point separates (unordered)
+  const mark = (k, ax, ay, bx, by) => {
+    const p = label(ax, ay), q = label(bx, by);
+    pair.set(k, Math.min(p, q) * 100000 + Math.max(p, q));
+  };
   for (let y = y0 - 1; y <= y1; y++) {
     for (let x = x0 - 1; x <= x1; x++) {
       const a = inside(x, y), b = inside(x + 1, y), c = inside(x + 1, y + 1), d = inside(x, y + 1);
@@ -59,10 +68,10 @@ function outline(test, g, x0 = 0, y0 = 0, x1 = g - 1, y1 = g - 1) {
       const top = key(2 * x + 2, 2 * y + 1), right = key(2 * x + 3, 2 * y + 2);
       const bottom = key(2 * x + 2, 2 * y + 3), left = key(2 * x + 1, 2 * y + 2);
       const cross = [];
-      if (a !== b) cross.push(top);
-      if (b !== c) cross.push(right);
-      if (c !== d) cross.push(bottom);
-      if (d !== a) cross.push(left);
+      if (a !== b) { cross.push(top); mark(top, x, y, x + 1, y); }
+      if (b !== c) { cross.push(right); mark(right, x + 1, y, x + 1, y + 1); }
+      if (c !== d) { cross.push(bottom); mark(bottom, x, y + 1, x + 1, y + 1); }
+      if (d !== a) { cross.push(left); mark(left, x, y, x, y + 1); }
       if (cross.length === 2) link(cross[0], cross[1]);
       else if (a) { link(top, left); link(right, bottom); }   // saddle: cut off the inside corners
       else { link(top, right); link(bottom, left); }
@@ -72,23 +81,56 @@ function outline(test, g, x0 = 0, y0 = 0, x1 = g - 1, y1 = g - 1) {
   for (const start of links.keys()) {
     if (seen.has(start)) continue;
     // walk the loop
-    const loop = [];
+    const loop = [], codes = [];
     let prev = -1, cur = start;
     while (!seen.has(cur)) {
       seen.add(cur);
       loop.push([Math.floor(cur / 4096) / 2, (cur % 4096) / 2]);
+      codes.push(pair.get(cur));
       const nb = links.get(cur);
       const next = nb[0] !== prev ? nb[0] : nb[1];
       prev = cur;
       cur = next;
     }
     if (loop.length < 3) continue;
-    const pts = chaikin(chaikin(loop));
+    const pts = chaikin(chaikin(relax(relax(loop, codes), codes)));
     path.moveTo(pts[0][0], pts[0][1]);
     for (let i = 1; i < pts.length; i++) path.lineTo(pts[i][0], pts[i][1]);
     path.closePath();
   }
   return path;
+}
+
+// moving-average smoothing along a closed loop, done separately on each run of points that
+// separate the same two areas; the window shrinks toward the run ends, so junctions stay fixed
+// and the result doesn't depend on loop direction or start point
+const relax_window = 7;
+function relax(p, codes) {
+  const n = p.length, out = p.map((q) => [q[0], q[1]]);
+  let start = codes.findIndex((c, i) => c !== codes[(i - 1 + n) % n]);
+  if (start < 0) {
+    // one run around the whole loop (e.g. a lake inside a single segment): plain cyclic average
+    for (let i = 0; i < n; i++) {
+      let sx = 0, sy = 0;
+      for (let j = -relax_window; j <= relax_window; j++) { const q = p[(i + j + n) % n]; sx += q[0]; sy += q[1]; }
+      out[i] = [sx / (2 * relax_window + 1), sy / (2 * relax_window + 1)];
+    }
+    return out;
+  }
+  for (let done = 0; done < n;) {
+    // run = consecutive points with the same pair code
+    let len = 1;
+    while (len < n && codes[(start + len) % n] === codes[start]) len++;
+    for (let j = 0; j < len; j++) {
+      const w = Math.min(relax_window, j, len - 1 - j);
+      let sx = 0, sy = 0;
+      for (let k = -w; k <= w; k++) { const q = p[(start + j + k) % n]; sx += q[0]; sy += q[1]; }
+      out[(start + j) % n] = [sx / (2 * w + 1), sy / (2 * w + 1)];
+    }
+    start = (start + len) % n;
+    done += len;
+  }
+  return out;
 }
 
 // one round of chaikin corner cutting on a closed loop (rounds the 45° marching-squares steps)
@@ -180,10 +222,12 @@ export class MapView {
   buildOutlines() {
     const { ids, terrain, grid: g, segs } = this.map;
     const lake = (c) => terrain && terrain[c] === 1, mtn = (c) => terrain && terrain[c] === 2;
-    this.islandP = outline((c) => ids[c] >= 0 || mtn(c), g);
-    this.outerP = outline((c) => ids[c] >= 0 || mtn(c) || lake(c), g);
-    this.lakesP = outline(lake, g);
-    this.mtnP = outline(mtn, g);
+    // cell label: segment id, or -1 sea / -2 lake / -3 mountain
+    const lab = (c) => (ids[c] >= 0 ? ids[c] : -1 - (terrain ? terrain[c] : 0));
+    this.islandP = outline((c) => ids[c] >= 0 || mtn(c), lab, g);
+    this.outerP = outline((c) => ids[c] >= 0 || mtn(c) || lake(c), lab, g);
+    this.lakesP = outline(lake, lab, g);
+    this.mtnP = outline(mtn, lab, g);
     // per-segment bounding boxes keep the tracing fast
     const box = segs.map(() => [g, g, -1, -1]);
     for (let c = 0; c < g * g; c++) {
@@ -192,7 +236,7 @@ export class MapView {
       const b = box[id], x = c % g, y = Math.floor(c / g);
       if (x < b[0]) b[0] = x; if (y < b[1]) b[1] = y; if (x > b[2]) b[2] = x; if (y > b[3]) b[3] = y;
     }
-    this.segP = segs.map((s) => outline((c) => ids[c] === s.id, g, ...box[s.id]));
+    this.segP = segs.map((s) => outline((c) => ids[c] === s.id, lab, g, ...box[s.id]));
   }
 
   // tree clusters inside segments, away from borders and number labels
@@ -345,8 +389,12 @@ export class MapView {
       const px = tr.x * sc, py = tr.y * sc, r = Math.max(1.6, tr.r * sc);
       x.fillStyle = 'rgba(20,30,30,0.22)';
       x.beginPath(); x.ellipse(px + r * 0.45, py + r * 0.35, r * 1.05, r * 0.55, 0, 0, Math.PI * 2); x.fill();
+      // trunk: short brown stem from the ground up into the crown
+      const tw = Math.max(1, r * 0.28);
+      x.fillStyle = css(t.trunk ?? [96, 72, 54]);
+      x.fillRect(px - tw / 2, py - r * 0.6, tw, r * 0.95);
       if (t.tree === 'pine') {
-        const top = py - r * 2.4, base = py + r * 0.3, hw = r * 0.95;
+        const top = py - r * 2.7, base = py - r * 0.05, hw = r * 0.95;
         x.fillStyle = css(t.treeLight);
         x.beginPath(); x.moveTo(px, top); x.lineTo(px - hw, base); x.lineTo(px, base); x.fill();
         x.fillStyle = css(t.treeDark);
@@ -357,9 +405,9 @@ export class MapView {
         }
       } else {
         x.fillStyle = css(t.treeDark);
-        x.beginPath(); x.arc(px, py - r * 0.4, r, 0, Math.PI * 2); x.fill();
+        x.beginPath(); x.arc(px, py - r * 1.1, r, 0, Math.PI * 2); x.fill();
         x.fillStyle = css(t.treeLight);
-        x.beginPath(); x.arc(px - r * 0.3, py - r * 0.75, r * 0.55, 0, Math.PI * 2); x.fill();
+        x.beginPath(); x.arc(px - r * 0.3, py - r * 1.45, r * 0.55, 0, Math.PI * 2); x.fill();
       }
     }
     this.over = c;
