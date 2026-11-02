@@ -131,7 +131,7 @@ export const sfx = {
   // war cry: a slice of a shouting crowd, louder for bigger fights
   shout(size) { play('shout', { vol: 0.25 + 0.45 * size, jitter: 0.06 }); },
   // sword clash: one of 10 recorded clashes, pitch varied so repeats don't stand out
-  clash() { play('clash', { vol: 0.28, jitter: 0.12 }); },
+  clash() { play('clash', { vol: 0.22, jitter: 0.12 }); },
   // horn when a tile changes hands: rising for you, falling when you lose one
   capture(mine) {
     const [a, b] = mine ? [196, 294] : [220, 147];

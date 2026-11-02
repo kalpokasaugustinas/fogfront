@@ -1,12 +1,12 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=28';
-import { generateMap, rng } from './mapgen.js?v=28';
-import { Battle } from './battle.js?v=28';
-import { personalities } from './ai.js?v=28';
-import { Campaign } from './campaign.js?v=28';
-import { Expedition, stages, perks } from './expedition.js?v=28';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=28';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=28';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=29';
+import { generateMap, rng } from './mapgen.js?v=29';
+import { Battle } from './battle.js?v=29';
+import { personalities } from './ai.js?v=29';
+import { Campaign } from './campaign.js?v=29';
+import { Expedition, stages, perks } from './expedition.js?v=29';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=29';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=29';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
