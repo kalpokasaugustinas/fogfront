@@ -9,7 +9,7 @@ const world_seed = 20261102;
 
 export class Campaign {
   constructor() {
-    this.map = generateMap({ seed: world_seed, cells: 16, grid: 200 });
+    this.map = generateMap({ seed: world_seed, cells: 16, grid: 400 });
     const rand = rng(world_seed);
     // home = the southern-most region
     this.home = this.map.segs.reduce((a, s) => (s.y > a.y ? s : a)).id;

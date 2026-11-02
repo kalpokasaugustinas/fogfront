@@ -64,6 +64,7 @@ export class MapView {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.size, this.size);
     ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(this.base, 0, 0, this.size, this.size);
     return ctx;
   }

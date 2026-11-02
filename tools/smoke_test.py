@@ -31,7 +31,7 @@ sim_js = """async () => {
   const { personalities } = await import('./js/ai.js');
   const types = Object.keys(personalities), res = [];
   for (let i = 0; i < 12; i++) {
-    const map = generateMap({ seed: 100 + i, cells: 22, grid: 240 });
+    const map = generateMap({ seed: 100 + i, cells: 22, grid: 480 });
     const factions = [0, 1, 2, 3].map((c) => ({ ai: true, color: c, think: 2, personality: personalities[types[(i + c) % 3]] }));
     const b = new Battle(map, { seed: i, factions, neutral: [8, 28] });
     const t0 = performance.now();
@@ -69,7 +69,7 @@ try:
             home = page.evaluate("__fl.campaign.map.segs.find(s => __fl.campaign.attackable(s.id)).id")
             box = page.locator("#campaign-canvas").bounding_box()
             seg = page.evaluate(f"__fl.campaign.map.segs[{home}]")
-            g = 200
+            g = page.evaluate("__fl.campaign.map.grid")
             page.mouse.click(box["x"] + seg["x"] / g * box["width"], box["y"] + seg["y"] / g * box["height"])
             page.wait_for_timeout(200)
             page.screenshot(path=str(out / f"{name}-campaign.png"))
@@ -80,7 +80,8 @@ try:
             b = page.evaluate("""(() => { const b = __fl.battle; const me = b.segs.find(s => s.owner === 0);
                 return { me: me.id, x: me.x, y: me.y, target: b.segs[me.adj[0]] }; })()""")
             box = page.locator("#battle-canvas").bounding_box()
-            to_px = lambda x, y: (box["x"] + x / 240 * box["width"], box["y"] + y / 240 * box["height"])
+            bg = page.evaluate("__fl.battle.map.grid")
+            to_px = lambda x, y: (box["x"] + x / bg * box["width"], box["y"] + y / bg * box["height"])
             page.wait_for_timeout(3000)   # let troops grow a bit
             page.mouse.click(*to_px(b["x"], b["y"]))
             page.click("#build .bld[data-type=farm]")
@@ -89,7 +90,14 @@ try:
             state = page.evaluate("({ my_armies: __fl.battle.armies.filter(a => a.owner === 0).length, orders: __fl.battle.stats.sent, building: __fl.battle.segs[%d].building })" % b["me"])
             print(f"{name}: after tap attack + farm -> {state}")
             page.screenshot(path=str(out / f"{name}-battle.png"))
-
+            # tap-to-move: give the player a 2nd neighbouring segment, then tap it while home is selected
+            mv = page.evaluate("""(() => { const b = __fl.battle, me = b.segs[%d];
+                const n = b.segs[me.adj[me.adj.length - 1]]; n.owner = 0; me.troops = 40; b.version++;
+                return { id: n.id, x: n.x, y: n.y }; })()""" % b["me"])
+            page.wait_for_timeout(100)
+            page.mouse.click(*to_px(mv["x"], mv["y"]))
+            moved = page.evaluate("__fl.battle.armies.some(a => a.owner === 0 && a.to === %d)" % mv["id"])
+            print(f"{name}: tap own neighbour moves troops -> {moved}")
             # fast-forward to the end and show the result card
             page.evaluate("__fl.battle.simulate(1500)")
             page.wait_for_timeout(300)

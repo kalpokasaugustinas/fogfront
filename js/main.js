@@ -155,7 +155,10 @@ function drawBattle() {
   }
 }
 
-// battle input: tap own = select, tap adjacent enemy/neutral = attack, drag own -> any adjacent = send
+// battle input:
+// - tap a neighbour of the selected segment = send troops there (attack, or move if it's yours)
+// - tap your segment that isn't a neighbour = select it; tap the selected one again = deselect
+// - drag from your segment to any neighbour = send troops
 function localPos(e) {
   const r = bv.canvas.getBoundingClientRect();
   return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -165,19 +168,26 @@ $('battle-canvas').addEventListener('pointerdown', (e) => {
   bv.canvas.setPointerCapture(e.pointerId);
   const sid = bv.segAt(e.clientX, e.clientY);
   hover = sid;
-  if (isMine(sid)) { selected = sid; drag = { from: sid, moved: false, ...localPos(e) }; }
+  // own segment: decide tap vs drag on pointerup
+  if (isMine(sid)) drag = { from: sid, moved: false, ...localPos(e) };
   else if (canTarget(selected, sid)) sendFrom(selected, sid);
   else if (sid < 0) selected = -1;
 });
 $('battle-canvas').addEventListener('pointermove', (e) => {
   if (!battle) return;
   hover = bv.segAt(e.clientX, e.clientY);
-  if (drag) { Object.assign(drag, localPos(e)); if (hover !== drag.from) drag.moved = true; }
+  if (drag) {
+    Object.assign(drag, localPos(e));
+    if (hover !== drag.from && !drag.moved) { drag.moved = true; selected = drag.from; }
+  }
 });
 $('battle-canvas').addEventListener('pointerup', (e) => {
   if (drag) {
-    const to = bv.segAt(e.clientX, e.clientY);
-    if (drag.moved && canTarget(drag.from, to)) sendFrom(drag.from, to);
+    const to = bv.segAt(e.clientX, e.clientY), from = drag.from;
+    if (drag.moved) { if (canTarget(from, to)) sendFrom(from, to); }
+    else if (from === selected) selected = -1;                   // tap selected again: deselect
+    else if (canTarget(selected, from)) sendFrom(selected, from); // tap own neighbour: move troops
+    else selected = from;                                         // tap other own segment: select
   }
   drag = null;
 });
@@ -191,7 +201,7 @@ function sendFrom(from, to) {
 function renderBuildPanel() {
   const box = $('build');
   if (selected < 0 || !battle) {
-    box.innerHTML = '<p class="hint">Tap your segment to select it. Tap a neighbour to attack, or drag to send troops (also to your own segments).</p>';
+    box.innerHTML = '<p class="hint">Tap your segment to select it, then tap a neighbour to send troops: attack enemies, move to your own. Or drag.</p>';
     return;
   }
   box.innerHTML = Object.entries(buildings).map(([type, b]) =>

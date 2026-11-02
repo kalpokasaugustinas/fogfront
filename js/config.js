@@ -1,14 +1,14 @@
 // all balance numbers live here, so tuning the game = editing this one file
 
 export const rules = {
-  grid: 240,          // battle map raster size (cells per side)
+  grid: 480,          // battle map raster size (cells per side)
   step: 0.1,          // fixed simulation step in seconds
-  armySpeed: 45,      // army travel speed in grid cells per second
+  armySpeed: 90,      // army travel speed in grid cells per second (scale with grid)
   startTroops: 25,    // troops in each faction's starting segment
   overCapDecay: 1,    // troops/s lost while a segment is above its cap
   // segment size -> cap and growth (size ratio = area / average area, clamped)
   capBase: 20, capPerSize: 40,          // avg segment: cap 60
-  growthBase: 0.3, growthPerSize: 0.5,  // avg segment: 0.8 troops/s
+  growthBase: 3, growthPerSize: 5,      // avg segment: 8 troops/s
 };
 
 // one building per segment; building costs troops taken from that segment.

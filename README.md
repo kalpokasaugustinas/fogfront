@@ -6,9 +6,9 @@ Prototype stage.
 
 ## How it plays
 - **Campaign:** a world map of 16 regions held by 3 rival empires. Attack any region next to one you own. Difficulty grows with distance from home: more segments, more enemies, stronger neutrals, faster bots. Progress is saved in the browser.
-- **Battle:** each segment you own grows troops up to its cap. Bigger segments grow faster and hold more.
-  - Tap your segment, then tap a neighbour to attack it with the chosen % (25/50/75/100).
-  - Drag from your segment to any neighbour (your own too) to send troops.
+- **Battle:** each segment you own grows troops up to its cap. Bigger segments grow faster and hold more (avg: cap 60, +8/s).
+  - Tap your segment, then tap a neighbour to send the chosen % (25/50/75/100): attack an enemy/neutral, or move troops to your own. Tap the selected segment again to deselect.
+  - Or drag from your segment to any neighbour.
   - Fight: attack = troops × attack bonus, defense = defenders × defense bonus. The higher number wins and keeps the difference.
   - Neutral segments don't grow. Bots also fight each other.
   - You win when every enemy faction is gone.

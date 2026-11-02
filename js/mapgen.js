@@ -111,13 +111,14 @@ export function generateMap({ seed, cells: n, grid: g }) {
   for (const c of land) if (ids[c] >= 0) ids[c] = remap.get(ids[c]);
   const segs = Array.from({ length: remap.size }, (_, id) => ({ id, area: 0, sx: 0, sy: 0, adj: new Set() }));
 
-  // 6. area, adjacency and edge cells (edge = differs from right/down neighbour, for 1-cell borders)
+  // 6. area, adjacency and edge cells (edge = differs from any 4-neighbour, so borders are 2 cells wide)
   const edge = new Uint8Array(g * g);
   for (let c = 0; c < g * g; c++) {
     const id = ids[c], x = c % g;
     if (id >= 0) { const s = segs[id]; s.area++; s.sx += x; s.sy += Math.floor(c / g); }
     const r = x < g - 1 ? ids[c + 1] : -1, d = c < g * g - g ? ids[c + g] : -1;
-    if (r !== id || d !== id) edge[c] = 1;
+    const l = x > 0 ? ids[c - 1] : -1, u = c >= g ? ids[c - g] : -1;
+    if (r !== id || d !== id || l !== id || u !== id) edge[c] = 1;
     if (id >= 0 && r >= 0 && r !== id) { segs[id].adj.add(r); segs[r].adj.add(id); }
     if (id >= 0 && d >= 0 && d !== id) { segs[id].adj.add(d); segs[d].adj.add(id); }
   }
