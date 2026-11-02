@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=33';
-import * as structures from './structures.js?v=33';
+import { themes } from './config.js?v=34';
+import * as structures from './structures.js?v=34';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -588,7 +588,6 @@ export class MapView {
     x.clip(this.islandP, 'evenodd');
     x.imageSmoothingEnabled = true;
     x.drawImage(this.groundC, 0, 0, g, g);
-    this.drawRivers(x, px);
     x.lineJoin = 'round';
     x.lineWidth = Math.max(1, this.size * 0.0022) * px;
     x.strokeStyle = css(t.lineNeutral, 0.45);
@@ -638,6 +637,30 @@ export class MapView {
     x.setTransform(1, 0, 0, 1, 0, 0);
     x.drawImage(this.base, 0, 0);
     this.st.forEach((s, id) => { if (s.building) this.blit(x, this.groundSprite(id, s.building)); });
+    // rivers above the building ground (farm fields never hide them), then the inner terrain
+    // border of every trait tile: a band in the terrain's colour just inside the edge, so the tile
+    // type stays readable under any building (dashed; the owner's solid colour band sits outside it)
+    this.gridT(x);
+    const px = 1 / this.scale;
+    x.save();
+    x.clip(this.islandP, 'evenodd');
+    this.drawRivers(x, px);
+    x.restore();
+    const band = Math.max(2.2, this.size * 0.007) * px, inner = Math.max(2, this.size * 0.0055) * px;
+    const traitCol = { forest: [46, 104, 58], highland: [118, 114, 108], river: [58, 140, 200], lakeside: [226, 196, 120] };
+    x.lineJoin = 'round';
+    this.map.segs.forEach((s, id) => {
+      const col = traitCol[s.trait];
+      if (!col) return;
+      x.save();
+      x.clip(this.segP[id]);
+      // dashed, so it never reads as an owner's (solid) border
+      x.lineWidth = (band + inner) * 2;
+      x.setLineDash([7 * px, 4 * px]);
+      x.strokeStyle = css(col, 0.85);
+      x.stroke(this.segP[id]);
+      x.restore();
+    });
     this.layerGround = c;
   }
 

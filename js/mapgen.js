@@ -457,50 +457,108 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
       if (ids[m] >= 0 && !near[m]) { near[m] = near[c] + 1; nearType[m] = terrain[c] || nearType[c]; nq.push(m); }
     }
   }
-  // 9. rivers (visual only): start next to mountains or deep inland, walk downhill on the
-  //    distance-to-water field until the coast or a lake; meander via a little randomness
-  const rivers = [];
-  if (obstacles) {
-    const solid = (c) => ids[c] >= 0 || terrain[c] === terrainTypes.mountain;
-    const wdist = new Int16Array(g * g).fill(-1), wq = [];
-    for (let c = 0; c < g * g; c++) {
-      if (!solid(c)) continue;
-      if (nbrs(c).some((m) => !solid(m)) || nbrs(c).length < 4) { wdist[c] = 0; wq.push(c); }
-    }
-    for (let k = 0; k < wq.length; k++) for (const m of nbrs(wq[k])) if (wdist[m] < 0 && solid(m)) { wdist[m] = wdist[wq[k]] + 1; wq.push(m); }
-    const starts = [];
-    for (const c of land) if (ids[c] >= 0 && ((near[c] === 2 && nearType[c] === terrainTypes.mountain) || wdist[c] > g * 0.09)) starts.push(c);
-    const want = Math.min(7, Math.round(2 + 2 * (1 / detail - 1)));
-    const used = new Uint8Array(g * g);
-    for (let r = 0, tries = 0; r < want && tries < want * 25 && starts.length; tries++) {
-      let cur = starts[Math.floor(orand() * starts.length)];
-      if (used[cur] || wdist[cur] < g * 0.04) continue;
-      const pts = [[(cur % g) + 0.5, Math.floor(cur / g) + 0.5]];
-      for (let step = 0; step < g * 2 && wdist[cur] > 0; step++) {
-        const x = cur % g;
-        const opts = [x > 0 ? cur - 1 : -1, x < g - 1 ? cur + 1 : -1, cur - g, cur + g, x > 0 ? cur - g - 1 : -1, x < g - 1 ? cur - g + 1 : -1, x > 0 ? cur + g - 1 : -1, x < g - 1 ? cur + g + 1 : -1]
-          .filter((m) => m >= 0 && m < g * g && ids[m] >= 0 && wdist[m] >= 0 && wdist[m] <= wdist[cur]);
-        if (!opts.length) break;
-        cur = opts.reduce((a, m) => (wdist[m] + orand() * 1.6 < wdist[a] + orand() * 1.6 ? m : a));
-        used[cur] = 1;
-        if (step % 2) pts.push([(cur % g) + 0.5, Math.floor(cur / g) + 0.5]);
-      }
-      if (pts.length > 12) { rivers.push(pts); r++; }
-    }
-  }
-  // 10. terrain traits per segment (one each at most): highland > river > lakeside > forest
-  const nearMtn = new Int32Array(segs.length), nearLake = new Int32Array(segs.length), riverHit = new Uint8Array(segs.length);
+  // 9. terrain counts per tile: cells next to mountains / lakes (traits, and where rivers may go)
+  const nearMtn = new Int32Array(segs.length), nearLake = new Int32Array(segs.length);
   for (const c of land) {
     const id = ids[c];
     if (id < 0 || !near[c] || near[c] > 2) continue;
     if (nearType[c] === terrainTypes.mountain) nearMtn[id]++;
     else if (nearType[c] === terrainTypes.lake) nearLake[id]++;
   }
-  for (const pts of rivers) for (const [x, y] of pts) { const id = ids[Math.floor(y) * g + Math.floor(x)]; if (id >= 0) riverHit[id] = 1; }
+  const highland = (s) => nearMtn[s.id] >= Math.max(4, s.area * 0.01);
+
+  // 10. rivers: chains of 1-3 neighbouring tiles. a river starts at a spring deep in the innermost
+  //     tile, bends through every tile of the chain (via 1-2 random waypoints well inside it),
+  //     crosses into the next tile at their shared border and flows out into the sea or a lake
+  //     from the last one. so every river tile carries a long winding stretch, never a clipped corner
+  const rivers = [], riverTile = new Uint8Array(segs.length);
+  if (obstacles) {
+    const water = (m) => ids[m] < 0 && terrain[m] !== terrainTypes.mountain;   // sea or lake
+    const cellsOf = segs.map(() => []);
+    for (const c of land) if (ids[c] >= 0) cellsOf[ids[c]].push(c);
+    const shore = segs.map((s) => cellsOf[s.id].filter((c) => nbrs(c).some(water)));
+    const deep = segs.map((s) => cellsOf[s.id].filter((c) => dist[c] >= 4));
+    // 8-connected neighbours inside the grid
+    const n8 = (c) => {
+      const x = c % g, out = [];
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if ((!dx && !dy) || x + dx < 0 || x + dx >= g) continue;
+        const m = c + dy * g + dx;
+        if (m >= 0 && m < g * g) out.push(m);
+      }
+      return out;
+    };
+    // shortest path from a to b through cells of tile id (8-connected bfs), as a list of cells
+    const route = (a, b, id) => {
+      const prev = new Map([[a, -1]]), q = [a];
+      for (let k = 0; k < q.length && !prev.has(b); k++) for (const m of n8(q[k])) if (!prev.has(m) && (ids[m] === id || m === b)) { prev.set(m, q[k]); q.push(m); }
+      if (!prev.has(b)) return [a, b];
+      const path = [];
+      for (let c = b; c >= 0; c = prev.get(c)) path.push(c);
+      return path.reverse();
+    };
+    const want = Math.min(7, Math.round(2 + 2 * (1 / detail - 1))), maxTiles = Math.max(2, Math.round(segs.length * 0.22));
+    const mouths = segs.filter((s) => shore[s.id].length && !highland(s)).map((s) => s.id);
+    let used = 0;
+    for (let r = 0, tries = 0; r < want && tries < want * 12 && used < maxTiles && mouths.length; tries++) {
+      const m0 = mouths[Math.floor(orand() * mouths.length)];
+      if (riverTile[m0]) continue;
+      // chain inland: unused, non-highland neighbours that share a land border, inland ones first
+      const chain = [m0], len = 1 + Math.floor(orand() * 3);
+      while (chain.length < len && used + chain.length < maxTiles) {
+        const cur = chain[chain.length - 1];
+        const opts = [...segs[cur].adj].filter((n) => !riverTile[n] && !chain.includes(n) && !highland(segs[n])
+          && cellsOf[cur].some((c) => nbrs(c).some((m) => ids[m] === n)));
+        if (!opts.length) break;
+        opts.sort((a, b) => shore[a].length - shore[b].length + (orand() - 0.5) * 30);
+        chain.push(opts[0]);
+      }
+      // waypoints from the spring (innermost tile) down to the mouth
+      const tiles = chain.slice().reverse(), cells = [];
+      let from = cellsOf[tiles[0]].reduce((a, c) => (dist[c] > dist[a] ? c : a), cellsOf[tiles[0]][0]);   // spring: deepest cell
+      for (let i = 0; i < tiles.length; i++) {
+        const id = tiles[i], next = tiles[i + 1];
+        let exit, after = -1;
+        if (next !== undefined) {
+          // crossing: border cell toward the next tile, nearest the midpoint of the two label spots
+          const mx = (segs[id].x + segs[next].x) / 2, my = (segs[id].y + segs[next].y) / 2;
+          const border = cellsOf[id].filter((c) => nbrs(c).some((m) => ids[m] === next));
+          exit = border.reduce((a, c) => (Math.hypot((c % g) - mx, Math.floor(c / g) - my) < Math.hypot((a % g) - mx, Math.floor(a / g) - my) ? c : a), border[0]);
+          after = nbrs(exit).find((m) => ids[m] === next);
+        } else {
+          // mouth: the shore cell farthest from where the river enters this tile
+          const fx = from % g, fy = Math.floor(from / g);
+          exit = shore[id].reduce((a, c) => (Math.hypot((c % g) - fx, Math.floor(c / g) - fy) > Math.hypot((a % g) - fx, Math.floor(a / g) - fy) ? c : a), shore[id][0]);
+          after = nbrs(exit).find(water);
+        }
+        // 1-2 waypoints deep in the tile, sorted along the way, so the river bends through it
+        const pool = deep[id].length ? deep[id] : cellsOf[id];
+        const ax = from % g, ay = Math.floor(from / g), bx = exit % g, by = Math.floor(exit / g);
+        const along = (c) => ((c % g) - ax) * (bx - ax) + (Math.floor(c / g) - ay) * (by - ay);
+        // up to 4 tries; keep the longest course, stop once it is at least one tile-width long
+        let best = null;
+        for (let k = 0; k < 4 && !(best && best.length >= Math.sqrt(segs[id].area)); k++) {
+          const ways = Array.from({ length: 1 + Math.floor(orand() * 2) }, () => pool[Math.floor(orand() * pool.length)]).sort((a, b) => along(a) - along(b));
+          const course = [from];
+          let at = from;
+          for (const w of [...ways, exit]) { course.push(...route(at, w, id).slice(1)); at = w; }
+          if (!best || course.length > best.length) best = course;
+        }
+        cells.push(...(cells.length ? best.slice(1) : best));
+        if (after !== undefined && after >= 0) cells.push(after);
+        from = after ?? exit;
+        riverTile[id] = 1;
+      }
+      used += tiles.length;
+      const pts = cells.filter((_, i) => i % 2 === 0 || i === cells.length - 1).map((c) => [(c % g) + 0.5, Math.floor(c / g) + 0.5]);
+      if (pts.length > 4) { rivers.push(pts); r++; }
+    }
+  }
+  // 11. terrain traits per segment (one each at most): highland > river > lakeside > forest
   const trait = segs.map((s) => {
     const need = Math.max(4, s.area * 0.01);
     if (nearMtn[s.id] >= need) return 'highland';
-    if (riverHit[s.id]) return 'river';
+    if (riverTile[s.id]) return 'river';
     if (nearLake[s.id] >= need) return 'lakeside';
     return orand() < 0.3 ? 'forest' : null;
   });
