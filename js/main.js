@@ -1,11 +1,11 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=17';
-import { generateMap, rng } from './mapgen.js?v=17';
-import { Battle } from './battle.js?v=17';
-import { personalities } from './ai.js?v=17';
-import { Campaign } from './campaign.js?v=17';
-import { Expedition, stages } from './expedition.js?v=17';
-import { MapView, hexToRgb, shade, label, pill } from './render.js?v=17';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=18';
+import { generateMap, rng } from './mapgen.js?v=18';
+import { Battle } from './battle.js?v=18';
+import { personalities } from './ai.js?v=18';
+import { Campaign } from './campaign.js?v=18';
+import { Expedition, stages } from './expedition.js?v=18';
+import { MapView, hexToRgb, shade, label, pill, unitSprite } from './render.js?v=18';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -149,7 +149,17 @@ function drawBattle() {
   // selected segment: glowing outline; its neighbours: dashed outlines
   if (selected >= 0) bv.highlight(ctx, selected, colors[0], battle.segs[selected].adj, performance.now() / 1000);
   const fs = Math.max(11, Math.min(18, bv.size / 30));
-  // segment numbers and building icons
+  // troop figures: one soldier per troopsPerDot troops (battalions of x5 on zoomed-out maps)
+  const z = Math.max(1, Math.min(1.9, bv.size / 480)), dpr = bv.dpr;   // figure scale: small but visible
+  const kind = (battle.map.detail ?? 1) < 0.7 ? 'battalion' : 'soldier';
+  const per = rules.troopsPerDot * (kind === 'battalion' ? 5 : 1), sp = (kind === 'battalion' ? 12 : 4.6) * z;
+  for (const s of battle.segs) {
+    const spots = bv.troopSpots(s.id, sp);
+    const n = Math.min(spots.length, Math.ceil(s.troops / per - 0.01));
+    const u = unitSprite(kind, s.owner < 0 ? '#8a8f86' : factionColors[battle.factions[s.owner].color], z, dpr);
+    for (let i = 0; i < n; i++) ctx.drawImage(u.c, spots[i][0] - u.w / 2, spots[i][1] - u.h, u.w, u.h);
+  }
+  // segment numbers
   for (const s of battle.segs) {
     const x = bv.sx(s.x), y = bv.sy(s.y);
     const own = s.owner >= 0 ? factionColors[battle.factions[s.owner].color] : null;
@@ -168,21 +178,39 @@ function drawBattle() {
     }
     ctx.restore();
   }
-  // armies on the move
+  // armies: marching formations; at the border they jostle and clash for the fight's 1-3 s
+  const now = performance.now() / 1000;
   for (const a of battle.armies) {
     const f = battle.segs[a.from], t = battle.segs[a.to];
     // progress between sim steps: add the not-yet-simulated time, so movement is smooth at any fps
-    const tt = Math.min(1, a.t + acc / a.dur);
+    const tt = a.fight ? a.t : Math.min(a.stopAt, a.t + acc / a.dur);
     const x = bv.sx(f.x + (t.x - f.x) * tt), y = bv.sy(f.y + (t.y - f.y) * tt);
-    const rad = 5 + Math.sqrt(a.n) * 1.3;
-    ctx.beginPath();
-    ctx.arc(x, y, rad, 0, Math.PI * 2);
-    ctx.fillStyle = factionColors[battle.factions[a.owner].color];
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = a.atk > 1 ? '#ffd76a' : '#fff';   // gold ring = barracks bonus
-    ctx.stroke();
-    label(ctx, a.n, x, y, fs * 0.7);
+    const ang = Math.atan2(bv.sy(t.y) - bv.sy(f.y), bv.sx(t.x) - bv.sx(f.x)), ca = Math.cos(ang), sa = Math.sin(ang);
+    const col = factionColors[battle.factions[a.owner].color], u = unitSprite(kind, col, z, dpr);
+    const m = Math.max(1, Math.min(kind === 'battalion' ? 12 : 30, Math.ceil(a.n / per - 0.01)));
+    const cols = Math.ceil(Math.sqrt(m)), seed = a.from * 31 + a.to;
+    for (let i = 0; i < m; i++) {
+      // rows behind the leader, ranks across the direction of travel
+      const r = Math.floor(i / cols), c = i % cols, along = -r * sp * 0.9, across = (c - (cols - 1) / 2) * sp * 0.8;
+      let px = x + ca * along - sa * across, py = y + sa * along + ca * across;
+      if (a.fight) { px += Math.sin(now * 23 + i * 1.7 + seed) * z * 1.2; py += Math.cos(now * 19 + i) * z * 0.8; }
+      else py += Math.sin(now * 14 + i) * z * 0.5;   // marching bob
+      ctx.drawImage(u.c, px - u.w / 2, py - u.h, u.w, u.h);
+    }
+    if (a.fight) {
+      // clash sparks just ahead of the formation
+      const fx = x + ca * sp * 1.3, fy = y + sa * sp * 1.3 - 3 * z;
+      ctx.lineWidth = 1.4;
+      for (let k = 0; k < 4; k++) {
+        const ph = now * 9 + k * 2.1 + seed, a2 = ph * 2.3;
+        if (Math.sin(ph * 3.1) < 0.2) continue;
+        const sx = fx + Math.sin(ph) * sp * 0.9, sy = fy + Math.cos(ph * 1.3) * sp * 0.6, len = 2.5 * z;
+        ctx.strokeStyle = k % 2 ? '#fff6c8' : '#ffd76a';
+        ctx.beginPath(); ctx.moveTo(sx - Math.cos(a2) * len, sy - Math.sin(a2) * len); ctx.lineTo(sx + Math.cos(a2) * len, sy + Math.sin(a2) * len); ctx.stroke();
+      }
+    }
+    // small number above the formation (gold rim = barracks bonus)
+    pill(ctx, Math.floor(a.n), x, y - u.h - 7 * z, fs * 0.62, a.atk > 1 ? '#e0a020' : col, col);
   }
   // player routes: dashed arrows with a moving dash
   ctx.save();

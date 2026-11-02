@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=17';
-import * as structures from './structures.js?v=17';
+import { themes } from './config.js?v=18';
+import * as structures from './structures.js?v=18';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -683,6 +683,30 @@ export class MapView {
     return out;
   }
 
+  // garrison figure positions (css px) inside a segment: clustered around the number label,
+  // keeping the label itself clear and staying off the border; sp = spacing in css px
+  troopSpots(id, sp) {
+    const key = `u${id}:${sp.toFixed(1)}`;
+    if (this.spotCache.has(key)) return this.spotCache.get(key);
+    const { bdist, grid: g, segs } = this.map, s = segs[id], lx = this.sx(s.x), ly = this.sy(s.y);
+    const cand = [];
+    for (const c of this.segCells[id]) {
+      if (bdist[c] < 3 * this.k || c % 2) continue;
+      const x = this.sx((c % g) + 0.5), y = this.sy(Math.floor(c / g) + 0.5);
+      // keep the number badge clear: figures stand upward from their spot, so the zone reaches further down
+      if (Math.abs(x - lx) < sp * 3.4 && y - ly > -sp * 1.3 && y - ly < sp * 3.4) continue;
+      cand.push([Math.hypot(x - lx, (y - ly) * 1.4) + hash(c, 9, this.seed) * sp * 0.6, x, y]);
+    }
+    cand.sort((a, b) => a[0] - b[0]);
+    const out = [];
+    for (const [, x, y] of cand) {
+      if (out.length >= 60) break;
+      if (out.every((p) => Math.abs(p[0] - x) >= sp || Math.abs(p[1] - y) >= sp * 0.8)) out.push([x, y]);
+    }
+    this.spotCache.set(key, out);
+    return out;
+  }
+
   // selected segment: thick white outline with a soft pulsing glow plus the owner colour inside;
   // targets: moving dashed white outlines. drawn every frame on top of the cached layers
   highlight(ctx, id, color, targets, time, targetsOnly = false) {
@@ -756,6 +780,41 @@ export class MapView {
     }
     return best;
   }
+}
+
+// troop figures, drawn from small cached sprites (fast enough for hundreds per frame).
+// soldier = body + head; battalion = 2 x 3 tiny soldiers with a banner (zoomed-out maps)
+const unitCache = new Map();
+export function unitSprite(kind, color, z, dpr) {
+  const key = `${kind}|${color}|${z.toFixed(2)}|${dpr}`;
+  let s = unitCache.get(key);
+  if (s) return s;
+  const w = (kind === 'battalion' ? 13 : 5) * z, h = (kind === 'battalion' ? 11 : 8) * z;
+  const c = document.createElement('canvas');
+  c.width = Math.ceil(w * dpr);
+  c.height = Math.ceil(h * dpr);
+  const x = c.getContext('2d');
+  x.scale(dpr * z, dpr * z);
+  const col = hexToRgb(color), body = css(col), side = css(shade(col, -0.3)), skin = 'rgb(236,206,176)';
+  const man = (mx, my, sc) => {
+    x.fillStyle = body; x.fillRect(mx - 1.3 * sc, my - 4 * sc, 2.6 * sc, 4 * sc);
+    x.fillStyle = side; x.fillRect(mx + 0.2 * sc, my - 4 * sc, 1.1 * sc, 4 * sc);
+    x.fillStyle = skin; x.beginPath(); x.arc(mx, my - 5 * sc, 1.15 * sc, 0, Math.PI * 2); x.fill();
+  };
+  x.fillStyle = 'rgba(20,30,30,0.25)';
+  if (kind === 'battalion') {
+    x.beginPath(); x.ellipse(6.5, 10, 6, 1.2, 0, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = 'rgba(70,55,40,0.9)'; x.lineWidth = 0.6;
+    x.beginPath(); x.moveTo(11.6, 9.5); x.lineTo(11.6, 0.6); x.stroke();
+    x.fillStyle = body; x.beginPath(); x.moveTo(11.6, 0.6); x.lineTo(8.6, 1.8); x.lineTo(11.6, 3); x.fill();
+    for (const [mx, my] of [[2, 7], [5, 7], [8, 7], [3.5, 9.8], [6.5, 9.8], [9.5, 9.8]]) man(mx, my, 0.62);
+  } else {
+    x.beginPath(); x.ellipse(2.5, 7.4, 2.2, 0.7, 0, 0, Math.PI * 2); x.fill();
+    man(2.5, 7.2, 1);
+  }
+  s = { c, w, h };
+  unitCache.set(key, s);
+  return s;
 }
 
 // outlined text, readable on any colour

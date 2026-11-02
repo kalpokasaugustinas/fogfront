@@ -7,9 +7,9 @@
 //   - pick 1 of 3 perks
 // bots scale with you: base troops + 70% of your carried people, and capitals with the same
 // total bonus strength in a random mix. losing a stage ends the run.
-import { effects } from './config.js?v=17';
-import { personalities } from './ai.js?v=17';
-import { rng } from './mapgen.js?v=17';
+import { effects } from './config.js?v=18';
+import { personalities } from './ai.js?v=18';
+import { rng } from './mapgen.js?v=18';
 
 export const stages = [
   { name: 'Valley', detail: 1, area: '5 km²', cells: 12, bots: 1, shape: 'random', neutral: [0.12, 0.3] },
@@ -74,7 +74,7 @@ export class Expedition {
       ai: true, color, think: Math.max(1.8, 3.2 - this.stage * 0.3),
       personality: personalities[types[Math.floor(r() * types.length)]],
       // from stage 2 on, bots get capitals scaled to the player
-      capital: this.capital ? { troops: 25 + carried * botCarry, bonus: shuffleBonus(this.capital.bonus, r) } : undefined,
+      capital: this.capital ? { troops: 10 + carried * botCarry, bonus: shuffleBonus(this.capital.bonus, r) } : undefined,
     }));
     return {
       seed: Math.floor(r() * 1e9),

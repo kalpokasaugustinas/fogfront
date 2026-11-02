@@ -8,17 +8,18 @@ Prototype stage.
 - **Campaign:** a generated world of ~34 regions: a continent with bays, mountain ranges and lakes, plus islands linked by sea routes. 4 rival empires hold the regions. Each region has a climate by location (snowy north, autumn east, moor west, summer south) that its battle uses. Attack any region next to one you own (or across a sea route). Difficulty grows with distance from home: more segments, more enemies, stronger neutrals, faster bots. Progress is saved in the browser.
 - **🧭 Expedition (roguelite):** 5 stages that zoom out: Valley (5 km²) → Region → Country → Continent → World (510 million km²). Win a stage and everything you hold collapses into one capital on the next, bigger map:
   - the new capital is one tile with the outline of the island you just won, placed on the coast of the bigger map
-  - all your people come along: the capital starts full (1000), the rest is a reserve that flows in when there's room
+  - all your people come along: the capital starts full (400), the rest is a reserve that flows in when there's room
   - buildings become capital bonuses = effect × share of your segments that had them (4 farms of 10 segments → +60% × 40% = +24% growth); nothing can be built in a capital, and old capital bonuses count as one segment, so they fade unless you build again
   - pick 1 of 3 perks at every zoom-out (12 in the pool: faster armies, cheaper buildings, stronger farms, plunder, ...)
-  - bots scale with you: each starts with 25 + 70% of your carried people and its own capital with a shuffled bonus mix
+  - bots scale with you: each starts with 10 + 70% of your carried people and its own capital with a shuffled bonus mix
   - lose a stage and the run is over; best run (stage reached, time) is saved
   - each stage looks further away: lakes, mountain ridges and trees get smaller and more numerous
-- **Battle:** each segment you own grows 1% of its cap per second, up to the cap. Cap scales with segment size: the largest segment on the map holds 1000 (+10/s).
+- **Battle:** each segment you own grows 1% of its cap per second, up to the cap. Cap scales with segment size: the largest segment on the map holds 400 (+4/s).
   - Tap your segment, then tap a neighbour to send the chosen % (25/50/75/100): attack an enemy/neutral, or move troops to your own. Tap the selected segment again to deselect.
   - Or drag from your segment to any neighbour.
   - 🔁 Auto toggle (key A): when on, sending to your own neighbour also sets a standing route. Every second the source forwards all troops above its reserve (100% − send %, of its cap) to the target. Chain routes to pipe troops from the back to the front. ✕ Stop on the selected tile ends its route; a route also ends when either tile is lost.
-  - Fight: attack = troops × attack bonus, defense = defenders × defense bonus. The higher number wins and keeps the difference.
+  - Troops are shown as small soldiers (1 per 8 troops; battalions of 40 on zoomed-out expedition stages) in each tile and in marching armies.
+  - Fight: attacking armies stop at the border and fight for 1–3 s (bigger fights last longer). Attack = troops × attack bonus, defense = defenders × defense bonus. The higher number wins and keeps the difference.
   - Neutral segments start with a garrison that is a share of their cap (bigger tiles hold more) and regrow back to it at 1% of cap per second. Bots also fight each other.
   - Fair starts: you and every bot start on the coast, spread evenly around the island at about the same distance from each other.
   - The island floats in fog, seen at a slight angle. Built segments show their building as a scene: farms turn into fields with farmhouses, forts get stone walls and towers, barracks a castle with tents and soldiers, hospitals an infirmary with medical tents, labs an observatory with crystals. Flags and soldiers take the owner's colour.
@@ -30,11 +31,11 @@ Prototype stage.
 
 | Building | Cost | Effect |
 |---|---|---|
-| 🌾 Farm | 75 | +60% growth in this segment |
-| ⚔️ Barracks | 100 | troops sent from here attack x1.5 |
-| 🛡️ Fort | 100 | defenders here count x1.5 |
-| ➕ Hospital | 125 | +50% growth in your adjacent segments |
-| 🔬 Lab | 150 | +10% growth in all your segments |
+| 🌾 Farm | 30 | +60% growth in this segment |
+| ⚔️ Barracks | 40 | troops sent from here attack x1.5 |
+| 🛡️ Fort | 40 | defenders here count x1.5 |
+| ➕ Hospital | 50 | +50% growth in your adjacent segments |
+| 🔬 Lab | 60 | +10% growth in all your segments |
 
 - **Bots** have personalities (aggressive, builder, turtle). They pick targets by value per troop needed, build according to position (front line: fort or barracks; behind the front: farm, hospital or lab), and push troops from the back to the front.
 

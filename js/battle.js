@@ -1,8 +1,8 @@
 // battle simulation: segments, troops, buildings, armies. no drawing here,
 // so the same code runs in the browser and in headless tests.
-import { rules, buildings, effects } from './config.js?v=17';
-import { rng, spreadStarts } from './mapgen.js?v=17';
-import { think } from './ai.js?v=17';
+import { rules, buildings, effects } from './config.js?v=18';
+import { rng, spreadStarts } from './mapgen.js?v=18';
+import { think } from './ai.js?v=18';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
@@ -107,7 +107,9 @@ export class Battle {
     from.troops -= n;
     const to = this.segs[b];
     const dur = Math.hypot(to.x - from.x, to.y - from.y) / (rules.armySpeed * (this.mods(f).speed ?? 1));
-    this.armies.push({ owner: f, n, atk: this.atkMult(from), from: a, to: b, t: 0, dur });
+    // attacks stop near the border and fight there; moves to own tiles go all the way
+    const stopAt = to.owner === f ? 1 : rules.fightAt;
+    this.armies.push({ owner: f, n, atk: this.atkMult(from), from: a, to: b, t: 0, dur, stopAt, fight: null, done: false });
     if (f === 0 && !auto) this.stats.sent++;
     return true;
   }
@@ -126,24 +128,47 @@ export class Battle {
     return true;
   }
 
-  // army arrives: reinforce own segment or fight
+  // defense multiplier of tile t against attacker f (perk: conscription weakens neutrals)
+  fightDef(t, f) { return this.defMult(t) * (t.owner < 0 ? (this.mods(f).neutralDef ?? 1) : 1); }
+
+  // army reached its stop point: reinforce an own tile, or start a fight at the border
   arrive(a) {
     const t = this.segs[a.to];
-    if (t.owner === a.owner) { t.troops += a.n; return; }
-    const atk = a.n * a.atk;
-    // perk: conscription makes neutrals defend weaker against this attacker
-    const dm = this.defMult(t) * (t.owner < 0 ? (this.mods(a.owner).neutralDef ?? 1) : 1), def = t.troops * dm;
-    if (atk > def) {
+    if (t.owner === a.owner) {
+      if (a.t < 1) { a.stopAt = 1; return; }   // became ours on the way: walk in
+      t.troops += a.n;
+      a.done = true;
+      return;
+    }
+    // fight: both sides lose strength at the same rate k until one is gone, so the result equals
+    // attack - defense like an instant fight, just spread over 1-3 s (bigger fights last longer)
+    const A = a.n * a.atk, D = t.troops * this.fightDef(t, a.owner);
+    const dur = Math.min(rules.fightMax, rules.fightMin + (rules.fightMax - rules.fightMin) * Math.min(1, Math.min(A, D) / rules.fightScale));
+    a.fight = { k: Math.max(1, Math.min(A, D) / dur), time: 0 };
+  }
+
+  // one step of a running fight
+  fightStep(a, dt) {
+    const t = this.segs[a.to];
+    if (t.owner === a.owner) { a.fight = null; a.stopAt = 1; return; }   // someone else took it for us: walk in
+    a.fight.time += dt;
+    const dm = this.fightDef(t, a.owner);
+    const d = Math.min(a.fight.k * dt, a.n * a.atk, t.troops * dm);
+    a.n -= d / a.atk;
+    t.troops -= d / dm;
+    if (t.troops <= 1e-6) {
+      // defenders gone: capture with what's left of the army
       const prev = t.owner;
       t.owner = a.owner;
-      t.troops = (atk - def) / a.atk;
+      t.troops = Math.max(0, a.n);
       // perk: plunder adds part of an enemy segment's cap when it's taken
       if (prev >= 0) t.troops += t.cap * (this.mods(a.owner).loot ?? 0);
       this.version++;
       this.updateGrowth();
       if (a.owner === 0) this.stats.captured++;
-    } else {
-      t.troops = (def - atk) / dm;
+      a.done = true;
+    } else if (a.n <= 1e-6) {
+      a.done = true;   // attack beaten back
     }
   }
 
@@ -191,10 +216,11 @@ export class Battle {
       f.reserve -= flow;
     }
     for (const a of this.armies) {
-      a.t += dt / a.dur;
-      if (a.t >= 1) this.arrive(a);
+      if (a.fight) { this.fightStep(a, dt); continue; }
+      a.t = Math.min(a.stopAt, a.t + dt / a.dur);
+      if (a.t >= a.stopAt) this.arrive(a);
     }
-    this.armies = this.armies.filter((a) => a.t < 1);
+    this.armies = this.armies.filter((a) => !a.done);
     this.routeTimer -= dt;
     if (this.routeTimer <= 0) { this.routeTimer += rules.routeEvery; this.runRoutes(); }
     for (const f of this.factions) {

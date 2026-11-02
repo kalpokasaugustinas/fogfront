@@ -4,12 +4,15 @@ export const rules = {
   grid: 480,          // battle map raster size (cells per side)
   step: 0.1,          // fixed simulation step in seconds
   armySpeed: 90,      // army travel speed in grid cells per second (scale with grid)
-  startTroops: 25,    // troops in each faction's starting segment
+  startTroops: 10,    // troops in each faction's starting segment
   overCapDecay: 1,    // troops/s lost while a segment is above its cap
+  fightAt: 0.7,       // attacking armies stop at this share of the way (about the border) and fight there
+  fightMin: 1, fightMax: 3, fightScale: 240,   // fight length: 1 s + 2 s x (smaller side's strength / 240), max 3 s
+  troopsPerDot: 8,    // one soldier figure per 8 troops; zoomed-out maps show battalions (x5) instead
   routeEvery: 1,      // auto-send routes forward troops every N seconds
-  routeMin: 5,        // ...when at least this many troops are above the route's reserve
+  routeMin: 2,        // ...when at least this many troops are above the route's reserve
   // cap scales with segment area: the largest segment on the map holds capMax
-  capMax: 1000,
+  capMax: 400,
   // growth: every tile produces this share of its cap per second (600-cap tile: +6/s).
   // neutral tiles regrow at the same rate, but only back up to their starting garrison
   growthRate: 0.01,
@@ -18,11 +21,11 @@ export const rules = {
 // one building per segment; building costs troops taken from that segment.
 // a captured segment keeps its building (the new owner gets it).
 export const buildings = {
-  farm:     { name: 'Farm',     icon: '🌾', cost: 75,  desc: '+60% growth in this segment' },
-  barracks: { name: 'Barracks', icon: '⚔️', cost: 100, desc: 'troops sent from here attack x1.5' },
-  fort:     { name: 'Fort',     icon: '🛡️', cost: 100, desc: 'defenders here count x1.5' },
-  hospital: { name: 'Hospital', icon: '➕', cost: 125, desc: '+50% growth in your adjacent segments' },
-  lab:      { name: 'Lab',      icon: '🔬', cost: 150, desc: '+10% growth in all your segments' },
+  farm:     { name: 'Farm',     icon: '🌾', cost: 30, desc: '+60% growth in this segment' },
+  barracks: { name: 'Barracks', icon: '⚔️', cost: 40, desc: 'troops sent from here attack x1.5' },
+  fort:     { name: 'Fort',     icon: '🛡️', cost: 40, desc: 'defenders here count x1.5' },
+  hospital: { name: 'Hospital', icon: '➕', cost: 50, desc: '+50% growth in your adjacent segments' },
+  lab:      { name: 'Lab',      icon: '🔬', cost: 60, desc: '+10% growth in all your segments' },
 };
 
 export const effects = {
