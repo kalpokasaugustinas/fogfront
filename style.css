@@ -56,7 +56,7 @@ button { box-shadow: 0 1px 2px rgba(30, 50, 55, 0.12); }
 
 /* map + panel */
 .layout { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.mapwrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 6px; }
+.mapwrap { position: relative; overflow: hidden; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 6px; }
 canvas { touch-action: none; display: block; }
 /* fixed panel height in portrait, so the map doesn't jump when the panel content changes */
 .panel { background: rgba(255, 255, 255, 0.55); backdrop-filter: blur(6px); padding: 8px 12px 12px; border-top: 1px solid var(--line); overflow-y: auto; height: 38vh; flex: none; }
@@ -87,6 +87,23 @@ canvas { touch-action: none; display: block; }
 .card ul { padding-left: 18px; }
 .card li { margin: 5px 0; }
 .card button { margin: 6px 4px 0; }
+
+/* expedition: stage label, carry-over list, perk choices, zoom-out transition */
+#stage { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.carry { text-align: left; margin: 6px 0; font-size: 14px; }
+#end-perks { display: grid; gap: 6px; margin-top: 8px; }
+.perk { display: flex; gap: 10px; align-items: center; text-align: left; padding: 8px 10px; }
+.perk .ico { font-size: 24px; }
+.perk small { color: var(--muted); }
+.zooming { transition: transform 1.7s cubic-bezier(0.45, 0, 0.2, 1), opacity 1.7s ease; }
+.zoom-snap { pointer-events: none; z-index: 2; transform-origin: 50% 50%; }
+#zoom-banner {
+  position: fixed; left: 50%; top: 22%; transform: translate(-50%, 0); opacity: 0; pointer-events: none; z-index: 15;
+  text-align: center; font-size: 15px; color: #fff; background: rgba(30, 45, 50, 0.55); padding: 10px 18px; border-radius: 14px;
+  transition: opacity 0.4s;
+}
+#zoom-banner.show { opacity: 1; }
+#zoom-banner b { font-size: 24px; }
 
 #toast {
   color: #fff;

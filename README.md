@@ -6,6 +6,12 @@ Prototype stage.
 
 ## How it plays
 - **Campaign:** a generated world of ~34 regions: a continent with bays, mountain ranges and lakes, plus islands linked by sea routes. 4 rival empires hold the regions. Each region has a climate by location (snowy north, autumn east, moor west, summer south) that its battle uses. Attack any region next to one you own (or across a sea route). Difficulty grows with distance from home: more segments, more enemies, stronger neutrals, faster bots. Progress is saved in the browser.
+- **🧭 Expedition (roguelite):** 5 stages that zoom out: Valley (5 km²) → Region → Country → Continent → World (510 million km²). Win a stage and everything you hold collapses into one capital on the next, bigger map:
+  - all your people come along: the capital starts full (1000), the rest is a reserve that flows in when there's room
+  - buildings become capital bonuses = effect × share of your segments that had them (4 farms of 10 segments → +60% × 40% = +24% growth); nothing can be built in a capital, and old capital bonuses count as one segment, so they fade unless you build again
+  - pick 1 of 3 perks at every zoom-out (12 in the pool: faster armies, cheaper buildings, stronger farms, plunder, ...)
+  - bots scale with you: each starts with 25 + 70% of your carried people and its own capital with a shuffled bonus mix
+  - lose a stage and the run is over; best run (stage reached, time) is saved
 - **Battle:** each segment you own grows troops up to its cap. Cap scales with segment size: the largest segment on the map holds 1000. Bigger segments also grow faster (avg +3.9/s).
   - Tap your segment, then tap a neighbour to send the chosen % (25/50/75/100): attack an enemy/neutral, or move troops to your own. Tap the selected segment again to deselect.
   - Or drag from your segment to any neighbour.
@@ -42,6 +48,7 @@ Vanilla JS modules plus canvas 2D. No build step, no dependencies.
 | `js/ai.js` | bot decisions and personalities |
 | `js/campaign.js` | world map, empires, region difficulty, save/load |
 | `js/render.js` | island-diorama renderer: smooth vector outlines (marching squares), tilted camera, static layers + cached per-segment sprites (overlays, trees, buildings), troop pills |
+| `js/expedition.js` | expedition stages, perks, carry-over maths, bot scaling, best run |
 | `js/structures.js` | building scenes that fill a segment: farmland, fort walls and towers, castle with soldiers, hospital, lab |
 | `js/main.js` | screens, input, HUD, frame loop |
 

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#a9bcbc">
   <title>Frontlines</title>
-  <link rel="stylesheet" href="style.css?v=14">
+  <link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
   <!-- main menu -->
@@ -13,9 +13,10 @@
     <h1>Frontlines</h1>
     <p class="tag">Conquer the map, one region at a time. Do the math, pick your fights.</p>
     <button id="btn-campaign" class="primary">🗺️ Campaign</button>
+    <button id="btn-expedition">🧭 Expedition</button>
     <button id="btn-skirmish">⚔️ Quick battle</button>
     <button id="btn-help">❔ How to play</button>
-    <span id="version">build 14 · 2026-11-02 16:35</span>
+    <span id="version">build 15 · 2026-11-02 17:01</span>
   </section>
 
   <!-- campaign world map -->
@@ -37,6 +38,7 @@
     <header class="bar">
       <button id="battle-quit">←</button>
       <span id="factions"></span>
+      <span id="stage" class="hidden"></span>
       <span id="clock">0:00</span>
       <span id="speed" class="seg">
         <button data-speed="0">⏸</button><button data-speed="1">1x</button><button data-speed="2">2x</button><button data-speed="3">3x</button>
@@ -56,7 +58,8 @@
     <div id="end" class="overlay hidden">
       <div class="card">
         <h2 id="end-title"></h2>
-        <p id="end-stats"></p>
+        <div id="end-stats"></div>
+        <div id="end-perks"></div>
         <button id="end-retry">↻ Retry</button>
         <button id="end-continue" class="primary">Continue</button>
       </div>
@@ -78,12 +81,14 @@
         <li>Each segment can hold one building, paid with its own troops. Captured buildings switch sides.</li>
       </ul>
       <ul id="help-buildings"></ul>
+      <p><b>🧭 Expedition</b> (roguelite): 5 stages from a valley to the whole world. Win a stage and everything you hold collapses into one capital on a bigger map: all your people come along (the capital fills up, the rest waits in a 🏕️ reserve), and each building type becomes a capital bonus = its effect × the share of your segments that had it (4 farms of 10 segments → +60% × 40% = +24% growth). Nothing can be built in a capital. Bots start with part of your strength and their own capitals. Pick a perk at every zoom-out. Lose once and the run ends.</p>
       <p>Win: wipe out every enemy faction. Keys: space = pause, 1–4 = send %, A = auto toggle, Esc = deselect.</p>
       <button id="help-close" class="primary">Got it</button>
     </div>
   </div>
 
+  <div id="zoom-banner"></div>
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=14"></script>
+  <script type="module" src="js/main.js?v=15"></script>
 </body>
 </html>

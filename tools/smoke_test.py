@@ -10,6 +10,8 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+sys.stdout.reconfigure(encoding="utf-8")   # emoji in titles: windows console defaults to cp1257
+
 root = Path(__file__).resolve().parent.parent
 out = Path(sys.argv[1] if len(sys.argv) > 1 else root / "tools" / "shots")
 out.mkdir(parents=True, exist_ok=True)
@@ -81,6 +83,41 @@ try:
                 page.wait_for_timeout(300)
                 page.locator("#battle-canvas").screenshot(path=str(out / "buildings.png"))
                 page.evaluate("document.querySelectorAll('.screen').forEach(s => s.classList.toggle('hidden', s.id !== 'menu'))")
+
+            if name == "landscape":
+                # expedition: force-win every stage, pick perks, check carry-over and bot scaling
+                page.click("#btn-expedition")
+                page.wait_for_timeout(500)
+                for stage in range(5):
+                    # give the player a few buildings, then take every bot segment
+                    page.evaluate("""(() => { const b = __fl.battle, types = ['farm', 'farm', 'lab', 'fort', 'barracks', 'hospital'];
+                      const free = b.segs.filter(s => !s.capital).slice(0, 6);
+                      free.forEach((s, i) => { s.owner = 0; s.building = types[i]; s.troops = 300; });
+                      for (const s of b.segs) if (s.owner > 0) s.owner = 0;
+                      b.armies = []; b.version++; b.updateGrowth(); })()""")
+                    page.wait_for_timeout(400)
+                    title = page.inner_text("#end-title")
+                    perks = page.locator("#end-perks .perk").count()
+                    print(f"expedition stage {stage + 1}: '{title}', perk choices: {perks}")
+                    if stage == 4:
+                        page.screenshot(path=str(out / "expedition-won.png"))
+                        break
+                    if stage == 0:
+                        page.screenshot(path=str(out / "expedition-card.png"))
+                    page.locator("#end-perks .perk").first.click()
+                    page.wait_for_timeout(700)
+                    if stage == 0:
+                        page.screenshot(path=str(out / "expedition-zoom.png"))
+                    page.wait_for_timeout(1500)
+                    info = page.evaluate("""(() => { const b = __fl.battle, e = __fl.expedition, me = b.segs[b.factions[0].capitalSeg];
+                      return { stage: e.stage + 1, segs: b.segs.length, capital_troops: Math.round(me.troops), reserve: Math.round(b.factions[0].reserve),
+                        bonus: Object.fromEntries(Object.entries(me.bonus).map(([k, v]) => [k, +v.toFixed(3)])),
+                        bot_capitals: b.factions.slice(1).map(f => Math.round(b.segs[f.capitalSeg].troops + f.reserve)), perks: e.perks }; })()""")
+                    print(f"  -> {info}")
+                    if stage == 3:
+                        page.screenshot(path=str(out / "expedition-world.png"))
+                page.evaluate("document.querySelectorAll('.screen').forEach(s => s.classList.toggle('hidden', s.id !== 'menu'))")
+                page.evaluate("document.getElementById('end').classList.add('hidden')")
 
             if name == "portrait":
                 t0 = time.time()

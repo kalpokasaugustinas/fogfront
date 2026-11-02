@@ -1,10 +1,11 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=14';
-import { generateMap, rng } from './mapgen.js?v=14';
-import { Battle } from './battle.js?v=14';
-import { personalities } from './ai.js?v=14';
-import { Campaign } from './campaign.js?v=14';
-import { MapView, hexToRgb, shade, label, pill } from './render.js?v=14';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=15';
+import { generateMap, rng } from './mapgen.js?v=15';
+import { Battle } from './battle.js?v=15';
+import { personalities } from './ai.js?v=15';
+import { Campaign } from './campaign.js?v=15';
+import { Expedition, stages } from './expedition.js?v=15';
+import { MapView, hexToRgb, shade, label, pill } from './render.js?v=15';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -106,6 +107,8 @@ function startBattle(setup, m, rid = -1) {
   const theme = setup.theme ?? themeNames[setup.seed % themeNames.length];
   if (!bv) bv = new MapView($('battle-canvas'), map, theme); else bv.setMap(map, theme);
   bv.prewarm(battle.factions.map((f) => colors[f.color]), 0.16);
+  $('stage').classList.toggle('hidden', m !== 'expedition');
+  if (m === 'expedition') $('stage').textContent = `${expedition.stage + 1}/${stages.length} · ${expedition.current.name} · ${expedition.current.area}`;
   $('end').classList.add('hidden');
   renderBuildPanel();
   show('battle');
@@ -151,6 +154,19 @@ function drawBattle() {
     const x = bv.sx(s.x), y = bv.sy(s.y);
     const own = s.owner >= 0 ? factionColors[battle.factions[s.owner].color] : null;
     pill(ctx, Math.floor(s.troops), x, y, fs * 0.85, own ?? 'rgba(90,100,95,.55)', own ?? '#4b5552');
+  }
+  // sea routes (world-style maps): dashed lines between islands
+  if (battle.map.bridges?.length) {
+    ctx.save();
+    ctx.setLineDash([5, 5]);
+    ctx.lineDashOffset = -(battle.time + acc) * 14;
+    for (const b of battle.map.bridges) {
+      const x1 = bv.sx(b.ax), y1 = bv.sy(b.ay), x2 = bv.sx(b.bx), y2 = bv.sy(b.by);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo((x1 + x2) / 2, (y1 + y2) / 2 + 10, x2, y2);
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(60,80,90,0.25)'; ctx.stroke();
+      ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.stroke();
+    }
+    ctx.restore();
   }
   // armies on the move
   for (const a of battle.armies) {
@@ -261,8 +277,17 @@ function renderBuildPanel() {
     box.innerHTML = '<p class="hint">Tap your segment to select it, then tap a neighbour to send troops: attack enemies, move to your own. Or drag.</p>';
     return;
   }
+  const sel = battle.segs[selected];
+  if (sel.capital) {
+    // capital: no building; show the carried-over bonuses
+    const b = sel.bonus, pc = (v) => `+${Math.round(v * 100)}%`;
+    box.innerHTML = `<p class="hint">🏰 <b>Capital</b>: nothing can be built here. Carried-over bonuses:
+      ${pc(b.growth)} growth here · ${pc(b.hosp)} growth in your neighbouring segments · ${pc(b.lab)} growth everywhere ·
+      defense ${pc(b.def)} · attack ${pc(b.atk)} from here</p>`;
+    return;
+  }
   box.innerHTML = Object.entries(buildings).map(([type, b]) =>
-    `<button class="bld" data-type="${type}"><span class="ico">${b.icon}</span><span><b>${b.name}</b> · ${b.cost}<br><small>${b.desc}</small></span></button>`).join('');
+    `<button class="bld" data-type="${type}"><span class="ico">${b.icon}</span><span><b>${b.name}</b> · ${battle.costOf(0, type)}<br><small>${b.desc}</small></span></button>`).join('');
   for (const btn of box.querySelectorAll('.bld')) btn.onclick = () => {
     if (!battle.build(0, selected, btn.dataset.type)) flash('Need more troops in this segment');
   };
@@ -276,7 +301,7 @@ function updatePanel() {
     const mult = [s.building === 'fort' && `🛡️ defense x${effects.fortDefense}`, s.building === 'barracks' && `⚔️ attack x${effects.barracksAttack}`].filter(Boolean).join(' · ');
     const col = s.owner < 0 ? neutralColor : factionColors[battle.factions[s.owner].color];
     $('seg-info').innerHTML = `<b style="color:${col}">${who}</b>
-      · ${Math.floor(s.troops)} / ${s.cap} troops · +${s.growth}/s${s.building ? ' · ' + buildings[s.building].icon + ' ' + buildings[s.building].name : ''}${mult ? ' · ' + mult : ''}`;
+      · ${Math.floor(s.troops)} / ${s.cap} troops · +${s.growth}/s${s.capital ? ' · 🏰 Capital' : s.building ? ' · ' + buildings[s.building].icon + ' ' + buildings[s.building].name : ''}${mult ? ' · ' + mult : ''}`;
   } else $('seg-info').textContent = '';
   // selected tile's route (if any) with a stop button
   const route = selected >= 0 ? battle.routes.get(selected) : null;
@@ -284,17 +309,20 @@ function updatePanel() {
   if (route) $('route-info').firstElementChild.textContent = `🔁 Route active, keeps ${Math.round(route.keep * 100)}% of cap`;
   for (const btn of $('build').querySelectorAll('.bld')) {
     const s = battle.segs[selected];
-    btn.disabled = !s || s.troops < buildings[btn.dataset.type].cost || s.building === btn.dataset.type;
+    btn.disabled = !s || s.troops < battle.costOf(0, btn.dataset.type) || s.building === btn.dataset.type;
     btn.classList.toggle('current', !!s && s.building === btn.dataset.type);
   }
   // faction chips: segments and total troops (on map + marching)
   $('factions').innerHTML = battle.factions.map((f) => {
     const segs = battle.segs.filter((s) => s.owner === f.id);
-    const troops = segs.reduce((v, s) => v + s.troops, 0) + battle.armies.filter((a) => a.owner === f.id).reduce((v, a) => v + a.n, 0);
+    // total strength: troops on the map + marching + reserve (expedition capitals)
+    const troops = segs.reduce((v, s) => v + s.troops, 0) + battle.armies.filter((a) => a.owner === f.id).reduce((v, a) => v + a.n, 0) + f.reserve;
     const dead = !battle.alive(f.id);
     return `<span class="chip ${dead ? 'dead' : ''}"><i style="background:${factionColors[f.color]}"></i>${segs.length}▣ ${Math.floor(troops)}</span>`;
   }).join('');
-  $('clock').textContent = fmtTime(battle.time);
+  const res = battle.factions[0].reserve;
+  $('clock').textContent = fmtTime(battle.time) + (res >= 1 ? ` · 🏕️ ${Math.floor(res)}` : '');
+  $('clock').title = res >= 1 ? 'Reserve: flows into your capital when it has room' : '';
 }
 
 for (const b of document.querySelectorAll('#pct button')) {
@@ -314,6 +342,11 @@ function setSpeed(s) {
 
 function endBattle() {
   const won = battle.state === 'won';
+  if (mode === 'expedition') return endStage(won);
+  // regular end card: undo the expedition variants
+  $('end-perks').innerHTML = '';
+  $('end-retry').textContent = '↻ Retry';
+  $('end-continue').classList.remove('hidden');
   if (won && mode === 'campaign') { campaign.conquer(regionId); pickedRegion = -1; }
   const st = battle.stats;
   $('end-title').textContent = won ? (mode === 'campaign' ? '🏳️ Region conquered!' : '🏆 Victory!') : '💀 Defeated';
@@ -323,8 +356,97 @@ function endBattle() {
 }
 $('end-continue').onclick = () => { if (mode === 'campaign') show('campaign'); else show('menu'); };
 $('end-retry').onclick = () => {
-  if (mode === 'campaign') startBattle(campaign.battleSetup(regionId), 'campaign', regionId); else startSkirmish();
+  if (mode === 'campaign') startBattle(campaign.battleSetup(regionId), 'campaign', regionId);
+  else if (mode === 'expedition') startExpedition();
+  else startSkirmish();
 };
+
+// ---------- expedition (zoom-out roguelite) ----------
+let expedition = null;
+
+function startExpedition() {
+  expedition = new Expedition(Math.floor(Math.random() * 1e9));
+  startBattle(expedition.setup(), 'expedition');
+  flash(`🧭 Stage 1: ${expedition.current.name} (${expedition.current.area})`);
+}
+
+// stage over: run lost / world won / collapse into the next capital and pick a perk
+function endStage(won) {
+  $('end-perks').innerHTML = '';
+  const last = expedition.stage === stages.length - 1;
+  if (!won || last) {
+    if (won) expedition.collapse(battle);
+    const reached = won ? stages.length : expedition.stage + 1;
+    const record = expedition.saveBest(reached);
+    $('end-title').textContent = won ? '🌍 The world is yours!' : `💀 Expedition over: ${expedition.current.name}`;
+    $('end-stats').textContent = `Reached stage ${reached}/${stages.length} · total time ${fmtTime(expedition.time + (won ? 0 : battle.time))}${record ? ' · 🏆 new best' : ''}`;
+    $('end-retry').textContent = '↻ New expedition';
+    $('end-retry').classList.remove('hidden');
+    $('end-continue').classList.remove('hidden');
+    $('end').classList.remove('hidden');
+    return;
+  }
+  const from = expedition.current, sum = expedition.collapse(battle), b = sum.bonus, pc = (v) => `+${Math.round(v * 100)}%`;
+  const share = (k, label, eff) => (k ? `<li>${label}: ${k}/${sum.segments} → ${eff}</li>` : '');
+  $('end-title').textContent = `🏳️ ${from.name} conquered`;
+  $('end-stats').innerHTML = `Your ${sum.segments} segments become one capital with <b>${sum.troops.toLocaleString()}</b> people.
+    <ul class="carry">
+      ${share(sum.farms, '🌾 Farms', pc(b.growth) + ' growth')}${share(sum.hosp, '➕ Hospitals', pc(b.hosp) + ' neighbour growth')}
+      ${share(sum.labs, '🔬 Labs', pc(b.lab) + ' growth everywhere')}${share(sum.forts, '🛡️ Forts', pc(b.def) + ' defense')}
+      ${share(sum.barracks, '⚔️ Barracks', pc(b.atk) + ' attack')}
+    </ul>Next: <b>${expedition.current.name}</b> (${expedition.current.area}). Pick a perk:`;
+  for (const p of expedition.choices()) {
+    const btn = document.createElement('button');
+    btn.className = 'perk';
+    btn.innerHTML = `<span class="ico">${p.icon}</span><span><b>${p.name}</b><br><small>${p.desc}</small></span>`;
+    btn.onclick = () => { expedition.perks.push(p.id); $('end').classList.add('hidden'); zoomOut(); };
+    $('end-perks').appendChild(btn);
+  }
+  $('end-retry').classList.add('hidden');
+  $('end-continue').classList.add('hidden');
+  $('end').classList.remove('hidden');
+}
+
+// zoom-out: the old map shrinks into the new capital while the bigger map fades in around it
+function zoomOut() {
+  const wrap = bv.canvas.parentElement, old = bv.canvas;
+  const snap = document.createElement('canvas');
+  snap.width = old.width; snap.height = old.height;
+  snap.getContext('2d').drawImage(old, 0, 0);
+  const wr = wrap.getBoundingClientRect(), or = old.getBoundingClientRect();
+  Object.assign(snap.style, { position: 'absolute', left: or.left - wr.left + 'px', top: or.top - wr.top + 'px', width: or.width + 'px', height: or.height + 'px' });
+  snap.className = 'zoom-snap';
+  wrap.appendChild(snap);
+  startBattle(expedition.setup(), 'expedition');
+  paused = true;
+  requestAnimationFrame(() => {
+    const cap = battle.segs[battle.factions[0].capitalSeg];
+    const nr = old.getBoundingClientRect(), tx = cap ? bv.sx(cap.x) : nr.width / 2, ty = cap ? bv.sy(cap.y) : nr.height / 2;
+    // new map starts zoomed in on the capital, old map sits on top and shrinks into it
+    old.style.transformOrigin = `${tx}px ${ty}px`;
+    old.style.transform = 'scale(3)';
+    old.style.opacity = '0';
+    const dx = nr.left - wr.left + tx - (or.left - wr.left + or.width / 2), dy = nr.top - wr.top + ty - (or.top - wr.top + or.height / 2);
+    $('zoom-banner').innerHTML = `Zooming out…<br><b>${expedition.current.name}</b> · ${expedition.current.area}`;
+    $('zoom-banner').classList.add('show');
+    requestAnimationFrame(() => {
+      old.classList.add('zooming');
+      snap.classList.add('zooming');
+      old.style.transform = 'scale(1)';
+      old.style.opacity = '1';
+      snap.style.transform = `translate(${dx}px, ${dy}px) scale(0.06)`;
+      snap.style.opacity = '0';
+    });
+    setTimeout(() => {
+      snap.remove();
+      old.classList.remove('zooming');
+      old.style.transform = old.style.opacity = old.style.transformOrigin = '';
+      $('zoom-banner').classList.remove('show');
+      paused = false;
+      setSpeed(speed);
+    }, 1900);
+  });
+}
 
 let flashTimer = 0;
 function flash(msg) {
@@ -339,6 +461,7 @@ const fmtTime = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padSt
 // ---------- menu, help, keyboard ----------
 $('btn-campaign').onclick = () => show('campaign');
 $('btn-skirmish').onclick = startSkirmish;
+$('btn-expedition').onclick = startExpedition;
 $('btn-help').onclick = () => $('help').classList.remove('hidden');
 $('help-close').onclick = () => $('help').classList.add('hidden');
 $('campaign-back').onclick = () => show('menu');
@@ -384,4 +507,4 @@ setPct(0.5);
 setSpeed(1);
 
 // hooks for headless tests
-window.__fl = { campaign, startSkirmish, startBattle, get battle() { return battle; }, get view() { return bv; }, cview: cv };
+window.__fl = { campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv };

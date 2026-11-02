@@ -145,6 +145,17 @@ export function ground(v, x, id, type, owner) {
         x.beginPath(); x.arc(px - u + rnd(k, 3, seed + px | 0) * u * 2, py - u * 0.6 + rnd(k, 4, seed + py | 0) * u * 1.2, u * 0.18, 0, Math.PI * 2); x.fill();
       }
     }
+  } else if (type === 'capital') {
+    // cobbled town square
+    const [p] = v.spots(id, 1, 0);
+    if (!p) { x.restore(); return; }
+    x.fillStyle = css(snow ? [222, 222, 224] : [196, 186, 168]);
+    x.beginPath(); x.ellipse(p[0], p[1] - u * 0.4, u * 7.5, u * 4.4, 0, 0, Math.PI * 2); x.fill();
+    x.fillStyle = css(snow ? [206, 206, 210] : [176, 166, 148]);
+    for (let i = 0; i < 40; i++) {
+      const a = rnd(i, 21, seed) * Math.PI * 2, d = Math.sqrt(rnd(i, 22, seed));
+      x.fillRect(p[0] + Math.cos(a) * d * u * 6.5, p[1] - u * 0.4 + Math.sin(a) * d * u * 3.6, u * 0.5, u * 0.3);
+    }
   } else if (type === 'lab') {
     // paved plaza with a ring pattern
     const [p] = v.spots(id, 1, 0);
@@ -217,6 +228,28 @@ export function top(v, x, id, type, owner) {
     flag(x, px + u * 3.2, t2, u, col);
     if (a) for (let i = 0; i < 2; i++) tent(x, a[0] + (i - 0.5) * u * 2.6, a[1], u, [226, 218, 200]);
     if (b) for (let r = 0; r < 3; r++) for (let q = 0; q < 5; q++) soldier(x, b[0] + (q - 2) * u * 0.9 + r * u * 0.3, b[1] + (r - 1) * u * 1.1, u, col);
+  } else if (type === 'capital') {
+    // walled town: wall along the segment edge, houses around a tall keep with a big flag
+    x.save();
+    v.gridT(x);
+    x.clip(v.segP[id]);
+    const wpx = (u * 0.7) / v.scale;
+    x.lineJoin = 'round';
+    x.lineWidth = wpx * 2.4;
+    x.strokeStyle = css(stoneDark);
+    x.stroke(v.segP[id]);
+    x.lineWidth = wpx * 1.8;
+    x.strokeStyle = css(lt(stone, 0.15));
+    x.stroke(v.segP[id]);
+    x.restore();
+    const [c, ...homes] = v.spots(id, 7, u * 3.2);
+    if (!c) { x.restore(); return; }
+    const roofs = [roofRed, [150, 110, 80], [120, 130, 150], roofRed];
+    for (const [i, h] of homes.entries()) house(x, h[0], h[1], u * 0.85, wallWhite, roofs[i % roofs.length]);
+    const ty = tower(x, c[0], c[1], u, 3, 5.4, lt(stone, 0.1));
+    tower(x, c[0] - u * 2.2, c[1] + u * 0.3, u, 1.5, 3.6);
+    tower(x, c[0] + u * 2.2, c[1] + u * 0.3, u, 1.5, 3.6);
+    flag(x, c[0], ty, u * 1.5, col);
   } else if (type === 'hospital') {
     // white infirmary with a red cross, medical tents
     const [c, ...rest] = v.spots(id, 3, u * 6);

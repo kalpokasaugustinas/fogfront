@@ -1,17 +1,23 @@
 // battle simulation: segments, troops, buildings, armies. no drawing here,
 // so the same code runs in the browser and in headless tests.
-import { rules, buildings, effects } from './config.js?v=14';
-import { rng, spreadStarts } from './mapgen.js?v=14';
-import { think } from './ai.js?v=14';
+import { rules, buildings, effects } from './config.js?v=15';
+import { rng, spreadStarts } from './mapgen.js?v=15';
+import { think } from './ai.js?v=15';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
 export class Battle {
-  // map: from generateMap. opts: { seed, factions: [{ ai, personality, think }], neutral: [min, max] }
+  // map: from generateMap. opts: { seed, factions: [...], neutral: [min, max] }
+  // faction: { ai, personality, think, mods?, capital? }
+  //   mods    = perk modifiers (expedition): speed, atk, farm, hospital, lab, growth, cost, fort,
+  //             neutralDef, capitalDef, reserve, loot (see expedition.js)
+  //   capital = { troops, bonus }: the faction starts in a capital (no building allowed there) that
+  //             holds up to capMax troops; the rest is a reserve that flows in over time.
+  //             bonus = { growth, hosp, lab, def, atk } carried over from the previous stage
   constructor(map, opts) {
     this.map = map;
     this.rand = rng(opts.seed ?? 1);
-    this.factions = opts.factions.map((f, id) => ({ id, ...f, timer: 1 + this.rand() * 2 }));
+    this.factions = opts.factions.map((f, id) => ({ id, mods: {}, reserve: 0, capitalSeg: -1, ...f, timer: 1 + this.rand() * 2 }));
     this.time = 0;
     this.version = 0;          // bumps on ownership/building change (renderer repaints the map)
     this.state = 'running';    // running | won | lost
@@ -36,29 +42,64 @@ export class Battle {
       };
     });
     spreadStarts(map, this.factions.length, this.rand).forEach((sid, f) => {
-      this.segs[sid].owner = f;
-      this.segs[sid].troops = rules.startTroops;
+      const s = this.segs[sid], fac = this.factions[f];
+      s.owner = f;
+      s.troops = rules.startTroops;
+      if (fac.capital) {
+        // capital: full at the start, the rest waits in the reserve
+        s.capital = true;
+        s.building = 'capital';
+        s.cap = rules.capMax;
+        s.bonus = { growth: 0, hosp: 0, lab: 0, def: 0, atk: 0, ...fac.capital.bonus };
+        s.troops = Math.min(s.cap, fac.capital.troops);
+        fac.reserve = Math.max(0, fac.capital.troops - s.cap);
+        fac.capitalSeg = sid;
+      }
     });
     this.updateGrowth();
   }
 
-  // growth multiplier per segment: farm (own), hospitals (adjacent own), labs (whole faction)
+  mods(f) { return f >= 0 ? this.factions[f].mods : {}; }
+
+  // growth multiplier per segment: farm (own), hospitals (adjacent own), labs (whole faction),
+  // capital bonuses (own growth, hospital-like aura, faction-wide lab part), perk modifiers
   updateGrowth() {
-    const labs = this.factions.map((f) => this.segs.filter((s) => s.owner === f.id && s.building === 'lab').length);
+    const labBonus = this.factions.map((f) => {
+      const labs = this.segs.filter((s) => s.owner === f.id && s.building === 'lab').length;
+      const caps = this.segs.filter((s) => s.owner === f.id && s.capital).reduce((v, s) => v + s.bonus.lab, 0);
+      return labs * effects.labGrowth * (f.mods.lab ?? 1) + caps;
+    });
     for (const s of this.segs) {
       if (s.owner < 0) { s.growth = 0; continue; }
-      let mult = 1 + labs[s.owner] * effects.labGrowth;
-      if (s.building === 'farm') mult += effects.farmGrowth;
+      const m = this.mods(s.owner);
+      let mult = 1 + labBonus[s.owner];
+      if (s.building === 'farm') mult += effects.farmGrowth * (m.farm ?? 1);
+      if (s.capital) mult += s.bonus.growth;
       for (const a of s.adj) {
         const n = this.segs[a];
-        if (n.owner === s.owner && n.building === 'hospital') mult += effects.hospitalGrowth;
+        if (n.owner !== s.owner) continue;
+        if (n.building === 'hospital') mult += effects.hospitalGrowth * (m.hospital ?? 1);
+        if (n.capital) mult += n.bonus.hosp;
       }
-      s.growth = round1(s.baseGrowth * mult);
+      s.growth = round1(s.baseGrowth * mult * (m.growth ?? 1));
     }
   }
 
-  defMult(s) { return s.building === 'fort' ? effects.fortDefense : 1; }
-  atkMult(s) { return s.building === 'barracks' ? effects.barracksAttack : 1; }
+  defMult(s) {
+    const m = this.mods(s.owner);
+    let d = s.building === 'fort' ? (m.fort ?? effects.fortDefense) : 1;
+    if (s.capital) d += s.bonus.def + (m.capitalDef ?? 0);
+    return d;
+  }
+
+  atkMult(s) {
+    let a = s.building === 'barracks' ? effects.barracksAttack : 1;
+    if (s.capital) a += s.bonus.atk;
+    return a * (this.mods(s.owner).atk ?? 1);
+  }
+
+  // building price for faction f (perk: engineers)
+  costOf(f, type) { return Math.round(buildings[type].cost * (this.mods(f).cost ?? 1)); }
 
   // faction f sends n troops from segment a to adjacent segment b
   send(f, a, b, n, auto = false) {
@@ -67,7 +108,7 @@ export class Battle {
     if (this.state !== 'running' || from.owner !== f || !from.adj.includes(b) || n < 1) return false;
     from.troops -= n;
     const to = this.segs[b];
-    const dur = Math.hypot(to.x - from.x, to.y - from.y) / rules.armySpeed;
+    const dur = Math.hypot(to.x - from.x, to.y - from.y) / (rules.armySpeed * (this.mods(f).speed ?? 1));
     this.armies.push({ owner: f, n, atk: this.atkMult(from), from: a, to: b, t: 0, dur });
     if (f === 0 && !auto) this.stats.sent++;
     return true;
@@ -76,8 +117,10 @@ export class Battle {
   // faction f builds type in segment s, paid with troops from that segment
   build(f, sid, type) {
     const s = this.segs[sid], b = buildings[type];
-    if (this.state !== 'running' || s.owner !== f || !b || s.building === type || s.troops < b.cost) return false;
-    s.troops -= b.cost;
+    if (this.state !== 'running' || s.owner !== f || !b || s.capital || s.building === type) return false;
+    const cost = this.costOf(f, type);
+    if (s.troops < cost) return false;
+    s.troops -= cost;
     s.building = type;
     this.version++;
     this.updateGrowth();
@@ -89,15 +132,20 @@ export class Battle {
   arrive(a) {
     const t = this.segs[a.to];
     if (t.owner === a.owner) { t.troops += a.n; return; }
-    const atk = a.n * a.atk, def = t.troops * this.defMult(t);
+    const atk = a.n * a.atk;
+    // perk: conscription makes neutrals defend weaker against this attacker
+    const dm = this.defMult(t) * (t.owner < 0 ? (this.mods(a.owner).neutralDef ?? 1) : 1), def = t.troops * dm;
     if (atk > def) {
+      const prev = t.owner;
       t.owner = a.owner;
       t.troops = (atk - def) / a.atk;
+      // perk: plunder adds part of an enemy segment's cap when it's taken
+      if (prev >= 0) t.troops += t.cap * (this.mods(a.owner).loot ?? 0);
       this.version++;
       this.updateGrowth();
       if (a.owner === 0) this.stats.captured++;
     } else {
-      t.troops = (def - atk) / this.defMult(t);
+      t.troops = (def - atk) / dm;
     }
   }
 
@@ -131,6 +179,14 @@ export class Battle {
       if (s.owner < 0) continue;
       if (s.troops < s.cap) s.troops = Math.min(s.cap, s.troops + s.growth * dt);
       else s.troops = Math.max(s.cap, s.troops - rules.overCapDecay * dt);
+    }
+    // reserves flow into each faction's capital while it has room (and is still theirs)
+    for (const f of this.factions) {
+      const s = this.segs[f.capitalSeg];
+      if (!f.reserve || !s || s.owner !== f.id || s.troops >= s.cap) continue;
+      const flow = Math.min(f.reserve, s.cap - s.troops, Math.max(5, f.reserve * 0.04) * (f.mods.reserve ?? 1) * dt);
+      s.troops += flow;
+      f.reserve -= flow;
     }
     for (const a of this.armies) {
       a.t += dt / a.dur;
