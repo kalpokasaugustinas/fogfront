@@ -183,13 +183,6 @@ html.compact .stars span { font-size: 30px; } html.compact .stars span:nth-child
 .perk small { color: rgba(255,255,255,0.92); font-size: 12px; line-height: 1.25; }
 .zooming { transition: transform 1.7s cubic-bezier(0.45, 0, 0.2, 1), opacity 1.7s ease; }
 .zoom-snap { pointer-events: none; z-index: 2; }
-#zoom-banner {
-  position: fixed; left: 50%; top: 22%; transform: translate(-50%, 0); opacity: 0; pointer-events: none; z-index: 15;
-  text-align: center; font-size: 15px; color: #fff; background: rgba(30, 45, 50, 0.55); padding: 10px 18px; border-radius: 14px;
-  transition: opacity 0.4s;
-}
-#zoom-banner.show { opacity: 1; }
-#zoom-banner b { font-size: 24px; }
 
 .toggle.off { opacity: 0.45; text-decoration: line-through; }
 .toggle.small { padding: 4px 8px; font-size: 13px; }

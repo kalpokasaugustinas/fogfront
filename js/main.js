@@ -1,13 +1,13 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=32';
-import { generateMap, rng } from './mapgen.js?v=32';
-import { Battle } from './battle.js?v=32';
-import { personalities } from './ai.js?v=32';
-import { Campaign } from './campaign.js?v=32';
-import { Expedition, stages, perks } from './expedition.js?v=32';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=32';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=32';
-import { previewBuildings } from './structures.js?v=32';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=33';
+import { generateMap, rng } from './mapgen.js?v=33';
+import { Battle } from './battle.js?v=33';
+import { personalities } from './ai.js?v=33';
+import { Campaign } from './campaign.js?v=33';
+import { Expedition, stages, perks } from './expedition.js?v=33';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=33';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=33';
+import { previewBuildings } from './structures.js?v=33';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -724,13 +724,13 @@ function endStage(won) {
 }
 
 // zoom-out: the old map shrinks into the new capital while the bigger map fades in around it
-// expedition stage change as one continuous camera pull-back:
-// 1. the won island (a snapshot) stays put; the new map fades in behind it, zoomed in so that the
-//    new capital (which has the old island's outline) lies exactly under the old island
-// 2. the camera pulls back slowly: the new map shrinks to its normal size and the snapshot shrinks
-//    with it, riding on the capital tile, and blends into it, so the old battlefield visibly
-//    becomes one tile of the bigger map
-const zoomHold = 0.7, zoomTime = 4.2;   // seconds: still frame + fade-in, then the pull-back
+// expedition stage change, told without words in three steps:
+// 1. shrink: only the won island (a snapshot) is left over the fog and shrinks smoothly to the size
+//    and place of the new capital tile (the capital has the old island's outline)
+// 2. glow: the little island pulses gold: it has become one tile
+// 3. reveal: the new map grows outward from that tile in a widening circle, and the little island
+//    fades into the capital tile underneath
+const zoomSteps = { hold: 0.5, shrink: 2.2, glow: 0.7, reveal: 1.8 };   // seconds
 function zoomOut() {
   const wrap = bv.canvas.parentElement, old = bv.canvas;
   // old island: bounding box of its tiles, in canvas css px
@@ -760,27 +760,31 @@ function zoomOut() {
     const capId = battle.factions[0].capitalSeg, nr = pageRect(old), no = { x: nr.left - wr.left, y: nr.top - wr.top };
     const box = bv.boxes[capId] ?? [0, 0, g - 1, g - 1];
     const cc = { x: bv.sx((box[0] + box[2] + 1) / 2), y: bv.sy((box[1] + box[3] + 1) / 2), w: (box[2] - box[0] + 1) * bv.scale };
-    const ratio = Math.min(1, cc.w / Math.max(1, oc.w)), z0 = 1 / Math.max(0.04, ratio);   // new map's start zoom
-    const start = so.x + oc.x, startY = so.y + oc.y, end = no.x + cc.x, endY = no.y + cc.y;   // capital centre: from / to
-    $('zoom-banner').innerHTML = `Zooming out…<br><b>${expedition.current.name}</b>`;
-    $('zoom-banner').classList.add('show');
+    const ratio = Math.min(1, cc.w / Math.max(1, oc.w));   // old island -> capital tile size
+    const from = { x: so.x + oc.x, y: so.y + oc.y }, to = { x: no.x + cc.x, y: no.y + cc.y };   // island centre on screen
+    const farthest = Math.hypot(Math.max(cc.x, nr.width - cc.x), Math.max(cc.y, nr.height - cc.y));   // reveal radius at the end
+    const { hold, shrink, glow, reveal } = zoomSteps, total = hold + shrink + glow + reveal;
+    const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
+    const phase = (t, a, d) => Math.min(1, Math.max(0, (t - a) / d));
     const t0 = performance.now();
-    const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);   // slow in, slow out
     const tick = (now) => {
-      const t = (now - t0) / 1000, k = ease(Math.min(1, Math.max(0, (t - zoomHold) / zoomTime)));
-      // zoom falls off exponentially (feels like a steady camera speed); the capital centre glides
-      // from where the old island was to its place on the new map
-      const z = z0 ** (1 - k), px = start + (end - start) * k, py = startY + (endY - startY) * k;
-      old.style.transformOrigin = '0 0';
-      old.style.transform = `translate(${px - no.x - z * cc.x}px, ${py - no.y - z * cc.y}px) scale(${z})`;
-      old.style.opacity = String(Math.min(1, t / zoomHold));
-      const sz = z * ratio;   // the old island keeps covering the capital tile
-      snap.style.transform = `translate(${px - so.x - sz * oc.x}px, ${py - so.y - sz * oc.y}px) scale(${sz})`;
-      snap.style.opacity = String(1 - Math.min(1, Math.max(0, (k - 0.2) / 0.45)));
-      if (t < zoomHold + zoomTime) { requestAnimationFrame(tick); return; }
+      const t = (now - t0) / 1000;
+      // 1. shrink (scale falls off exponentially, so it reads as a steady pull-back)
+      const k = ease(phase(t, hold, shrink)), s = ratio ** k;
+      const px = from.x + (to.x - from.x) * k, py = from.y + (to.y - from.y) * k;
+      snap.style.transform = `translate(${px - so.x - s * oc.x}px, ${py - so.y - s * oc.y}px) scale(${s})`;
+      // 2. glow: a gold pulse around the little island
+      const gk = phase(t, hold + shrink, glow), pulse = Math.sin(gk * Math.PI);
+      snap.style.filter = pulse > 0.01 ? `drop-shadow(0 0 ${2 + 10 * pulse}px rgba(255, 210, 90, ${0.9 * pulse}))` : '';
+      // 3. reveal: the new map in a growing soft-edged circle around the capital; the island fades
+      const rk = ease(phase(t, hold + shrink + glow * 0.5, reveal)), rad = 6 + rk * (farthest + 60);
+      const mask = `radial-gradient(circle at ${cc.x}px ${cc.y}px, #000 ${Math.max(0, rad - 50)}px, transparent ${rad}px)`;
+      old.style.opacity = rk > 0 ? '1' : '0';
+      old.style.webkitMaskImage = old.style.maskImage = rk >= 1 ? '' : mask;
+      snap.style.opacity = String(1 - phase(t, hold + shrink + glow * 0.6, reveal * 0.5));
+      if (t < total) { requestAnimationFrame(tick); return; }
       snap.remove();
-      old.style.transform = old.style.opacity = old.style.transformOrigin = '';
-      $('zoom-banner').classList.remove('show');
+      old.style.opacity = old.style.webkitMaskImage = old.style.maskImage = '';
       paused = false;
       setSpeed(speed);
     };

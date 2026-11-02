@@ -131,10 +131,10 @@ try:
                     page.locator("#end-perks .perk").first.click()
                     if stage == 0:
                         # frames of the zoom-out: still frame, early, middle, late pull-back
-                        for i, ms in enumerate([300, 1200, 1300, 1200]):
+                        for i, ms in enumerate([1200, 1500, 1000, 900]):
                             page.wait_for_timeout(ms)
                             page.screenshot(path=str(out / f"expedition-zoom{i}.png"))
-                        page.wait_for_timeout(1400)
+                        page.wait_for_timeout(1000)
                     else:
                         page.wait_for_timeout(5400)
                     info = page.evaluate("""(() => { const b = __fl.battle, e = __fl.expedition, me = b.segs[b.factions[0].capitalSeg];
