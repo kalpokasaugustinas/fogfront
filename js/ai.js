@@ -1,13 +1,15 @@
 // bot brain. called every few seconds per bot faction (interval = faction.think).
 // personality: { build: chance to build per think, risk: troop safety margin,
-//                attacks: max attacks per think, grudge: extra value for player segments }
+//                actions: max moves per think (build, attack or reinforce, shared budget
+//                so a big empire doesn't act faster than a small one),
+//                grudge: extra value for player segments }
 import { rules, buildings, effects } from './config.js';
 import { hops } from './mapgen.js';
 
 export const personalities = {
-  aggressive: { build: 0.25, risk: 1.15, attacks: 2, grudge: 0.3 },
-  builder:    { build: 0.7,  risk: 1.35, attacks: 1, grudge: 0 },
-  turtle:     { build: 0.5,  risk: 1.6,  attacks: 1, grudge: -0.2 },
+  aggressive: { build: 0.25, risk: 1.15, actions: 2, grudge: 0.3 },
+  builder:    { build: 0.7,  risk: 1.35, actions: 1, grudge: 0 },
+  turtle:     { build: 0.5,  risk: 1.6,  actions: 1, grudge: -0.2 },
 };
 
 export function think(b, f) {
@@ -18,15 +20,18 @@ export function think(b, f) {
   // front distance: 0 = touches a non-own segment, 1 = one step behind the front, ...
   const front = hops(b.map, mine.filter((s) => s.adj.some((a) => segs[a].owner !== me)).map((s) => s.id));
 
+  let budget = p.actions;
+
   // 1. build: at most one building per think
   if (b.rand() < p.build) {
     const reserve = 8;
     for (const s of shuffle(mine, b.rand)) {
       if (s.building) continue;
       const type = pickBuilding(b, s, front[s.id], mine.length);
-      if (s.troops >= buildings[type].cost + reserve && b.build(me, s.id, type)) break;
+      if (s.troops >= buildings[type].cost + reserve && b.build(me, s.id, type)) { budget--; break; }
     }
   }
+  if (budget <= 0) return;
 
   // 2. attack: rank adjacent targets by value per troop needed
   const options = [];
@@ -51,19 +56,21 @@ export function think(b, f) {
   }
   options.sort((x, y) => y.score - x.score);
   const used = new Set();
-  let done = 0;
   for (const o of options) {
-    if (done >= p.attacks || used.has(o.s.id) || used.has('t' + o.tid)) continue;
-    if (b.send(me, o.s.id, o.tid, o.send)) { used.add(o.s.id); used.add('t' + o.tid); done++; }
+    if (budget <= 0) return;
+    if (used.has(o.s.id) || used.has('t' + o.tid)) continue;
+    if (b.send(me, o.s.id, o.tid, o.send)) { used.add(o.s.id); used.add('t' + o.tid); budget--; }
   }
 
-  // 3. reinforce: interior segments push troops one step toward the front
-  for (const s of mine) {
-    if (used.has(s.id) || front[s.id] < 1 || s.troops < s.cap * 0.5) continue;
+  // 3. reinforce with what's left: the fullest interior segment pushes troops one step toward the front
+  const back = mine.filter((s) => !used.has(s.id) && front[s.id] >= 1 && s.troops >= s.cap * 0.5)
+    .sort((x, y) => y.troops - x.troops);
+  for (const s of back) {
+    if (budget <= 0) return;
     const next = s.adj.map((a) => segs[a]).filter((n) => n.owner === me && front[n.id] < front[s.id]);
     if (!next.length) continue;
     next.sort((x, y) => x.troops - y.troops);
-    b.send(me, s.id, next[0].id, s.troops * 0.7);
+    if (b.send(me, s.id, next[0].id, s.troops * 0.7)) budget--;
   }
 }
 

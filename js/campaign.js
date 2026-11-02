@@ -38,8 +38,8 @@ export class Campaign {
         level: d,
         segments: Math.min(34, 10 + d * 4),
         bots: Math.min(4, 1 + Math.floor((d + rand()) / 1.6)),
-        think: Math.max(0.9, 2.8 - d * 0.35),   // seconds between bot decisions
-        neutral: [6 + d * 2, 20 + d * 5],
+        think: Math.max(1.8, 3.5 - d * 0.35),   // seconds between bot decisions
+        neutral: [30 + d * 10, 100 + d * 25],
         seed: Math.floor(rand() * 1e9),
       };
     });

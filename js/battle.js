@@ -19,7 +19,7 @@ export class Battle {
     this.stats = { sent: 0, captured: 0, built: 0 };
 
     // segments: cap and base growth come from the segment's size
-    const [nmin, nmax] = opts.neutral ?? [8, 30];
+    const [nmin, nmax] = opts.neutral ?? [40, 150];
     const maxArea = Math.max(...map.segs.map((s) => s.area));
     this.segs = map.segs.map((s) => {
       const size = Math.min(2, Math.max(0.4, s.area / map.avgArea));

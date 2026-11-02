@@ -32,8 +32,8 @@ sim_js = """async () => {
   const types = Object.keys(personalities), res = [];
   for (let i = 0; i < 12; i++) {
     const map = generateMap({ seed: 100 + i, cells: 22, grid: 480 });
-    const factions = [0, 1, 2, 3].map((c) => ({ ai: true, color: c, think: 2, personality: personalities[types[(i + c) % 3]] }));
-    const b = new Battle(map, { seed: i, factions, neutral: [8, 28] });
+    const factions = [0, 1, 2, 3].map((c) => ({ ai: true, color: c, think: 3, personality: personalities[types[(i + c) % 3]] }));
+    const b = new Battle(map, { seed: i, factions, neutral: [40, 140] });
     const t0 = performance.now();
     b.simulate(1200);
     const owners = b.segs.map((s) => s.owner);

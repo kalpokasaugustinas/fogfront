@@ -91,9 +91,9 @@ function startBattle(setup, m, rid = -1) {
 function startSkirmish() {
   const seed = Math.floor(Math.random() * 1e9), r = rng(seed), types = Object.keys(personalities);
   startBattle({
-    seed, cells: 22, neutral: [8, 28],
+    seed, cells: 22, neutral: [40, 140],
     factions: [{ ai: false, color: 0 }, ...[1, 2, 3].map((color) => ({
-      ai: true, color, think: 2, personality: personalities[types[Math.floor(r() * types.length)]],
+      ai: true, color, think: 3, personality: personalities[types[Math.floor(r() * types.length)]],
     }))],
   }, 'skirmish');
 }
