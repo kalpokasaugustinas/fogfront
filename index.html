@@ -5,19 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#a9bcbc">
   <title>Frontlines</title>
-  <link rel="stylesheet" href="style.css?v=19">
+  <link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
   <!-- main menu -->
   <section id="menu" class="screen">
-    <h1>Frontlines</h1>
-    <p class="tag">Conquer the map, one region at a time. Do the math, pick your fights.</p>
-    <button id="btn-campaign" class="primary">🗺️ Campaign</button>
-    <button id="btn-expedition">🧭 Expedition</button>
-    <button id="btn-skirmish">⚔️ Quick battle</button>
-    <button id="btn-help">❔ How to play</button>
-    <div class="row-btns"><button id="btn-sfx" class="toggle">🔊 Sound</button><button id="btn-music" class="toggle">🎵 Music</button></div>
-    <span id="version">build 19 · 2026-11-02 17:35</span>
+    <!-- live demo battle behind everything -->
+    <div class="menu-bg"><canvas id="menu-canvas"></canvas></div>
+    <div class="menu-fog"></div>
+    <header class="menu-top">
+      <span class="badge" id="m-regions" title="Campaign regions">🏳️ 1/34</span>
+      <span class="badge" id="m-best" title="Best expedition">🧭 —</span>
+      <span class="badge" id="m-wins" title="Quick battle wins">🏆 0</span>
+      <span class="spacer"></span>
+      <button id="btn-sfx" class="round toggle" title="Sound">🔊</button>
+      <button id="btn-music" class="round toggle" title="Music">🎵</button>
+      <button id="btn-help" class="round" title="How to play">❔</button>
+    </header>
+    <div class="logo">
+      <h1>FRONTLINES</h1>
+      <div class="ribbon">Conquer the map, one region at a time</div>
+    </div>
+    <div class="modes">
+      <button id="btn-campaign" class="mode blue pulse"><span class="m-ico">🗺️</span><span class="m-txt"><b>Campaign</b><small id="m-campaign">34 regions · 4 empires</small></span><span class="play">PLAY</span></button>
+      <button id="btn-expedition" class="mode gold"><span class="m-ico">🧭</span><span class="m-txt"><b>Expedition</b><small id="m-expedition">Valley → World roguelite</small></span><span class="play">GO</span></button>
+      <button id="btn-skirmish" class="mode green"><span class="m-ico">⚔️</span><span class="m-txt"><b>Quick battle</b><small>Random island · 3 rivals</small></span><span class="play">FIGHT</span></button>
+    </div>
+    <span id="version">build 20 · 2026-11-02 17:41</span>
   </section>
 
   <!-- campaign world map -->
@@ -91,6 +105,6 @@
 
   <div id="zoom-banner"></div>
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=19"></script>
+  <script type="module" src="js/main.js?v=20"></script>
 </body>
 </html>

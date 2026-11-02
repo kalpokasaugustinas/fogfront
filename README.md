@@ -41,8 +41,11 @@ Prototype stage.
 
 Keys: space = pause, 1–4 = send %, A = auto toggle, Esc = deselect.
 
+## Menu
+A live 4-bot battle plays on a decorative island behind the menu (new island when it ends). Glossy logo, 3D mode cards with progress (campaign regions, best expedition stage, quick battle wins), sound/music/help buttons.
+
 ## Sound
-All synthesized with Web Audio, no sound files: marching steps while armies walk, war cries when fights start, sword clashes during fights, horns when you take or lose a tile, and a generative medieval-folk music loop (D dorian: drone, plucked arpeggios, frame drum). Sound and music toggles on the menu (music also in the battle bar), remembered per browser.
+All synthesized with Web Audio, no sound files: marching steps while armies walk, war cries when fights start, sword clashes during fights, horns when you take or lose a tile, and two generative music tracks: a heroic D-major theme on the menus (brass chords, horn melody, timpani) and a medieval-folk loop in battle (D dorian: drone, plucked arpeggios, frame drum). Sound and music toggles on the menu (music also in the battle bar), remembered per browser.
 
 ## Code
 Vanilla JS modules plus canvas 2D. No build step, no dependencies.

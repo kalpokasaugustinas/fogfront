@@ -1,12 +1,12 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=19';
-import { generateMap, rng } from './mapgen.js?v=19';
-import { Battle } from './battle.js?v=19';
-import { personalities } from './ai.js?v=19';
-import { Campaign } from './campaign.js?v=19';
-import { Expedition, stages } from './expedition.js?v=19';
-import { initAudio, sfx, setSfx, setMusic, audioPrefs } from './audio.js?v=19';
-import { MapView, hexToRgb, shade, label, pill, unitSprite } from './render.js?v=19';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=20';
+import { generateMap, rng } from './mapgen.js?v=20';
+import { Battle } from './battle.js?v=20';
+import { personalities } from './ai.js?v=20';
+import { Campaign } from './campaign.js?v=20';
+import { Expedition, stages } from './expedition.js?v=20';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=20';
+import { MapView, hexToRgb, shade, label, pill, unitSprite } from './render.js?v=20';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -19,6 +19,8 @@ const neutral = hexToRgb(neutralColor);
 function show(id) {
   for (const s of document.querySelectorAll('.screen')) s.classList.toggle('hidden', s.id !== id);
   screen = id;
+  setTrack(id === 'battle' ? 'battle' : 'menu');   // heroic theme on menus, folk loop in battle
+  if (id === 'menu') { renderMenuStats(); requestAnimationFrame(() => mv?.resize()); }
   requestAnimationFrame(() => { if (id === 'battle' && bv) { bv.resize(); key = ''; } if (id === 'campaign') cv.resize(), paintCampaign(); });
 }
 let screen = 'menu';
@@ -144,35 +146,33 @@ function paintBattle() {
   renderBuildPanel();
 }
 
-function drawBattle() {
-  paintBattle();
-  const ctx = bv.drawBase();
-  // selected segment: glowing outline; its neighbours: dashed outlines
-  if (selected >= 0) bv.highlight(ctx, selected, colors[0], battle.segs[selected].adj, performance.now() / 1000);
-  const fs = Math.max(11, Math.min(18, bv.size / 30));
+// troop figures in tiles, tile numbers, sea routes and armies (marching / fighting) for battle b
+// drawn on view v; ac = not-yet-simulated time (smooth motion); numbers = draw the number badges
+function drawUnits(ctx, v, b, ac, numbers) {
+  const fs = Math.max(11, Math.min(18, v.size / 30));
   // troop figures: one soldier per troopsPerDot troops (battalions of x5 on zoomed-out maps)
-  const z = Math.max(1, Math.min(1.9, bv.size / 480)), dpr = bv.dpr;   // figure scale: small but visible
-  const kind = (battle.map.detail ?? 1) < 0.7 ? 'battalion' : 'soldier';
+  const z = Math.max(1, Math.min(1.9, v.size / 480)), dpr = v.dpr;   // figure scale: small but visible
+  const kind = (b.map.detail ?? 1) < 0.7 ? 'battalion' : 'soldier';
   const per = rules.troopsPerDot * (kind === 'battalion' ? 5 : 1), sp = (kind === 'battalion' ? 12 : 4.6) * z;
-  for (const s of battle.segs) {
-    const spots = bv.troopSpots(s.id, sp);
+  for (const s of b.segs) {
+    const spots = v.troopSpots(s.id, sp);
     const n = Math.min(spots.length, Math.ceil(s.troops / per - 0.01));
-    const u = unitSprite(kind, s.owner < 0 ? '#8a8f86' : factionColors[battle.factions[s.owner].color], z, dpr);
+    const u = unitSprite(kind, s.owner < 0 ? '#8a8f86' : factionColors[b.factions[s.owner].color], z, dpr);
     for (let i = 0; i < n; i++) ctx.drawImage(u.c, spots[i][0] - u.w / 2, spots[i][1] - u.h, u.w, u.h);
   }
   // segment numbers
-  for (const s of battle.segs) {
-    const x = bv.sx(s.x), y = bv.sy(s.y);
-    const own = s.owner >= 0 ? factionColors[battle.factions[s.owner].color] : null;
+  if (numbers) for (const s of b.segs) {
+    const x = v.sx(s.x), y = v.sy(s.y);
+    const own = s.owner >= 0 ? factionColors[b.factions[s.owner].color] : null;
     pill(ctx, Math.floor(s.troops), x, y, fs * 0.85, own ?? 'rgba(90,100,95,.55)', own ?? '#4b5552');
   }
   // sea routes (world-style maps): dashed lines between islands
-  if (battle.map.bridges?.length) {
+  if (b.map.bridges?.length) {
     ctx.save();
     ctx.setLineDash([5, 5]);
-    ctx.lineDashOffset = -(battle.time + acc) * 14;
-    for (const b of battle.map.bridges) {
-      const x1 = bv.sx(b.ax), y1 = bv.sy(b.ay), x2 = bv.sx(b.bx), y2 = bv.sy(b.by);
+    ctx.lineDashOffset = -(b.time + ac) * 14;
+    for (const br of b.map.bridges) {
+      const x1 = v.sx(br.ax), y1 = v.sy(br.ay), x2 = v.sx(br.bx), y2 = v.sy(br.by);
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo((x1 + x2) / 2, (y1 + y2) / 2 + 10, x2, y2);
       ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(60,80,90,0.25)'; ctx.stroke();
       ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.stroke();
@@ -181,13 +181,13 @@ function drawBattle() {
   }
   // armies: marching formations; at the border they jostle and clash for the fight's 1-3 s
   const now = performance.now() / 1000;
-  for (const a of battle.armies) {
-    const f = battle.segs[a.from], t = battle.segs[a.to];
+  for (const a of b.armies) {
+    const f = b.segs[a.from], t = b.segs[a.to];
     // progress between sim steps: add the not-yet-simulated time, so movement is smooth at any fps
-    const tt = a.fight ? a.t : Math.min(a.stopAt, a.t + acc / a.dur);
-    const x = bv.sx(f.x + (t.x - f.x) * tt), y = bv.sy(f.y + (t.y - f.y) * tt);
-    const ang = Math.atan2(bv.sy(t.y) - bv.sy(f.y), bv.sx(t.x) - bv.sx(f.x)), ca = Math.cos(ang), sa = Math.sin(ang);
-    const col = factionColors[battle.factions[a.owner].color], u = unitSprite(kind, col, z, dpr);
+    const tt = a.fight ? a.t : Math.min(a.stopAt, a.t + ac / a.dur);
+    const x = v.sx(f.x + (t.x - f.x) * tt), y = v.sy(f.y + (t.y - f.y) * tt);
+    const ang = Math.atan2(v.sy(t.y) - v.sy(f.y), v.sx(t.x) - v.sx(f.x)), ca = Math.cos(ang), sa = Math.sin(ang);
+    const col = factionColors[b.factions[a.owner].color], u = unitSprite(kind, col, z, dpr);
     const m = Math.max(1, Math.min(kind === 'battalion' ? 12 : 30, Math.ceil(a.n / per - 0.01)));
     const cols = Math.ceil(Math.sqrt(m)), seed = a.from * 31 + a.to;
     for (let i = 0; i < m; i++) {
@@ -211,8 +211,17 @@ function drawBattle() {
       }
     }
     // small number above the formation (gold rim = barracks bonus)
-    pill(ctx, Math.floor(a.n), x, y - u.h - 7 * z, fs * 0.62, a.atk > 1 ? '#e0a020' : col, col);
+    if (numbers) pill(ctx, Math.floor(a.n), x, y - u.h - 7 * z, fs * 0.62, a.atk > 1 ? '#e0a020' : col, col);
   }
+}
+
+function drawBattle() {
+  paintBattle();
+  const ctx = bv.drawBase();
+  // selected segment: glowing outline; its neighbours: dashed outlines
+  if (selected >= 0) bv.highlight(ctx, selected, colors[0], battle.segs[selected].adj, performance.now() / 1000);
+  const fs = Math.max(11, Math.min(18, bv.size / 30));
+  drawUnits(ctx, bv, battle, acc, true);
   // player routes: dashed arrows with a moving dash
   ctx.save();
   for (const [a, r] of battle.routes) {
@@ -391,6 +400,7 @@ function endBattle() {
   $('end-retry').textContent = '↻ Retry';
   $('end-continue').classList.remove('hidden');
   if (won && mode === 'campaign') { campaign.conquer(regionId); pickedRegion = -1; }
+  if (won && mode === 'skirmish') addQuickWin();
   const st = battle.stats;
   $('end-title').textContent = won ? (mode === 'campaign' ? '🏳️ Region conquered!' : '🏆 Victory!') : '💀 Defeated';
   $('end-stats').innerHTML = statsHtml(battle);
@@ -501,6 +511,48 @@ function flash(msg) {
 
 const fmtTime = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
+// ---------- menu: live demo battle in the background ----------
+// four bots fight on a decorative island behind the menu (attract mode); a new island when it ends
+let demo = null, mv = null, demoAcc = 0, demoN = 0;
+function newDemo() {
+  const seed = 4242 + demoN * 977, r = rng(seed), types = Object.keys(personalities);
+  const map = generateMap({ seed, cells: 18, grid: rules.grid, shape: 'random', obstacles: true });
+  demo = new Battle(map, {
+    seed, neutral: [0.1, 0.25],
+    factions: [0, 1, 2, 3].map((color) => ({ ai: true, color, think: 1.4, personality: personalities[types[Math.floor(r() * types.length)]] })),
+  });
+  // a few ready-made buildings so the island looks lived in
+  const blds = Object.keys(buildings);
+  demo.segs.forEach((s, i) => { if (r() < 0.3 && !s.capital) s.building = blds[i % blds.length]; });
+  const theme = themeNames[demoN % themeNames.length];
+  if (!mv) mv = new MapView($('menu-canvas'), map, theme); else mv.setMap(map, theme);
+  demoN++;
+}
+function drawMenu(dt) {
+  if (!demo || demo.state !== 'running' || demo.time > 240) newDemo();
+  demoAcc += dt;
+  while (demoAcc >= rules.step) { demo.step(rules.step); demoAcc -= rules.step; }
+  demo.events.length = 0;   // demo is silent
+  mv.paint((id) => {
+    const s = demo.segs[id];
+    return { color: s.owner < 0 ? null : colors[demo.factions[s.owner].color], fill: s.owner < 0 ? 0 : 0.16, building: s.building };
+  });
+  drawUnits(mv.drawBase(), mv, demo, demoAcc, false);
+}
+
+// menu badges: campaign progress, best expedition, quick battle wins
+function renderMenuStats() {
+  const best = Expedition.best();
+  $('m-regions').textContent = `🏳️ ${campaign.owned.size}/${campaign.regions.length}`;
+  $('m-best').textContent = best ? `🧭 Stage ${best.stage}` : '🧭 —';
+  $('m-wins').textContent = `🏆 ${quickWins()}`;
+  $('m-campaign').textContent = `${campaign.owned.size}/${campaign.regions.length} regions conquered`;
+  $('m-expedition').textContent = best ? `Best: stage ${best.stage}/5` : 'Valley → World roguelite';
+}
+const wins_key = 'frontlines.quickwins';
+function quickWins() { try { return +localStorage.getItem(wins_key) || 0; } catch { return 0; } }
+function addQuickWin() { try { localStorage.setItem(wins_key, quickWins() + 1); } catch { /* storage blocked */ } }
+
 // ---------- menu, help, keyboard ----------
 $('btn-campaign').onclick = () => show('campaign');
 $('btn-skirmish').onclick = startSkirmish;
@@ -565,6 +617,7 @@ function frame(now) {
     uiTimer -= dt;
     if (uiTimer <= 0) { updatePanel(); uiTimer = 0.15; }
   } else if (screen === 'campaign') drawCampaign();
+  else if (screen === 'menu') drawMenu(dt);
 }
 requestAnimationFrame(frame);
 setPct(0.5);
@@ -581,6 +634,7 @@ function syncAudioButtons() {
 $('btn-sfx').onclick = () => { setSfx(!audioPrefs.sfx); syncAudioButtons(); sfx.click(); };
 $('btn-music').onclick = $('bar-music').onclick = () => { setMusic(!audioPrefs.music); syncAudioButtons(); };
 syncAudioButtons();
+renderMenuStats();
 
 // hooks for headless tests
 window.__fl = { campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv };

@@ -139,13 +139,16 @@ export const sfx = {
 };
 
 // ---------- music ----------
-// d dorian, 72 bpm, 4 chords x 2 bars. each bar: drone pad (root + fifth), a plucked arpeggio
-// with random variation, frame drum on beats 1 and 3. scheduled ~1 s ahead on a timer.
-
-const bpm = 72, beat = 60 / bpm;
-const chords = [[50, 57, 62, 65], [48, 55, 60, 64], [53, 60, 65, 69], [45, 52, 57, 60]];   // dm, c, f, am (midi)
+// two generative tracks, scheduled ~1 s ahead on a timer, one bar at a time:
+//   battle: d dorian folk loop, 72 bpm: drone pad, plucked lute arpeggio, frame drum
+//   menu:   heroic d major theme, 84 bpm (d-a-bm-g): brass-like chord swells, horn melody,
+//           timpani on the downbeat with a roll and cymbal swell every 4th bar
 const mtof = (m) => 440 * 2 ** ((m - 69) / 12);
-let nextBar = 0, bar = 0;
+const tracks = {
+  battle: { bpm: 72, chords: [[50, 57, 62, 65], [48, 55, 60, 64], [53, 60, 65, 69], [45, 52, 57, 60]], bar: battleBar },
+  menu: { bpm: 84, chords: [[50, 57, 62, 66], [45, 52, 57, 61], [47, 54, 59, 62], [43, 50, 55, 59]], bar: menuBar },
+};
+let track = tracks.menu, nextBar = 0, bar = 0;
 
 function startMusic() {
   nextBar = ctx.currentTime + 0.3;
@@ -153,22 +156,71 @@ function startMusic() {
   musicTimer = setInterval(scheduleMusic, 250);
 }
 
+// switch tracks: quick dip of the music bus, then the new track starts on a fresh phrase
+export function setTrack(name) {
+  const next = tracks[name] ?? tracks.menu;
+  if (next === track) return;
+  track = next;
+  bar = 0;
+  if (!ctx) return;
+  const g = musicBus.gain, on = prefs.music ? 0.32 : 0, t = ctx.currentTime;
+  g.cancelScheduledValues(t);
+  g.setTargetAtTime(0, t, 0.15);
+  g.setTargetAtTime(on, t + 0.9, 0.4);
+  nextBar = t + 0.9;
+}
+
 function scheduleMusic() {
   if (!ctx || ctx.state !== 'running') return;
   while (nextBar < ctx.currentTime + 1.2) {
-    const ch = chords[Math.floor(bar / 2) % chords.length], when = nextBar - ctx.currentTime, barLen = beat * 4;
-    // drone pad: soft triangles, slow attack
-    for (const m of [ch[0] - 12, ch[1] - 12]) note({ bus: musicBus, when, freq: mtof(m), type: 'triangle', vol: 0.09, attack: 0.8, dur: barLen + 0.6, cutoff: 900 });
-    // plucked arpeggio: 8 eighth notes, chord tones with the odd passing tone
-    for (let i = 0; i < 8; i++) {
-      if (Math.random() < 0.18) continue;
-      const m = ch[(i * 2 + bar) % 4] + (Math.random() < 0.25 ? 12 : 0);
-      note({ bus: musicBus, when: when + i * beat / 2, freq: mtof(m), type: 'sawtooth', vol: 0.05, attack: 0.004, dur: 0.6, cutoff: 1600 });
-      note({ bus: musicBus, when: when + i * beat / 2, freq: mtof(m) * 2.003, type: 'sine', vol: 0.015, attack: 0.004, dur: 0.35 });
-    }
-    // frame drum: beats 1 and 3, softer ghost note before 3
-    for (const [b, v] of [[0, 0.22], [1.5, 0.07], [2, 0.16]]) noise({ bus: musicBus, when: when + b * beat, type: 'lowpass', freq: 140, q: 1, vol: v, dur: 0.25 });
-    nextBar += barLen;
+    const beat = 60 / track.bpm, ch = track.chords[Math.floor(bar / 2) % track.chords.length];
+    track.bar(nextBar - ctx.currentTime, ch, beat, bar);
+    nextBar += beat * 4;
     bar++;
+  }
+}
+
+function battleBar(when, ch, beat, bar) {
+  const barLen = beat * 4;
+  // drone pad: soft triangles, slow attack
+  for (const m of [ch[0] - 12, ch[1] - 12]) note({ bus: musicBus, when, freq: mtof(m), type: 'triangle', vol: 0.09, attack: 0.8, dur: barLen + 0.6, cutoff: 900 });
+  // plucked arpeggio: 8 eighth notes, chord tones with the odd octave jump
+  for (let i = 0; i < 8; i++) {
+    if (Math.random() < 0.18) continue;
+    const m = ch[(i * 2 + bar) % 4] + (Math.random() < 0.25 ? 12 : 0);
+    note({ bus: musicBus, when: when + i * beat / 2, freq: mtof(m), type: 'sawtooth', vol: 0.05, attack: 0.004, dur: 0.6, cutoff: 1600 });
+    note({ bus: musicBus, when: when + i * beat / 2, freq: mtof(m) * 2.003, type: 'sine', vol: 0.015, attack: 0.004, dur: 0.35 });
+  }
+  // frame drum: beats 1 and 3, softer ghost note before 3
+  for (const [b, v] of [[0, 0.22], [1.5, 0.07], [2, 0.16]]) noise({ bus: musicBus, when: when + b * beat, type: 'lowpass', freq: 140, q: 1, vol: v, dur: 0.25 });
+}
+
+// horn melody: one 2-bar phrase per chord pair, built from chord tones (rhythm in beats)
+const phrases = [[[0, 1], [1, 0.5], [2, 0.5], [3, 2]], [[3, 1.5], [2, 0.5], [1, 1], [0, 1]], [[2, 0.5], [3, 0.5], [2, 1], [1, 2]], [[0, 2], [1, 1], [3, 1]]];
+
+function menuBar(when, ch, beat, bar) {
+  const barLen = beat * 4;
+  // brass-like chord swell: detuned saws through a lowpass, slow attack
+  for (const m of [ch[1], ch[2], ch[3]]) {
+    for (const det of [1, 1.004]) note({ bus: musicBus, when, freq: mtof(m) * det, type: 'sawtooth', vol: 0.022, attack: 0.5, dur: barLen + 0.4, cutoff: 1100 });
+  }
+  note({ bus: musicBus, when, freq: mtof(ch[0] - 12), type: 'triangle', vol: 0.1, attack: 0.05, dur: barLen, cutoff: 600 });   // bass
+  // horn melody on even bars (a phrase spans the next 2 bars' worth of beats when it's long)
+  if (bar % 2 === 0) {
+    let at = 0;
+    for (const [deg, len] of phrases[(bar / 2) % phrases.length]) {
+      const f = mtof(ch[deg] + 12);
+      note({ bus: musicBus, when: when + at * beat, freq: f, type: 'sawtooth', vol: 0.045, attack: 0.06, dur: len * beat * 0.95, cutoff: 1800 });
+      note({ bus: musicBus, when: when + at * beat, freq: f * 0.5, type: 'triangle', vol: 0.03, attack: 0.06, dur: len * beat * 0.95 });
+      at += len;
+    }
+  }
+  // timpani on the downbeat (pitched to the root), roll + cymbal swell into every 4th bar
+  const timp = (w, v) => note({ bus: musicBus, when: w, freq: mtof(ch[0] - 12), type: 'sine', vol: v, attack: 0.005, dur: 0.6, glide: 0.92 });
+  timp(when, 0.22);
+  timp(when + beat * 2, 0.12);
+  if (bar % 4 === 3) {
+    for (let i = 0; i < 8; i++) timp(when + beat * 3 + i * beat / 8, 0.05 + i * 0.012);
+    noise({ bus: musicBus, when: when + beat * 2, type: 'highpass', freq: 5000, q: 0.5, vol: 0.05, dur: beat * 2.2, attack: beat * 2 });
   }
 }
