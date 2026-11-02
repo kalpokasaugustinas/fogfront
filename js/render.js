@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=16';
-import * as structures from './structures.js?v=16';
+import { themes } from './config.js?v=17';
+import * as structures from './structures.js?v=17';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -297,7 +297,8 @@ export class MapView {
     };
     let land = 0;
     for (let c = 0; c < g * g; c++) if (ids[c] >= 0) land++;
-    const clusters = Math.round((land / (g * g)) * 45 * t.trees);
+    const dt = this.map.detail ?? 1;   // zoomed-out maps: smaller trees, more woods
+    const clusters = Math.round((land / (g * g)) * 45 * t.trees / Math.sqrt(dt));
     let i = 0;
     for (let n = 0, tries = 0; n < clusters && tries < clusters * 30; tries++) {
       const cx = hash(i++, 1, this.seed) * g, cy = hash(i++, 2, this.seed) * g;
@@ -306,9 +307,9 @@ export class MapView {
       // a cluster = a small wood: 6-17 trees packed together
       const count = 6 + Math.floor(hash(i++, 3, this.seed) * 12);
       for (let j = 0; j < count; j++) {
-        const a = hash(i++, 4, this.seed) * Math.PI * 2, d = Math.sqrt(hash(i++, 5, this.seed)) * 14 * k;
+        const a = hash(i++, 4, this.seed) * Math.PI * 2, d = Math.sqrt(hash(i++, 5, this.seed)) * 14 * k * Math.max(0.5, dt);
         const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
-        if (ok(x, y)) this.trees.push({ x, y, r: (3.4 + hash(i++, 6, this.seed) * 2.2) * k, seg: ids[Math.floor(y) * g + Math.floor(x)] });
+        if (ok(x, y)) this.trees.push({ x, y, r: (3.4 + hash(i++, 6, this.seed) * 2.2) * k * Math.max(0.45, dt), seg: ids[Math.floor(y) * g + Math.floor(x)] });
       }
     }
     this.trees.sort((a, b) => a.y - b.y);   // draw back to front
@@ -483,6 +484,7 @@ export class MapView {
     x.clip(this.islandP, 'evenodd');
     x.imageSmoothingEnabled = true;
     x.drawImage(this.groundC, 0, 0, g, g);
+    this.drawRivers(x, px);
     x.lineJoin = 'round';
     x.lineWidth = Math.max(1, this.size * 0.0022) * px;
     x.strokeStyle = css(t.lineNeutral, 0.45);
@@ -492,6 +494,30 @@ export class MapView {
     x.stroke(this.islandP);
     x.restore();
     this.base = c;
+  }
+
+  // rivers (visual only): smoothed polylines, drawn in pieces so they widen toward the mouth
+  drawRivers(x, px) {
+    // river blue (icy in winter), independent of the fog colour
+    const t = this.theme, water = t.groundA[0] > 215 ? [128, 168, 196] : [84, 142, 190], dt = this.map.detail ?? 1;
+    x.lineCap = 'round';
+    x.lineJoin = 'round';
+    for (const raw of this.map.rivers ?? []) {
+      const pts = chaikin(chaikin(raw)).slice(2, -2);   // open line: drop the wrap-around corner
+      const pieces = 6, len = pts.length;
+      for (const [col, extra] of [[t.shore, 1.6], [water, 0]]) {
+        x.strokeStyle = css(col, extra ? 0.7 : 0.95);
+        for (let k = 0; k < pieces; k++) {
+          const a = Math.floor((k / pieces) * len), b = Math.min(len - 1, Math.floor(((k + 1) / pieces) * len) + 1);
+          if (b - a < 2) continue;
+          x.lineWidth = ((1.3 + 3.6 * ((k + 1) / pieces)) * (0.6 + 0.4 * dt) + extra) * Math.max(1, this.size / 700) * px;
+          x.beginPath();
+          x.moveTo(pts[a][0], pts[a][1]);
+          for (let i = a + 1; i <= b; i++) x.lineTo(pts[i][0], pts[i][1]);
+          x.stroke();
+        }
+      }
+    }
   }
 
   // static: rock plateaus

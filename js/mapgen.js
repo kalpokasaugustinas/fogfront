@@ -53,7 +53,10 @@ export const terrainTypes = { sea: 0, lake: 1, mountain: 2 };
 
 // shape: a key of shapes, 'random' (picked from the seed) or 'world' (noise continents with islands,
 // linked by sea routes). obstacles: carve lakes + mountain ranges
-export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles = false }) {
+// detail: feature scale (1 = close-up; smaller = seen from further away: smaller, more numerous
+// lakes, ridges and trees). stamp: { n, data } outline (n x n, 0/1) placed as one ready-made segment,
+// e.g. the previous expedition stage's island as the new capital
+export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles = false, detail = 1, stamp = null }) {
   const world = shape === 'world';
   const rand = rng(seed);
   const na = noise2(rand, 3), nb = noise2(rand, 7);
@@ -95,7 +98,8 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
     const cellsIn = [];
     for (let c = 0; c < g * g; c++) if (mask[c]) cellsIn.push(c);
     const n1 = noise2(orand, 9), n2 = noise2(orand, 23), lw1 = noise2(orand, 5), lw2 = noise2(orand, 5);
-    let lakes = Math.floor(orand() * 3) + (world ? 3 : 0), ranges = Math.floor(orand() * 3) + (world ? 4 : 0);
+    const more = Math.round((1 / detail - 1) * 2);   // zoomed out: more, smaller features
+    let lakes = Math.floor(orand() * 3) + (world ? 3 : 0) + more, ranges = Math.floor(orand() * 3) + (world ? 4 : 0) + more;
     if (lakes + ranges === 0) lakes = 1;
     const pick = () => { const c = cellsIn[Math.floor(orand() * cellsIn.length)]; return [c % g, Math.floor(c / g)]; };
 
@@ -103,7 +107,7 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
     const lakeList = [];
     for (let i = 0; i < lakes; i++) {
       const [x, y] = pick();
-      lakeList.push({ x, y, r: g * (world ? 0.025 + orand() * 0.025 : 0.06 + orand() * 0.045) });
+      lakeList.push({ x, y, r: g * (world ? 0.025 + orand() * 0.025 : 0.06 + orand() * 0.045) * Math.sqrt(detail) });
     }
 
     // mountain ridges: a meandering spine plus 1-2 short spurs; width tapers toward the ends
@@ -113,13 +117,13 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
       for (let k = 0; k < steps; k++) {
         pts.push({ x, y, w: width * (0.35 + 0.65 * Math.sin(Math.PI * (k + 0.5) / steps)) });
         ang += (orand() - 0.5) * 0.7;
-        x += Math.cos(ang) * g * 0.022;
-        y += Math.sin(ang) * g * 0.022;
+        x += Math.cos(ang) * g * 0.022 * Math.sqrt(detail);
+        y += Math.sin(ang) * g * 0.022 * Math.sqrt(detail);
       }
       return pts;
     };
     for (let i = 0; i < ranges; i++) {
-      const [x, y] = pick(), ang = orand() * Math.PI * 2, width = g * (0.038 + orand() * 0.02) * (world ? 0.55 : 1);
+      const [x, y] = pick(), ang = orand() * Math.PI * 2, width = g * (0.038 + orand() * 0.02) * (world ? 0.55 : 1) * detail;
       const spine = walk(x, y, ang, 6 + Math.floor(orand() * 6), width);
       ridges.push(spine);
       const spurs = 1 + Math.floor(orand() * 2);
@@ -197,6 +201,31 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
   const blobOf = new Int16Array(g * g).fill(-1);
   islands.forEach((b, i) => { for (const c of b) blobOf[c] = i; });
 
+  // 1c. stamp: resample the given outline to about two segments wide and put it fully on land,
+  //     as far from the land's centre as possible (coastal, like a fair start)
+  const stampCells = new Uint8Array(g * g);
+  let stampAt = null;
+  if (stamp) {
+    const S = Math.max(10, Math.round(Math.sqrt(land.length / n) * 1.5)), sm = [];
+    for (let yy = 0; yy < S; yy++) for (let xx = 0; xx < S; xx++) {
+      if (stamp.data[Math.floor((yy / S) * stamp.n) * stamp.n + Math.floor((xx / S) * stamp.n)]) sm.push([xx, yy]);
+    }
+    const inLand = new Uint8Array(g * g);
+    for (const c of land) inLand[c] = 1;
+    const lcx = land.reduce((v, c) => v + (c % g), 0) / land.length, lcy = land.reduce((v, c) => v + Math.floor(c / g), 0) / land.length;
+    let best = null;
+    for (let tries = 0; tries < 600; tries++) {
+      const c = land[Math.floor(orand() * land.length)], ox = (c % g) - (S >> 1), oy = Math.floor(c / g) - (S >> 1);
+      if (!sm.every(([a, b]) => { const x = ox + a, y = oy + b; return x >= 0 && y >= 0 && x < g && y < g && inLand[y * g + x]; })) continue;
+      const score = Math.hypot(ox + S / 2 - lcx, oy + S / 2 - lcy) + orand() * 3;
+      if (!best || score > best.score) best = { ox, oy, score };
+    }
+    if (best) {
+      for (const [a, b] of sm) stampCells[(best.oy + b) * g + best.ox + a] = 1;
+      stampAt = { x: best.ox + S / 2, y: best.oy + S / 2 };
+    }
+  }
+
   // 2. seed points spread out over the land (min distance rejection sampling), each island gets a
   //    share of the seeds by area (at least one)
   const minDist = Math.sqrt(land.length / n) * 0.8;
@@ -208,12 +237,15 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
       const c = b[Math.floor(rand() * b.length)];
       const x = c % g, y = Math.floor(c / g);
       const d = tries < 15000 ? minDist : minDist * 0.6;   // relax if the island is crowded
+      if (stampCells[c]) continue;
       if (seeds.every((s) => Math.hypot(s.x - x, s.y - y) >= d) && mine.every((s) => Math.hypot(s.x - x, s.y - y) >= d)) mine.push({ x, y, blob: bi });
     }
     if (!mine.length) { const c = b[0]; mine.push({ x: c % g, y: Math.floor(c / g), blob: bi }); }
     seeds.push(...mine);
   });
   const seedsOf = islands.map((_, bi) => seeds.map((s, i) => (s.blob === bi ? i : -1)).filter((i) => i >= 0));
+  // the stamp is one extra segment that owns exactly its cells
+  const stampSeed = stampAt ? seeds.push({ x: stampAt.x, y: stampAt.y, blob: -1 }) - 1 : -1;
 
   // 3. each land cell goes to its nearest seed, measured from a noise-warped
   //    position so borders wiggle instead of being straight lines
@@ -221,6 +253,7 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
   for (const c of land) {
     const x = c % g, y = Math.floor(c / g), u = x / g, w = y / g;
     const px = x + (wx(u, w) - 0.5) * 2 * warp, py = y + (wy(u, w) - 0.5) * 2 * warp;
+    if (stampCells[c]) { ids[c] = stampSeed; continue; }
     // only seeds on the same island, so a segment never spans the sea
     let best = 0, bd = Infinity;
     for (const i of seedsOf[blobOf[c]]) {
@@ -355,8 +388,40 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
       if (ids[m] >= 0 && !near[m]) { near[m] = near[c] + 1; nearType[m] = terrain[c] || nearType[c]; nq.push(m); }
     }
   }
+  // 9. rivers (visual only): start next to mountains or deep inland, walk downhill on the
+  //    distance-to-water field until the coast or a lake; meander via a little randomness
+  const rivers = [];
+  if (obstacles) {
+    const solid = (c) => ids[c] >= 0 || terrain[c] === terrainTypes.mountain;
+    const wdist = new Int16Array(g * g).fill(-1), wq = [];
+    for (let c = 0; c < g * g; c++) {
+      if (!solid(c)) continue;
+      if (nbrs(c).some((m) => !solid(m)) || nbrs(c).length < 4) { wdist[c] = 0; wq.push(c); }
+    }
+    for (let k = 0; k < wq.length; k++) for (const m of nbrs(wq[k])) if (wdist[m] < 0 && solid(m)) { wdist[m] = wdist[wq[k]] + 1; wq.push(m); }
+    const starts = [];
+    for (const c of land) if (ids[c] >= 0 && ((near[c] === 2 && nearType[c] === terrainTypes.mountain) || wdist[c] > g * 0.09)) starts.push(c);
+    const want = Math.min(7, Math.round(2 + 2 * (1 / detail - 1)));
+    const used = new Uint8Array(g * g);
+    for (let r = 0, tries = 0; r < want && tries < want * 25 && starts.length; tries++) {
+      let cur = starts[Math.floor(orand() * starts.length)];
+      if (used[cur] || wdist[cur] < g * 0.04) continue;
+      const pts = [[(cur % g) + 0.5, Math.floor(cur / g) + 0.5]];
+      for (let step = 0; step < g * 2 && wdist[cur] > 0; step++) {
+        const x = cur % g;
+        const opts = [x > 0 ? cur - 1 : -1, x < g - 1 ? cur + 1 : -1, cur - g, cur + g, x > 0 ? cur - g - 1 : -1, x < g - 1 ? cur - g + 1 : -1, x > 0 ? cur + g - 1 : -1, x < g - 1 ? cur + g + 1 : -1]
+          .filter((m) => m >= 0 && m < g * g && ids[m] >= 0 && wdist[m] >= 0 && wdist[m] <= wdist[cur]);
+        if (!opts.length) break;
+        cur = opts.reduce((a, m) => (wdist[m] + orand() * 1.6 < wdist[a] + orand() * 1.6 ? m : a));
+        used[cur] = 1;
+        if (step % 2) pts.push([(cur % g) + 0.5, Math.floor(cur / g) + 0.5]);
+      }
+      if (pts.length > 12) { rivers.push(pts); r++; }
+    }
+  }
   return {
-    grid: g, ids, edge, avgArea, shape, terrain, near, nearType, bridges, islands: islands.length,
+    grid: g, ids, edge, avgArea, shape, terrain, near, nearType, bridges, islands: islands.length, detail, rivers,
+    stampSeg: stampSeed >= 0 && remap.has(stampSeed) ? remap.get(stampSeed) : -1,
     bdist: dist,   // steps from each land cell to its segment's border
     relief,   // mountain height / lake depth, 0..1
     segs: segs.map((s) => ({ id: s.id, area: s.area, x: s.x, y: s.y, adj: [...s.adj], coast: !!s.coast })),
@@ -413,14 +478,14 @@ export function hops(map, starts) {
 // fair starting segments (player first, then bots): all on the coast, spread evenly around the
 // island by angle, then the layout whose hop distances between starts are largest and most even.
 // every coast segment is tried as the anchor; a little randomness picks among near-equal layouts
-export function spreadStarts(map, k, rand) {
+export function spreadStarts(map, k, rand, first = -1) {
   const coast = map.segs.filter((s) => s.coast);
   if (coast.length >= k * 2) {
     const cx = map.segs.reduce((a, s) => a + s.x, 0) / map.segs.length, cy = map.segs.reduce((a, s) => a + s.y, 0) / map.segs.length;
     const ang = (s) => Math.atan2(s.y - cy, s.x - cx);
     const diff = (a, b) => Math.abs(((a - b + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
     let best = null;
-    for (const s0 of coast) {
+    for (const s0 of first >= 0 ? [map.segs[first]] : coast) {
       const pick = [s0.id];
       for (let i = 1; i < k; i++) {
         const target = ang(s0) + (i * Math.PI * 2) / k;
@@ -433,8 +498,8 @@ export function spreadStarts(map, k, rand) {
       const score = Math.min(...d) * 2 - (Math.max(...d) - Math.min(...d)) + rand() * 0.8;
       if (!best || score > best.score) best = { score, pick };
     }
-    // shuffle who gets which spot, so the player isn't always on the same side
-    const pick = best.pick, r = Math.floor(rand() * k);
+    // shuffle who gets which spot, so the player isn't always on the same side (unless fixed)
+    const pick = best.pick, r = first >= 0 ? 0 : Math.floor(rand() * k);
     return pick.slice(r).concat(pick.slice(0, r));
   }
   const starts = [Math.floor(rand() * map.segs.length)];

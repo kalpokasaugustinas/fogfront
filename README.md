@@ -7,11 +7,13 @@ Prototype stage.
 ## How it plays
 - **Campaign:** a generated world of ~34 regions: a continent with bays, mountain ranges and lakes, plus islands linked by sea routes. 4 rival empires hold the regions. Each region has a climate by location (snowy north, autumn east, moor west, summer south) that its battle uses. Attack any region next to one you own (or across a sea route). Difficulty grows with distance from home: more segments, more enemies, stronger neutrals, faster bots. Progress is saved in the browser.
 - **🧭 Expedition (roguelite):** 5 stages that zoom out: Valley (5 km²) → Region → Country → Continent → World (510 million km²). Win a stage and everything you hold collapses into one capital on the next, bigger map:
+  - the new capital is one tile with the outline of the island you just won, placed on the coast of the bigger map
   - all your people come along: the capital starts full (1000), the rest is a reserve that flows in when there's room
   - buildings become capital bonuses = effect × share of your segments that had them (4 farms of 10 segments → +60% × 40% = +24% growth); nothing can be built in a capital, and old capital bonuses count as one segment, so they fade unless you build again
   - pick 1 of 3 perks at every zoom-out (12 in the pool: faster armies, cheaper buildings, stronger farms, plunder, ...)
   - bots scale with you: each starts with 25 + 70% of your carried people and its own capital with a shuffled bonus mix
   - lose a stage and the run is over; best run (stage reached, time) is saved
+  - each stage looks further away: lakes, mountain ridges and trees get smaller and more numerous
 - **Battle:** each segment you own grows 1% of its cap per second, up to the cap. Cap scales with segment size: the largest segment on the map holds 1000 (+10/s).
   - Tap your segment, then tap a neighbour to send the chosen % (25/50/75/100): attack an enemy/neutral, or move troops to your own. Tap the selected segment again to deselect.
   - Or drag from your segment to any neighbour.
@@ -21,6 +23,7 @@ Prototype stage.
   - Fair starts: you and every bot start on the coast, spread evenly around the island at about the same distance from each other.
   - The island floats in fog, seen at a slight angle. Built segments show their building as a scene: farms turn into fields with farmhouses, forts get stone walls and towers, barracks a castle with tents and soldiers, hospitals an infirmary with medical tents, labs an observatory with crystals. Flags and soldiers take the owner's colour.
   - Each battle has a climate theme (summer, autumn, winter, moor): ground, cliffs, rocks and trees change with it. Owner colours show as glowing borders around each segment.
+  - Rivers (visual only) run from the mountains and inland to the coast or a lake.
   - Maps vary: island shape (blob, squiggly square, triangle, diamond, peanut, ring) and 1–4 lakes or mountain ranges that nobody can occupy or cross.
   - You win when every enemy faction is gone.
 - **Buildings** (one per segment, paid with that segment's troops; captured buildings switch sides):

@@ -7,16 +7,16 @@
 //   - pick 1 of 3 perks
 // bots scale with you: base troops + 70% of your carried people, and capitals with the same
 // total bonus strength in a random mix. losing a stage ends the run.
-import { effects } from './config.js?v=16';
-import { personalities } from './ai.js?v=16';
-import { rng } from './mapgen.js?v=16';
+import { effects } from './config.js?v=17';
+import { personalities } from './ai.js?v=17';
+import { rng } from './mapgen.js?v=17';
 
 export const stages = [
-  { name: 'Valley', area: '5 km²', cells: 12, bots: 1, shape: 'random', neutral: [0.12, 0.3] },
-  { name: 'Region', area: '800 km²', cells: 16, bots: 2, shape: 'random', neutral: [0.18, 0.38] },
-  { name: 'Country', area: '90,000 km²', cells: 20, bots: 3, shape: 'random', neutral: [0.24, 0.46] },
-  { name: 'Continent', area: '10 million km²', cells: 26, bots: 3, shape: 'world', neutral: [0.3, 0.55] },
-  { name: 'World', area: '510 million km²', cells: 34, bots: 4, shape: 'world', neutral: [0.36, 0.64] },
+  { name: 'Valley', detail: 1, area: '5 km²', cells: 12, bots: 1, shape: 'random', neutral: [0.12, 0.3] },
+  { name: 'Region', detail: 0.75, area: '800 km²', cells: 16, bots: 2, shape: 'random', neutral: [0.18, 0.38] },
+  { name: 'Country', detail: 0.55, area: '90,000 km²', cells: 20, bots: 3, shape: 'random', neutral: [0.24, 0.46] },
+  { name: 'Continent', detail: 0.42, area: '10 million km²', cells: 26, bots: 3, shape: 'world', neutral: [0.3, 0.55] },
+  { name: 'World', detail: 0.32, area: '510 million km²', cells: 34, bots: 4, shape: 'world', neutral: [0.36, 0.64] },
 ];
 
 export const botCarry = 0.7;   // share of the player's carried people each bot starts with
@@ -82,6 +82,8 @@ export class Expedition {
       shape: st.shape,
       theme: themes[Math.floor(r() * themes.length)],
       neutral: st.neutral,
+      detail: st.detail,
+      stamp: this.shape,   // previous island outline -> shape of the new capital
       factions: [{ ai: false, color: 0, mods: this.mods(), capital: this.capital ?? undefined }, ...bots],
     };
   }
@@ -105,6 +107,13 @@ export class Expedition {
     const troops = Math.round(mine.reduce((v, s) => v + s.troops, 0)
       + battle.armies.filter((a) => a.owner === 0).reduce((v, a) => v + a.n, 0) + battle.factions[0].reserve);
     this.capital = { troops, bonus };
+    // the island's outline (land, mountains, lakes), downsampled to 64 x 64, becomes the next capital's shape
+    const g = battle.map.grid, N = 64, data = new Uint8Array(N * N);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const c = Math.floor(((y + 0.5) / N) * g) * g + Math.floor(((x + 0.5) / N) * g);
+      data[y * N + x] = battle.map.ids[c] >= 0 || battle.map.terrain[c] ? 1 : 0;
+    }
+    this.shape = { n: N, data: cropShape(data, N) };
     this.stage++;
     return { segments: mine.length, farms, hosp, labs, forts, barracks, troops, bonus };
   }
@@ -130,6 +139,19 @@ export class Expedition {
     }
     return false;
   }
+}
+
+// crop an n x n outline to its bounding box and scale it back to n x n, so the stamp fills its square
+function cropShape(d, n) {
+  let x0 = n, y0 = n, x1 = -1, y1 = -1;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (d[y * n + x]) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+  if (x1 < 0) return d;
+  const w = Math.max(x1 - x0 + 1, y1 - y0 + 1), out = new Uint8Array(n * n);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const sx = x0 + Math.floor(((x + 0.5) / n) * w), sy = y0 + Math.floor(((y + 0.5) / n) * w);
+    out[y * n + x] = sx < n && sy < n ? d[sy * n + sx] : 0;
+  }
+  return out;
 }
 
 // same total bonus strength, values shuffled between types (bots get a different mix)

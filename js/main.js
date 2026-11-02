@@ -1,11 +1,11 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=16';
-import { generateMap, rng } from './mapgen.js?v=16';
-import { Battle } from './battle.js?v=16';
-import { personalities } from './ai.js?v=16';
-import { Campaign } from './campaign.js?v=16';
-import { Expedition, stages } from './expedition.js?v=16';
-import { MapView, hexToRgb, shade, label, pill } from './render.js?v=16';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=17';
+import { generateMap, rng } from './mapgen.js?v=17';
+import { Battle } from './battle.js?v=17';
+import { personalities } from './ai.js?v=17';
+import { Campaign } from './campaign.js?v=17';
+import { Expedition, stages } from './expedition.js?v=17';
+import { MapView, hexToRgb, shade, label, pill } from './render.js?v=17';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -100,7 +100,7 @@ let auto = false, selected = -1, pct = 0.5, drag = null, hover = -1, speed = 1, 
 
 function startBattle(setup, m, rid = -1) {
   // battle maps: random island shape + lakes/mountains (setup.shape can force a shape)
-  const map = generateMap({ seed: setup.seed, cells: setup.cells, grid: rules.grid, shape: setup.shape ?? 'random', obstacles: true });
+  const map = generateMap({ seed: setup.seed, cells: setup.cells, grid: rules.grid, shape: setup.shape ?? 'random', obstacles: true, detail: setup.detail ?? 1, stamp: setup.stamp ?? null });
   if (autoplay) setup.factions[0] = { ai: true, color: 0, think: 1.5, personality: personalities.aggressive };
   battle = new Battle(map, setup);
   mode = m; regionId = rid; selected = -1; drag = null; paused = false; key = '';

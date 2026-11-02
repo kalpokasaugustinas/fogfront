@@ -1,8 +1,8 @@
 // battle simulation: segments, troops, buildings, armies. no drawing here,
 // so the same code runs in the browser and in headless tests.
-import { rules, buildings, effects } from './config.js?v=16';
-import { rng, spreadStarts } from './mapgen.js?v=16';
-import { think } from './ai.js?v=16';
+import { rules, buildings, effects } from './config.js?v=17';
+import { rng, spreadStarts } from './mapgen.js?v=17';
+import { think } from './ai.js?v=17';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
@@ -36,7 +36,9 @@ export class Battle {
       const garrison = Math.round(cap * (nmin + this.rand() * (nmax - nmin)));
       return { ...s, owner: -1, troops: garrison, garrison, cap, baseGrowth: round1(cap * rules.growthRate), building: null };
     });
-    spreadStarts(map, this.factions.length, this.rand).forEach((sid, f) => {
+    // expedition: the player's capital is the stamped segment (previous island's shape)
+    const first = this.factions[0].capital && map.stampSeg >= 0 ? map.stampSeg : -1;
+    spreadStarts(map, this.factions.length, this.rand, first).forEach((sid, f) => {
       const s = this.segs[sid], fac = this.factions[f];
       s.owner = f;
       s.troops = rules.startTroops;

@@ -3,15 +3,15 @@
 // the world is a noise-generated continent with islands (sea routes link them), lakes and mountains.
 // regions belong to 4 rival empires; difficulty grows with distance from home; each region has a
 // climate by position (snowy north, autumn east, moor west, summer south) that its battle uses.
-import { generateMap, hops, rng } from './mapgen.js?v=16';
-import { personalities } from './ai.js?v=16';
+import { generateMap, hops, rng } from './mapgen.js?v=17';
+import { personalities } from './ai.js?v=17';
 
 const save_key = 'frontlines.campaign.v2';   // v2 = big world map (old saves don't fit)
 const world_seed = 20332373;   // picked from a seed scan: 4 islands, 3 sea routes, ~35% land
 
 export class Campaign {
   constructor() {
-    this.map = generateMap({ seed: world_seed, cells: 34, grid: 520, shape: 'world', obstacles: true });
+    this.map = generateMap({ seed: world_seed, cells: 34, grid: 520, shape: 'world', obstacles: true, detail: 0.6 });
     const rand = rng(world_seed);
     // home = the southern-most region
     this.home = this.map.segs.reduce((a, s) => (s.y > a.y ? s : a)).id;
