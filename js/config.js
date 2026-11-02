@@ -17,6 +17,7 @@ export const rules = {
   capitalMargin: 1.25,
   // growth: every tile produces this share of its cap per second (600-cap tile: +6/s).
   growthRate: 0.01,
+  fullRisk: 1.05,   // bots: safety margin when the attacking tile is full (instead of 1.15-1.6)
   // bots gang up on the leader (side with the highest total troop growth): its tiles are worth
   // gangUp x more to every other bot (who also pools several border tiles into joint attacks on it); the leader only changes when another side grows leaderSwitch x more
   gangUp: 2.5,

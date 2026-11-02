@@ -3,8 +3,8 @@
 //                actions: max moves per think (build, attack or reinforce, shared budget
 //                so a big empire doesn't act faster than a small one),
 //                grudge: extra value for player segments }
-import { rules, buildings, effects } from './config.js?v=36';
-import { hops } from './mapgen.js?v=36';
+import { rules, buildings, effects } from './config.js?v=37';
+import { hops } from './mapgen.js?v=37';
 
 export const personalities = {
   aggressive: { build: 0.25, risk: 1.15, actions: 2, grudge: 0.3 },
@@ -58,7 +58,9 @@ export function think(b, f) {
       const coming = b.armies.filter((a) => a.owner === me && a.to === tid).reduce((v, a) => v + a.n * a.atk, 0);
       const need = (def - coming) / b.atkMult(s);
       if (need <= 0) continue;
-      const send = Math.ceil(need * p.risk + 2);
+      // a full tile wastes its growth (and a capital blocks its reserve), so it takes thinner odds
+      const risk = s.troops >= s.cap * 0.95 ? Math.min(p.risk, rules.fullRisk) : p.risk;
+      const send = Math.ceil(need * risk + 2);
       if (send > s.troops - 1) continue;
       let value = t.cap / 50 + (t.building ? 0.6 : 0) + (t.relic ? 1.2 : 0) + (t.trait === 'river' || t.trait === 'lakeside' ? 0.4 : 0);
       if (t.owner === 0) value += p.grudge;
@@ -67,19 +69,23 @@ export function think(b, f) {
       options.push({ s, tid, send, score: value / send });
     }
   }
-  // gang attack: a leader tile too strong for any one of my tiles, but not for several of my
-  // neighbouring tiles together -> one joint attack (all of them send, one action)
-  if (gang >= 0) {
+  // joint attack: a tile too strong for any one of my tiles, but not for several of my
+  // neighbouring tiles together -> all of them send at once (one action). needed when garrisons
+  // outgrow tile caps (expedition camps), and the main way to gang up on the leader
+  {
     const seen = new Set();
     for (const s of mine) for (const tid of s.adj) {
       const t = segs[tid];
-      if (t.owner !== gang || seen.has(tid)) continue;
+      if (t.owner === me || seen.has(tid)) continue;
       seen.add(tid);
       const from = t.adj.map((a) => segs[a]).filter((n) => n.owner === me && n.troops >= 3);
       if (from.length < 2) continue;
-      const def = t.troops * b.defMult(t) * p.risk + 2, power = from.reduce((v, n) => v + (n.troops - 1) * b.atkMult(n), 0);
-      if (power < def) continue;
-      const value = (t.cap / 50 + (t.building ? 0.6 : 0)) * rules.gangUp;
+      const coming = b.armies.filter((a) => a.owner === me && a.to === tid).reduce((v, a) => v + a.n * a.atk, 0);
+      const def = (t.troops + t.growth * 3) * b.defMult(t) * p.risk + 2 - coming, power = from.reduce((v, n) => v + (n.troops - 1) * b.atkMult(n), 0);
+      if (def <= 0 || power < def) continue;
+      let value = t.cap / 50 + (t.building ? 0.6 : 0) + (t.relic ? 1.2 : 0);
+      if (t.owner === gang) value *= rules.gangUp;
+      if (t.owner < 0) value += 0.2;
       options.push({ joint: from, tid, def, power, score: value / (def / 1.5) });
     }
   }
