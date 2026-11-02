@@ -3,8 +3,8 @@
 //                actions: max moves per think (build, attack or reinforce, shared budget
 //                so a big empire doesn't act faster than a small one),
 //                grudge: extra value for player segments }
-import { rules, buildings, effects } from './config.js?v=23';
-import { hops } from './mapgen.js?v=23';
+import { rules, buildings, effects } from './config.js?v=24';
+import { hops } from './mapgen.js?v=24';
 
 export const personalities = {
   aggressive: { build: 0.25, risk: 1.15, actions: 2, grudge: 0.3 },

@@ -152,7 +152,13 @@ try:
                 return box["x"] + sx, box["y"] + sy
             page.wait_for_timeout(1000)
             page.evaluate("__fl.battle.segs[%d].troops = 200" % b["me"])   # enough for a farm + an attack
-            page.mouse.click(*to_px(b["x"], b["y"]))
+            page.mouse.click(*to_px(b["x"], b["y"]))   # select
+            page.wait_for_timeout(150)
+            wheel_early = page.evaluate("!document.getElementById('wheel').classList.contains('hidden')")
+            page.mouse.click(*to_px(b["x"], b["y"]))   # tap again: build wheel
+            page.wait_for_timeout(100)
+            wheel_open = page.evaluate("!document.getElementById('wheel').classList.contains('hidden')")
+            print(f"{name}: wheel after 1st tap {wheel_early}, after 2nd {wheel_open}")
             page.wait_for_timeout(250)
             page.screenshot(path=str(out / f"{name}-wheel.png"))   # build wheel around the tile
             page.click("#wheel .sector[data-type=farm]")

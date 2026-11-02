@@ -1,10 +1,10 @@
 // battle simulation: segments, troops, buildings, armies. no drawing here,
 // so the same code runs in the browser and in headless tests.
-import { rules, buildings, effects, traits, relicGarrison } from './config.js?v=23';
-import { perks, combineMods } from './expedition.js?v=23';
-import { hops } from './mapgen.js?v=23';
-import { rng, spreadStarts, equalizeStarts } from './mapgen.js?v=23';
-import { think } from './ai.js?v=23';
+import { rules, buildings, effects, traits, relicGarrison } from './config.js?v=24';
+import { perks, combineMods } from './expedition.js?v=24';
+import { hops } from './mapgen.js?v=24';
+import { rng, spreadStarts, equalizeStarts } from './mapgen.js?v=24';
+import { think } from './ai.js?v=24';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
@@ -278,8 +278,8 @@ export class Battle {
     this.time += dt;
     for (const s of this.segs) {
       if (s.owner < 0) {
-        // neutrals regrow (same rate as owned tiles) but only back to their starting garrison
-        if (s.troops < s.garrison) s.troops = Math.min(s.garrison, s.troops + s.baseGrowth * dt);
+        // neutrals regrow (slower than owned tiles) but only back to their starting garrison
+        if (s.troops < s.garrison) s.troops = Math.min(s.garrison, s.troops + s.baseGrowth * rules.neutralRegrow * dt);
         continue;
       }
       if (s.troops < s.cap) {

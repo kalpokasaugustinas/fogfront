@@ -14,8 +14,9 @@ export const rules = {
   // cap scales with segment area: the largest segment on the map holds capMax
   capMax: 400,
   // growth: every tile produces this share of its cap per second (600-cap tile: +6/s).
-  // neutral tiles regrow at the same rate, but only back up to their starting garrison
   growthRate: 0.01,
+  // neutral tiles regrow at this share of that rate (0.2 = 80% slower), only back up to their garrison
+  neutralRegrow: 0.2,
 };
 
 // one building per segment; building costs troops taken from that segment.

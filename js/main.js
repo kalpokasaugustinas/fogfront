@@ -1,12 +1,12 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=23';
-import { generateMap, rng } from './mapgen.js?v=23';
-import { Battle } from './battle.js?v=23';
-import { personalities } from './ai.js?v=23';
-import { Campaign } from './campaign.js?v=23';
-import { Expedition, stages, perks } from './expedition.js?v=23';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=23';
-import { MapView, hexToRgb, shade, label, pill, unitSprite } from './render.js?v=23';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames, traits } from './config.js?v=24';
+import { generateMap, rng } from './mapgen.js?v=24';
+import { Battle } from './battle.js?v=24';
+import { personalities } from './ai.js?v=24';
+import { Campaign } from './campaign.js?v=24';
+import { Expedition, stages, perks } from './expedition.js?v=24';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs } from './audio.js?v=24';
+import { MapView, hexToRgb, shade, label, pill, unitSprite } from './render.js?v=24';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -144,7 +144,7 @@ function paintBattle() {
   const adj = selected >= 0 ? battle.segs[selected].adj : [];
   bv.paint((id) => {
     const s = battle.segs[id], o = s.owner, building = s.building ?? (s.relic ? 'relic' : s.home ? 'home' : s.camp ? 'camp' + s.camp : null);   // shrine shows until something is built
-    if (o < 0) return { color: null, fill: 0, building };
+    if (o < 0) return { color: null, fill: 0, building, huts: !building };   // neutral: shacks show people live there
     return { color: colors[battle.factions[o].color], fill: 0.16, building };
   });
   renderWheel();
@@ -436,12 +436,18 @@ $('battle-canvas').addEventListener('pointerup', (e) => {
   if (drag) {
     const to = bv.segAt(e.clientX, e.clientY), from = drag.from;
     if (drag.moved) { if (canTarget(from, to)) sendFrom(from, to); }
-    else if (from === selected) selected = -1;                   // tap selected again: deselect
+    else if (from === selected) {
+      // tap the selected tile again: open the build wheel (empty tile); with the wheel open, or on
+      // a tile that can't build, it deselects
+      const s = battle.segs[from];
+      if (!wheelOn && !s.building && !s.capital) wheelOn = true;
+      else { selected = -1; wheelOn = false; }
+    }
     // auto on + second tap on the tile the selected one already feeds: select it (route stays),
     // so a supply chain can be built tile by tile
-    else if (auto && battle.routes.get(selected)?.to === from) selected = from;
+    else if (auto && battle.routes.get(selected)?.to === from) { selected = from; wheelOn = false; }
     else if (canTarget(selected, from)) sendFrom(selected, from); // tap own neighbour: move troops
-    else { selected = from; wheelOn = true; }                     // tap other own segment: select (+ build wheel)
+    else { selected = from; wheelOn = false; }                    // tap other own segment: select
   }
   drag = null;
 });
@@ -466,7 +472,14 @@ $('route-stop').onclick = () => { if (selected >= 0) battle.clearRoute(selected)
 // tap a sector to build (paid with that tile's troops); the hole in the middle and everything
 // outside the ring stay tappable, so sending troops works as usual (and closes the wheel)
 let wheelOn = false, wheelFor = -1, wheelPos = '';
-const wheelColors = { farm: ['#ffd76a', '#e0a020'], barracks: ['#f07a6a', '#c8372e'], fort: ['#b7c0c8', '#77828d'], hospital: ['#ffffff', '#d8dde0'], lab: ['#8fe3f2', '#2aa8c8'] };
+// white line icons (24x24, stroked) per building
+const wheelIcons = {
+  farm: '<path d="M12 22V9"/><path d="M12 9c-2.5 0-4-1.8-4-4 2.5 0 4 1.8 4 4zM12 9c2.5 0 4-1.8 4-4-2.5 0-4 1.8-4 4z"/><path d="M12 14c-2.5 0-4-1.8-4-4 2.5 0 4 1.8 4 4zM12 14c2.5 0 4-1.8 4-4-2.5 0-4 1.8-4 4z"/><path d="M12 19c-2.5 0-4-1.8-4-4 2.5 0 4 1.8 4 4zM12 19c2.5 0 4-1.8 4-4-2.5 0-4 1.8-4 4z"/>',
+  barracks: '<path d="M4 4l11 11M4 4v3l10 10M4 4h3l10 10"/><path d="M20 4L9 15M20 4v3L10 17M20 4h-3L7 14"/><path d="M13 17l4 4M11 17l-4 4"/>',
+  fort: '<path d="M4 21V9h3V6h2v3h2V6h2v3h2V6h2v3h3v12z"/><path d="M10 21v-5a2 2 0 0 1 4 0v5"/>',
+  hospital: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>',
+  lab: '<path d="M9 3h6M10 3v6l-5.5 9.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/><path d="M7.5 15h9"/><circle cx="10.5" cy="17.5" r=".6"/><circle cx="13.5" cy="18" r=".6"/>',
+};
 function renderWheel() {
   const box = $('wheel'), s = battle && selected >= 0 ? battle.segs[selected] : null;
   const want = wheelOn && s && s.owner === 0 && !s.building && !s.capital ? selected : -1;
@@ -475,22 +488,26 @@ function renderWheel() {
   wheelPos = '';
   box.classList.toggle('hidden', want < 0);
   if (want < 0) { box.innerHTML = ''; return; }
-  const R = 104, r0 = 40, types = Object.keys(buildings), n = types.length, gap = 0.035;
-  const pt = (rad, a) => `${(Math.cos(a) * rad).toFixed(1)},${(Math.sin(a) * rad).toFixed(1)}`;
-  let svg = `<svg width="${R * 2}" height="${R * 2}" viewBox="${-R} ${-R} ${R * 2} ${R * 2}" style="left:${-R}px;top:${-R}px">
-    <defs><linearGradient id="wheel-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe7a0"/><stop offset="0.5" stop-color="#e0a43a"/><stop offset="1" stop-color="#9a6420"/></linearGradient>
-    ${types.map((t) => `<radialGradient id="wg-${t}" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="${wheelColors[t][0]}"/><stop offset="1" stop-color="${wheelColors[t][1]}"/></radialGradient>`).join('')}</defs>`;
+  // ring of wedges between r0 and R, thin gaps, tick marks on the outer rim (like a game hud dial)
+  const R = 100, r0 = 46, types = Object.keys(buildings), n = types.length, gap = 0.025;
+  const pt = (rad, a) => [Math.cos(a) * rad, Math.sin(a) * rad].map((v) => v.toFixed(1));
+  let svg = `<svg width="${(R + 8) * 2}" height="${(R + 8) * 2}" viewBox="${-R - 8} ${-R - 8} ${(R + 8) * 2} ${(R + 8) * 2}" style="left:${-R - 8}px;top:${-R - 8}px">
+    <defs><radialGradient id="wheel-hot" cx="0" cy="0" r="${R}" gradientUnits="userSpaceOnUse"><stop offset="0.45" stop-color="#e0961a" stop-opacity="0.35"/><stop offset="1" stop-color="#ffd76a" stop-opacity="0.95"/></radialGradient></defs>
+    <circle class="glass" r="${R}"/><circle class="hole" r="${r0}"/>`;
+  for (let i = 0; i < 60; i++) {   // tick marks
+    const a = (i / 60) * Math.PI * 2, [x1, y1] = pt(R + 2, a), [x2, y2] = pt(R + (i % 5 ? 4 : 7), a);
+    svg += `<line class="tick" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+  }
   types.forEach((t, i) => {
     const a0 = -Math.PI / 2 - Math.PI / n + (i / n) * Math.PI * 2 + gap, a1 = a0 + (Math.PI * 2) / n - gap * 2, am = (a0 + a1) / 2;
-    const d = `M${pt(r0, a0)} L${pt(R - 3, a0)} A${R - 3},${R - 3} 0 0 1 ${pt(R - 3, a1)} L${pt(r0, a1)} A${r0},${r0} 0 0 0 ${pt(r0, a0)} Z`;
-    const [ix, iy] = pt(60, am).split(','), [nx, ny] = pt(84, am).split(',');
+    const [ax, ay] = pt(r0 + 2, a0), [bx, by] = pt(R - 2, a0), [cx, cy] = pt(R - 2, a1), [dx, dy] = pt(r0 + 2, a1);
+    const d = `M${ax},${ay} L${bx},${by} A${R - 2},${R - 2} 0 0 1 ${cx},${cy} L${dx},${dy} A${r0 + 2},${r0 + 2} 0 0 0 ${ax},${ay} Z`;
+    const [ix, iy] = pt(72, am);
     svg += `<g class="sector" data-type="${t}"><path class="bg" d="${d}"/>
-      <circle class="ico-bg" cx="${ix}" cy="${iy - 2}" r="16" fill="url(#wg-${t})"/>
-      <text x="${ix}" y="${iy - 1}" font-size="16">${buildings[t].icon}</text>
-      <text class="name" x="${nx}" y="${+ny - 4}"${buildings[t].name.length > 6 ? ' style="font-size:8.5px"' : ''}>${buildings[t].name}</text>
-      <text class="cost" x="${nx}" y="${+ny + 8}">${battle.costOf(0, t)}</text></g>`;
+      <g class="ico" transform="translate(${ix},${iy - 7}) scale(1.3) translate(-12,-12)">${wheelIcons[t]}</g>
+      <text class="cost" x="${ix}" y="${+iy + 17}">${battle.costOf(0, t)}</text></g>`;
   });
-  svg += `<circle class="rim" r="${R - 1}"/><circle class="rim" r="${r0 - 1}" style="stroke-width:3"/></svg>`;
+  svg += `<circle class="rim" r="${R}"/><circle class="rim inner" r="${r0}"/></svg>`;
   box.innerHTML = svg;
   for (const g of box.querySelectorAll('.sector')) {
     g.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -526,7 +543,7 @@ function updatePanel() {
     const mult = [s.building === 'fort' && `🛡️ defense x${effects.fortDefense}`, s.building === 'barracks' && `⚔️ attack x${effects.barracksAttack}`].filter(Boolean).join(' · ');
     const col = s.owner < 0 ? neutralColor : factionColors[battle.factions[s.owner].color];
     $('seg-info').innerHTML = `<b style="color:${col}">${who}</b>
-      ${s.trait ? `· ${traits[s.trait].name} (${traits[s.trait].desc}) ` : ''}${s.relic ? `· ✨ Relic: ${perks.find((p) => p.id === s.relic).name} (${perks.find((p) => p.id === s.relic).desc}, for whoever holds it) ` : ''}· ${Math.floor(s.troops)} / ${s.owner < 0 ? s.garrison + ' (regrows to it at +' + s.baseGrowth + '/s)' : s.cap + ' troops · +' + s.growth + '/s'}${s.capital ? ' · 🏰 Capital' : s.building ? ' · ' + buildings[s.building].icon + ' ' + buildings[s.building].name : ''}${mult ? ' · ' + mult : ''}${s.capital && s.owner === 0 ? capitalInfo(s) : ''}`;
+      ${s.trait ? `· ${traits[s.trait].name} (${traits[s.trait].desc}) ` : ''}${s.relic ? `· ✨ Relic: ${perks.find((p) => p.id === s.relic).name} (${perks.find((p) => p.id === s.relic).desc}, for whoever holds it) ` : ''}· ${Math.floor(s.troops)} / ${s.owner < 0 ? s.garrison + ' (regrows to it at +' + Math.round(s.baseGrowth * rules.neutralRegrow * 10) / 10 + '/s)' : s.cap + ' troops · +' + s.growth + '/s'}${s.capital ? ' · 🏰 Capital' : s.building ? ' · ' + buildings[s.building].icon + ' ' + buildings[s.building].name : ''}${mult ? ' · ' + mult : ''}${s.capital && s.owner === 0 ? capitalInfo(s) : ''}`;
   } else $('seg-info').textContent = '';
   // selected tile's route (if any) with a stop button
   const route = selected >= 0 ? battle.routes.get(selected) : null;
@@ -709,7 +726,8 @@ function drawMenu(dt) {
   demo.events.length = 0;   // demo is silent
   mv.paint((id) => {
     const s = demo.segs[id];
-    return { color: s.owner < 0 ? null : colors[demo.factions[s.owner].color], fill: s.owner < 0 ? 0 : 0.16, building: s.building ?? (s.relic ? 'relic' : s.home ? 'home' : null) };
+    const building = s.building ?? (s.relic ? 'relic' : s.home ? 'home' : null);
+    return { color: s.owner < 0 ? null : colors[demo.factions[s.owner].color], fill: s.owner < 0 ? 0 : 0.16, building, huts: s.owner < 0 && !building };
   });
   drawUnits(mv.drawBase(), mv, demo, demoAcc, false);
 }

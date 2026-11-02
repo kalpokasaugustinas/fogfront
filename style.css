@@ -211,19 +211,20 @@ canvas { touch-action: none; display: block; }
 #wheel svg { position: absolute; overflow: visible; pointer-events: none; filter: drop-shadow(0 6px 10px rgba(20,40,50,0.35)); animation: wheel-in 0.16s ease-out; }
 @keyframes wheel-in { from { transform: scale(0.6); opacity: 0; } }
 #wheel .sector { pointer-events: auto; cursor: pointer; }
-#wheel .sector path.bg { fill: rgba(250,248,240,0.94); stroke: rgba(154,100,32,0.5); stroke-width: 1.5; transition: fill 0.1s; }
-#wheel .sector:hover path.bg { fill: #fff6dc; }
-#wheel .sector:active path.bg { fill: #ffe7a0; }
+#wheel .glass { fill: rgba(16, 26, 36, 0.62); }
+#wheel .hole { fill: rgba(16, 26, 36, 0.06); }
+#wheel .sector path.bg { fill: rgba(255, 255, 255, 0.04); stroke: rgba(255, 255, 255, 0.16); stroke-width: 1; transition: fill 0.12s; }
+#wheel .sector:hover path.bg, #wheel .sector:active path.bg { fill: url(#wheel-hot); stroke: rgba(255, 231, 160, 0.9); }
+#wheel .ico { fill: none; stroke: #fff; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5)); }
+#wheel .cost { font-size: 12px; fill: #fff; font-weight: 900; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: rgba(0,0,0,0.45); stroke-width: 2.5px; }
 #wheel .sector.off { cursor: default; }
-#wheel .sector.off path.bg { fill: rgba(226,226,222,0.92); }
-#wheel .sector.off text { opacity: 0.45; }
-#wheel .rim { fill: none; stroke: url(#wheel-gold); stroke-width: 5; }
-#wheel text { font-weight: 900; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
-#wheel .ico-bg { stroke: rgba(255,255,255,0.9); stroke-width: 2; }
-#wheel .name { font-size: 10px; fill: #3a4a50; }
-#wheel .cost { font-size: 11px; fill: #9a6420; }
-#wheel .sector.off .cost { fill: #b8382f; opacity: 1; }
-#wheel .centre-txt { font-size: 11px; fill: #fff; text-shadow: 0 1px 0 rgba(0,0,0,0.3); }
+#wheel .sector.off .ico { opacity: 0.35; }
+#wheel .sector.off .cost { fill: #ff9a8a; }
+#wheel .sector.off:hover path.bg { fill: rgba(255, 255, 255, 0.04); stroke: rgba(255, 255, 255, 0.16); }
+#wheel .rim { fill: none; stroke: rgba(255, 255, 255, 0.45); stroke-width: 1.5; }
+#wheel .rim.inner { stroke: rgba(255, 255, 255, 0.3); }
+#wheel .tick { stroke: rgba(255, 255, 255, 0.4); stroke-width: 1; }
+#wheel text { pointer-events: none; }
 
 /* phones held upright: the game is landscape only */
 #rotate { display: none; z-index: 50; }

@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=23';
-import * as structures from './structures.js?v=23';
+import { themes } from './config.js?v=24';
+import * as structures from './structures.js?v=24';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -359,7 +359,7 @@ export class MapView {
       const cx = hash(i++, 1, this.seed) * g, cy = hash(i++, 2, this.seed) * g;
       if (!ok(cx, cy)) continue;
       // forest tiles are filled separately below; elsewhere only the odd copse
-      if (segs[ids[Math.floor(cy) * g + Math.floor(cx)]].trait === 'forest' || hash(i++, 7, this.seed) < 0.88) continue;
+      if (segs[ids[Math.floor(cy) * g + Math.floor(cx)]].trait === 'forest' || hash(i++, 7, this.seed) < 0.965) continue;
       n++;
       // a cluster = a small wood: 6-17 trees packed together
       const count = 6 + Math.floor(hash(i++, 3, this.seed) * 12);
@@ -558,8 +558,9 @@ export class MapView {
     return this.cached(`t${id}|${type}|${color}`, () => this.sprite(id, this.u * 7, (x) => structures.top(this, x, id, type, color)));
   }
 
-  treeSprite(id) {
-    return this.cached(`r${id}`, () => this.sprite(id, this.u * 4, (x) => this.drawTreesOf(x, id)));
+  // trees (and boulders / reeds) of a segment; huts = a few small shacks (neutral tiles: people live there)
+  treeSprite(id, huts = false) {
+    return this.cached(`r${id}|${huts ? 1 : 0}`, () => this.sprite(id, this.u * 4, (x) => { this.drawTreesOf(x, id); if (huts) this.drawHuts(x, id); }));
   }
 
   blit(x, sp) { x.drawImage(sp.c, sp.left, sp.top); }
@@ -568,7 +569,7 @@ export class MapView {
   // faction colour), so a first capture or build never costs a frame
   prewarm(colors, fill) {
     const jobs = [];
-    for (let id = 0; id < this.segP.length; id++) jobs.push(() => this.treeSprite(id));
+    for (let id = 0; id < this.segP.length; id++) jobs.push(() => this.treeSprite(id, true), () => this.treeSprite(id));
     for (const col of colors) for (let id = 0; id < this.segP.length; id++) jobs.push(() => this.overlaySprite(id, col, fill));
     const map = this.map, size = this.size;
     const step = () => {
@@ -608,12 +609,12 @@ export class MapView {
     for (const raw of this.map.rivers ?? []) {
       const pts = chaikin(chaikin(raw)).slice(2, -2);   // open line: drop the wrap-around corner
       const pieces = 6, len = pts.length;
-      for (const [col, extra, alpha, thin] of [[t.shore, 3.2, 0.55, 1], [t.foam, 1.8, 0.9, 1], [water, 0, 1, 1], [t.seaLight, 0, 0.55, 0.3]]) {
+      for (const [col, extra, alpha, thin] of [[t.shore, 5, 0.6, 1], [t.foam, 2.6, 0.95, 1], [water, 0, 1, 1], [t.seaLight, 0, 0.6, 0.3]]) {
         x.strokeStyle = css(col, alpha);
         for (let k = 0; k < pieces; k++) {
           const a = Math.floor((k / pieces) * len), b = Math.min(len - 1, Math.floor(((k + 1) / pieces) * len) + 1);
           if (b - a < 2) continue;
-          x.lineWidth = ((1.8 + 4.6 * ((k + 1) / pieces)) * (0.6 + 0.4 * dt) * thin + extra) * Math.max(1, this.size / 700) * px;
+          x.lineWidth = ((3.4 + 6.5 * ((k + 1) / pieces)) * (0.65 + 0.35 * dt) * thin + extra) * Math.max(1, this.size / 700) * px;
           x.beginPath();
           x.moveTo(pts[a][0], pts[a][1]);
           for (let i = a + 1; i <= b; i++) x.lineTo(pts[i][0], pts[i][1]);
@@ -657,7 +658,7 @@ export class MapView {
     const order = this.map.segs.map((s) => s.id).sort((a, b) => this.map.segs[a].y - this.map.segs[b].y);
     for (const id of order) {
       const s = this.st[id];
-      this.blit(x, s.building ? this.topSprite(id, s.building, s.color) : this.treeSprite(id));
+      this.blit(x, s.building ? this.topSprite(id, s.building, s.color) : this.treeSprite(id, s.huts));
     }
     this.layerObjects = c;
   }
@@ -758,6 +759,34 @@ export class MapView {
         x.fillStyle = css(t.treeLight);
         x.beginPath(); x.arc(px - r * 0.3, py - r * 1.45, r * 0.55, 0, Math.PI * 2); x.fill();
       }
+    }
+    x.restore();
+  }
+
+  // 1-3 small shacks (more on bigger tiles): plank walls, straw roof, a wisp of chimney smoke
+  drawHuts(x, id) {
+    const s = this.map.segs[id], n = 1 + (s.area > this.map.avgArea ? 1 : 0) + (s.area > this.map.avgArea * 1.6 ? 1 : 0);
+    const u = this.u * Math.max(0.6, this.map.detail ?? 1) * 0.95, snow = this.theme.groundA[0] > 215;
+    x.save();
+    this.cssT(x);
+    const spots = this.spots(id, n, this.u * 3.5).slice().sort((a, b) => a[1] - b[1]);
+    for (const [i, [px, py]] of spots.entries()) {
+      const w = u * 2, h = u * 1.2, flip = hash(id, i + 40, this.seed) < 0.5 ? -1 : 1;
+      x.fillStyle = 'rgba(20,30,30,0.22)';
+      x.beginPath(); x.ellipse(px + u * 0.4, py + u * 0.1, w * 0.75, u * 0.45, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = css([150, 112, 76]);
+      x.fillRect(px - w / 2, py - h, w, h);
+      x.fillStyle = css([118, 86, 58]);
+      x.fillRect(px + (flip > 0 ? w * 0.15 : -w / 2), py - h, w * 0.35, h);
+      x.fillStyle = css([70, 50, 36]);
+      x.fillRect(px - u * 0.22, py - h * 0.65, u * 0.44, h * 0.65);   // door
+      // straw roof (snow-capped in winter)
+      x.fillStyle = css(snow ? [240, 242, 244] : [214, 178, 104]);
+      x.beginPath(); x.moveTo(px - w / 2 - u * 0.3, py - h); x.lineTo(px, py - h - u * 1.3); x.lineTo(px + w / 2 + u * 0.3, py - h); x.fill();
+      x.fillStyle = css(snow ? [206, 212, 218] : [176, 140, 76]);
+      x.beginPath(); x.moveTo(px, py - h - u * 1.3); x.lineTo(px + flip * (w / 2 + u * 0.3), py - h); x.lineTo(px + flip * u * 0.2, py - h); x.fill();
+      x.fillStyle = 'rgba(235,238,240,0.55)';
+      x.beginPath(); x.arc(px - flip * u * 0.5, py - h - u * 1.6, u * 0.35, 0, Math.PI * 2); x.arc(px - flip * u * 0.2, py - h - u * 2.2, u * 0.45, 0, Math.PI * 2); x.fill();
     }
     x.restore();
   }
@@ -864,7 +893,7 @@ export class MapView {
   paint(styleOf) {
     this.styleOf = styleOf;
     this.st = this.map.segs.map((s) => styleOf(s.id));
-    const bkey = this.st.map((s) => (s.building ? s.building + (s.color ?? '') : '')).join('|');
+    const bkey = this.st.map((s) => (s.building ? s.building + (s.color ?? '') : s.huts ? 'h' : '')).join('|');
     const okey = this.st.map((s) => (s.color ? s.color.join(',') + ':' + s.fill : '')).join('|');
     if (bkey !== this.bkey) { this.bkey = bkey; this.layerGround = this.layerObjects = null; }
     if (okey !== this.okey) { this.okey = okey; this.layerOwner = null; }
