@@ -1,10 +1,10 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=13';
-import { generateMap, rng } from './mapgen.js?v=13';
-import { Battle } from './battle.js?v=13';
-import { personalities } from './ai.js?v=13';
-import { Campaign } from './campaign.js?v=13';
-import { MapView, hexToRgb, shade, label, pill } from './render.js?v=13';
+import { rules, buildings, effects, factionColors, factionNames, neutralColor, themeNames } from './config.js?v=14';
+import { generateMap, rng } from './mapgen.js?v=14';
+import { Battle } from './battle.js?v=14';
+import { personalities } from './ai.js?v=14';
+import { Campaign } from './campaign.js?v=14';
+import { MapView, hexToRgb, shade, label, pill } from './render.js?v=14';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -23,27 +23,47 @@ let screen = 'menu';
 
 // ---------- campaign screen ----------
 const campaign = new Campaign();
-const cv = new MapView($('campaign-canvas'), campaign.map);
+const cv = new MapView($('campaign-canvas'), campaign.map, 'summer', campaign.regions.map((r) => r.climate));
 let pickedRegion = -1;
 
 function paintCampaign() {
   cv.paint((id) => {
-    const pick = id === pickedRegion ? 0.2 : 0;
-    if (campaign.owned.has(id)) return { color: colors[0], fill: 0.3 + pick };
+    // light tints so each region's climate (snow, autumn, moor, summer) still shows through
+    if (campaign.owned.has(id)) return { color: colors[0], fill: 0.2 };
     const c = colors[campaign.regions[id].empire];
-    return { color: campaign.attackable(id) ? c : shade(c, -0.25), fill: (campaign.attackable(id) ? 0.22 : 0.08) + pick };
+    return { color: campaign.attackable(id) ? c : shade(c, -0.2), fill: campaign.attackable(id) ? 0.1 : 0.04 };
   });
   renderRegionInfo();
 }
 
 function drawCampaign() {
   const ctx = cv.drawBase();
-  const fs = Math.max(10, Math.min(15, cv.size / 36));
+  const time = performance.now() / 1000;
+  // sea routes between islands: moving dashed lines
+  ctx.save();
+  ctx.setLineDash([5, 5]);
+  ctx.lineDashOffset = -time * 14;
+  ctx.lineCap = 'round';
+  for (const b of campaign.map.bridges) {
+    const x1 = cv.sx(b.ax), y1 = cv.sy(b.ay), x2 = cv.sx(b.bx), y2 = cv.sy(b.by);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(60,80,90,0.25)';
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo((x1 + x2) / 2, (y1 + y2) / 2 + 10, x2, y2); ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.stroke();
+  }
+  ctx.restore();
+  // picked region: glowing outline; regions you can attack: dashed outlines
+  const open = campaign.regions.filter((r) => campaign.attackable(r.id)).map((r) => r.id);
+  if (pickedRegion >= 0) cv.highlight(ctx, pickedRegion, colors[campaign.owned.has(pickedRegion) ? 0 : campaign.regions[pickedRegion].empire], open, time);
+  else if (open.length) cv.highlight(ctx, open[0], colors[campaign.regions[open[0]].empire], open, time, true);
+  const fs = Math.max(9, Math.min(13, cv.size / 48));
   for (const r of campaign.regions) {
     const s = campaign.map.segs[r.id], x = cv.sx(s.x), y = cv.sy(s.y);
     const owned = campaign.owned.has(r.id), open = campaign.attackable(r.id);
     label(ctx, owned ? '🏳️' : open ? '⚔️' : r.capital ? '👑' : '🔒', x, y - fs * 0.9, fs * 1.1);
-    label(ctx, r.name, x, y + fs * 0.4, fs * 0.85, owned || open ? '#fff' : '#dde3e3', 700);
+    label(ctx, r.name, x, y + fs * 0.4, fs * 0.85, owned || open ? '#fff' : '#eef1f0', 700);
     if (!owned) label(ctx, 'Lv ' + r.level, x, y + fs * 1.4, fs * 0.75, '#ffd76a', 700);
   }
 }

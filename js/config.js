@@ -11,7 +11,7 @@ export const rules = {
   // cap scales with segment area: the largest segment on the map holds capMax
   capMax: 1000,
   // growth from size ratio (area / average area, clamped)
-  growthBase: 2.1, growthPerSize: 3.5,  // avg segment: 5.6 troops/s
+  growthBase: 1.47, growthPerSize: 2.45,  // avg segment: 3.9 troops/s
 };
 
 // one building per segment; building costs troops taken from that segment.

@@ -51,8 +51,10 @@ function sdTriangle(px, py, r) {
 // terrain codes for cells that aren't land segments
 export const terrainTypes = { sea: 0, lake: 1, mountain: 2 };
 
-// shape: a key of shapes, or 'random' (picked from the seed). obstacles: carve lakes + mountain ranges
+// shape: a key of shapes, 'random' (picked from the seed) or 'world' (noise continents with islands,
+// linked by sea routes). obstacles: carve lakes + mountain ranges
 export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles = false }) {
+  const world = shape === 'world';
   const rand = rng(seed);
   const na = noise2(rand, 3), nb = noise2(rand, 7);
   const wx = noise2(rand, 6), wy = noise2(rand, 6);
@@ -62,6 +64,8 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
   if (shape === 'random') shape = shapeNames[Math.floor(orand() * shapeNames.length)];
   const sdf = shapes[shape] ?? shapes.blob;
   const sx = noise2(orand, 4), sy = noise2(orand, 4);
+  // world: three octaves of noise, land where the noise beats a threshold that rises toward the edge
+  const wn = world ? [noise2(orand, 3), noise2(orand, 7), noise2(orand, 15)] : null;
   const squiggle = shape === 'blob' ? 0 : 0.07;   // domain warp makes straight edges wavy
 
   // 1. island mask: shape with a noisy coastline
@@ -72,6 +76,12 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
       // non-blob shapes are scaled down a little so cliffs and foam fit inside the canvas
       const zoom = shape === 'blob' ? 1 : 1 / 0.9;
       const px = (u - 0.5) * zoom + (sx(u, w) - 0.5) * squiggle, py = (w - 0.5) * zoom + (sy(u, w) - 0.5) * squiggle;
+      if (world) {
+        const v = wn[0](u, w) * 0.55 + wn[1](u, w) * 0.3 + wn[2](u, w) * 0.15;
+        const d = Math.hypot(u - 0.5, w - 0.5) * 2.15;   // > 2: keeps a margin at the map edge
+        if (v > 0.31 + 0.4 * d ** 2.2) mask[y * g + x] = 1;
+        continue;
+      }
       const wobble = (na(u, w) - 0.5) * 0.16 + (nb(u, w) - 0.5) * 0.07;
       if (sdf(px, py) < wobble) mask[y * g + x] = 1;
     }
@@ -85,7 +95,7 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
     const cellsIn = [];
     for (let c = 0; c < g * g; c++) if (mask[c]) cellsIn.push(c);
     const n1 = noise2(orand, 9), n2 = noise2(orand, 23), lw1 = noise2(orand, 5), lw2 = noise2(orand, 5);
-    let lakes = Math.floor(orand() * 3), ranges = Math.floor(orand() * 3);
+    let lakes = Math.floor(orand() * 3) + (world ? 3 : 0), ranges = Math.floor(orand() * 3) + (world ? 4 : 0);
     if (lakes + ranges === 0) lakes = 1;
     const pick = () => { const c = cellsIn[Math.floor(orand() * cellsIn.length)]; return [c % g, Math.floor(c / g)]; };
 
@@ -93,7 +103,7 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
     const lakeList = [];
     for (let i = 0; i < lakes; i++) {
       const [x, y] = pick();
-      lakeList.push({ x, y, r: g * (0.06 + orand() * 0.045) });
+      lakeList.push({ x, y, r: g * (world ? 0.025 + orand() * 0.025 : 0.06 + orand() * 0.045) });
     }
 
     // mountain ridges: a meandering spine plus 1-2 short spurs; width tapers toward the ends
@@ -109,7 +119,7 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
       return pts;
     };
     for (let i = 0; i < ranges; i++) {
-      const [x, y] = pick(), ang = orand() * Math.PI * 2, width = g * (0.038 + orand() * 0.02);
+      const [x, y] = pick(), ang = orand() * Math.PI * 2, width = g * (0.038 + orand() * 0.02) * (world ? 0.55 : 1);
       const spine = walk(x, y, ang, 6 + Math.floor(orand() * 6), width);
       ridges.push(spine);
       const spurs = 1 + Math.floor(orand() * 2);
@@ -150,9 +160,19 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
     for (const c of cellsIn) if (terrain[c]) mask[c] = 0;
 
     // land cut off by obstacles becomes mountain foothill, so the playable land stays one piece
+    // (world: every island big enough stays)
     const keepSet = new Uint8Array(g * g);
-    for (const c of largestBlob(mask, g)) keepSet[c] = 1;
-    for (const c of cellsIn) if (!keepSet[c] && !terrain[c]) { terrain[c] = terrainTypes.mountain; relief[c] = 0.1; mask[c] = 0; }
+    for (const c of world ? blobs(mask, g, g * g * 0.002).flat() : largestBlob(mask, g)) keepSet[c] = 1;
+    for (const c of cellsIn) {
+      if (keepSet[c] || terrain[c]) continue;
+      mask[c] = 0;
+      if (!world) { terrain[c] = terrainTypes.mountain; relief[c] = 0.1; }   // world: stays sea
+    }
+    // world: mountain or lake bits left without any land next to them are dropped too
+    if (world) {
+      const solidNear = (c) => { const x = c % g; return [x > 0 ? c - 1 : -1, x < g - 1 ? c + 1 : -1, c - g, c + g].some((m) => m >= 0 && m < g * g && keepSet[m]); };
+      for (const b of blobs(terrain.map((v) => (v ? 1 : 0)), g, 1)) if (!b.some(solidNear)) for (const c of b) terrain[c] = 0;
+    }
 
     // lake depth = steps from the shore (bfs), normalised
     const q = [], dist = new Int16Array(g * g).fill(-1);
@@ -171,17 +191,29 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
     for (const c of q) relief[c] = Math.min(1, dist[c] / (g * 0.03));
   }
   // keep only the largest connected landmass, so every segment is reachable
-  const land = largestBlob(mask, g);
+  // (world: all islands above a minimum size; sea routes connect them later)
+  const islands = world ? blobs(mask, g, g * g * 0.003) : [largestBlob(mask, g)];
+  const land = islands.flat();
+  const blobOf = new Int16Array(g * g).fill(-1);
+  islands.forEach((b, i) => { for (const c of b) blobOf[c] = i; });
 
-  // 2. seed points spread out over the land (min distance rejection sampling)
+  // 2. seed points spread out over the land (min distance rejection sampling), each island gets a
+  //    share of the seeds by area (at least one)
   const minDist = Math.sqrt(land.length / n) * 0.8;
   const seeds = [];
-  for (let tries = 0; seeds.length < n && tries < 20000; tries++) {
-    const c = land[Math.floor(rand() * land.length)];
-    const x = c % g, y = Math.floor(c / g);
-    const d = tries < 15000 ? minDist : minDist * 0.6;   // relax if the island is crowded
-    if (seeds.every((s) => Math.hypot(s.x - x, s.y - y) >= d)) seeds.push({ x, y });
-  }
+  const quota = islands.map((b) => Math.max(1, Math.round((n * b.length) / land.length)));
+  islands.forEach((b, bi) => {
+    const mine = [];
+    for (let tries = 0; mine.length < quota[bi] && tries < 20000; tries++) {
+      const c = b[Math.floor(rand() * b.length)];
+      const x = c % g, y = Math.floor(c / g);
+      const d = tries < 15000 ? minDist : minDist * 0.6;   // relax if the island is crowded
+      if (seeds.every((s) => Math.hypot(s.x - x, s.y - y) >= d) && mine.every((s) => Math.hypot(s.x - x, s.y - y) >= d)) mine.push({ x, y, blob: bi });
+    }
+    if (!mine.length) { const c = b[0]; mine.push({ x: c % g, y: Math.floor(c / g), blob: bi }); }
+    seeds.push(...mine);
+  });
+  const seedsOf = islands.map((_, bi) => seeds.map((s, i) => (s.blob === bi ? i : -1)).filter((i) => i >= 0));
 
   // 3. each land cell goes to its nearest seed, measured from a noise-warped
   //    position so borders wiggle instead of being straight lines
@@ -189,8 +221,9 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
   for (const c of land) {
     const x = c % g, y = Math.floor(c / g), u = x / g, w = y / g;
     const px = x + (wx(u, w) - 0.5) * 2 * warp, py = y + (wy(u, w) - 0.5) * 2 * warp;
+    // only seeds on the same island, so a segment never spans the sea
     let best = 0, bd = Infinity;
-    for (let i = 0; i < seeds.length; i++) {
+    for (const i of seedsOf[blobOf[c]]) {
       const d = (seeds[i].x - px) ** 2 + (seeds[i].y - py) ** 2;
       if (d < bd) { bd = d; best = i; }
     }
@@ -248,8 +281,46 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
     // land next to a lake/mountain gets no hard border (it blends in via the 'near' shading instead)
     const same = (m, v) => v === id || (id >= 0 && m >= 0 && m < g * g && terrain[m]);
     if (!same(c + 1, r) || !same(c + g, d) || !same(c - 1, l) || !same(c - g, u)) edge[c] = 1;
+    // coast: segment touches the open sea (outside the grid counts as sea)
+    if (id >= 0 && [[c + 1, r, x < g - 1], [c + g, d, c < g * g - g], [c - 1, l, x > 0], [c - g, u, c >= g]].some(([m, v, ok]) => !ok || (v < 0 && !terrain[m]))) segs[id].coast = true;
     if (id >= 0 && r >= 0 && r !== id) { segs[id].adj.add(r); segs[r].adj.add(id); }
     if (id >= 0 && d >= 0 && d !== id) { segs[id].adj.add(d); segs[d].adj.add(id); }
+  }
+
+  // 6b. world: sea routes between islands. closest coast points per island pair, then a minimum
+  //     spanning tree (every island reachable) plus any extra pair that is very close
+  const bridges = [];
+  if (world && islands.length > 1) {
+    const coast = islands.map(() => []);
+    for (const c of land) {
+      if (ids[c] < 0 || c % 5) continue;
+      if (nbrs(c).some((m) => ids[m] < 0 && !terrain[m])) coast[blobOf[c]].push(c);
+    }
+    const pairs = [];
+    for (let a = 0; a < islands.length; a++) {
+      for (let b = a + 1; b < islands.length; b++) {
+        let best = null;
+        for (const ca of coast[a]) {
+          const ax = ca % g, ay = Math.floor(ca / g);
+          for (const cb of coast[b]) {
+            const d = Math.hypot(ax - (cb % g), ay - Math.floor(cb / g));
+            if (!best || d < best.d) best = { d, ca, cb };
+          }
+        }
+        if (best) pairs.push({ a, b, ...best });
+      }
+    }
+    pairs.sort((p, q) => p.d - q.d);
+    const root = islands.map((_, i) => i), find = (i) => (root[i] === i ? i : (root[i] = find(root[i])));
+    for (const p of pairs) {
+      const tree = find(p.a) !== find(p.b);
+      if (!tree && p.d > g * 0.05) continue;
+      root[find(p.a)] = find(p.b);
+      const sa = ids[p.ca], sb = ids[p.cb];
+      segs[sa].adj.add(sb);
+      segs[sb].adj.add(sa);
+      bridges.push({ a: sa, b: sb, ax: (p.ca % g) + 0.5, ay: Math.floor(p.ca / g) + 0.5, bx: (p.cb % g) + 0.5, by: Math.floor(p.cb / g) + 0.5 });
+    }
   }
 
   // 7. label position = the most "inner" cell (farthest from any border), via multi-source bfs
@@ -285,11 +356,29 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
     }
   }
   return {
-    grid: g, ids, edge, avgArea, shape, terrain, near, nearType,
+    grid: g, ids, edge, avgArea, shape, terrain, near, nearType, bridges, islands: islands.length,
     bdist: dist,   // steps from each land cell to its segment's border
     relief,   // mountain height / lake depth, 0..1
-    segs: segs.map((s) => ({ id: s.id, area: s.area, x: s.x, y: s.y, adj: [...s.adj] })),
+    segs: segs.map((s) => ({ id: s.id, area: s.area, x: s.x, y: s.y, adj: [...s.adj], coast: !!s.coast })),
   };
+}
+
+// all 4-connected blobs of a 0/1 mask with at least min cells, biggest first
+function blobs(mask, g, min) {
+  const seen = new Uint8Array(g * g), out = [];
+  for (let c0 = 0; c0 < g * g; c0++) {
+    if (!mask[c0] || seen[c0]) continue;
+    const blob = [c0];
+    seen[c0] = 1;
+    for (let k = 0; k < blob.length; k++) {
+      const c = blob[k], x = c % g;
+      for (const m of [x > 0 ? c - 1 : -1, x < g - 1 ? c + 1 : -1, c - g, c + g]) {
+        if (m >= 0 && m < g * g && mask[m] && !seen[m]) { seen[m] = 1; blob.push(m); }
+      }
+    }
+    if (blob.length >= min) out.push(blob.sort((a, b) => a - b));
+  }
+  return out.sort((a, b) => b.length - a.length);
 }
 
 // cells of the largest 4-connected blob in a 0/1 mask
@@ -321,8 +410,33 @@ export function hops(map, starts) {
   return d;
 }
 
-// pick k segments far apart from each other (player first, then bots)
+// fair starting segments (player first, then bots): all on the coast, spread evenly around the
+// island by angle, then the layout whose hop distances between starts are largest and most even.
+// every coast segment is tried as the anchor; a little randomness picks among near-equal layouts
 export function spreadStarts(map, k, rand) {
+  const coast = map.segs.filter((s) => s.coast);
+  if (coast.length >= k * 2) {
+    const cx = map.segs.reduce((a, s) => a + s.x, 0) / map.segs.length, cy = map.segs.reduce((a, s) => a + s.y, 0) / map.segs.length;
+    const ang = (s) => Math.atan2(s.y - cy, s.x - cx);
+    const diff = (a, b) => Math.abs(((a - b + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+    let best = null;
+    for (const s0 of coast) {
+      const pick = [s0.id];
+      for (let i = 1; i < k; i++) {
+        const target = ang(s0) + (i * Math.PI * 2) / k;
+        let cand = null, cd = Infinity;
+        for (const s of coast) if (!pick.includes(s.id) && diff(ang(s), target) < cd) { cd = diff(ang(s), target); cand = s.id; }
+        pick.push(cand);
+      }
+      const d = [];
+      for (let i = 0; i < k; i++) { const h = hops(map, [pick[i]]); for (let j = i + 1; j < k; j++) d.push(h[pick[j]]); }
+      const score = Math.min(...d) * 2 - (Math.max(...d) - Math.min(...d)) + rand() * 0.8;
+      if (!best || score > best.score) best = { score, pick };
+    }
+    // shuffle who gets which spot, so the player isn't always on the same side
+    const pick = best.pick, r = Math.floor(rand() * k);
+    return pick.slice(r).concat(pick.slice(0, r));
+  }
   const starts = [Math.floor(rand() * map.segs.length)];
   while (starts.length < k) {
     const d = hops(map, starts);

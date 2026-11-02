@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=13';
-import * as structures from './structures.js?v=13';
+import { themes } from './config.js?v=14';
+import * as structures from './structures.js?v=14';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -115,7 +115,7 @@ function relax(p, codes) {
     // one run around the whole loop (e.g. a lake inside a single segment): plain cyclic average
     for (let i = 0; i < n; i++) {
       let sx = 0, sy = 0;
-      for (let j = -relax_window; j <= relax_window; j++) { const q = p[(i + j + n) % n]; sx += q[0]; sy += q[1]; }
+      for (let j = -relax_window; j <= relax_window; j++) { const q = p[(((i + j) % n) + n) % n]; sx += q[0]; sy += q[1]; }
       out[i] = [sx / (2 * relax_window + 1), sy / (2 * relax_window + 1)];
     }
     return out;
@@ -167,17 +167,19 @@ function chaikin(p) {
 }
 
 export class MapView {
-  constructor(canvas, map, theme) {
+  // segThemes (optional): theme name per segment, e.g. campaign regions with their own climate
+  constructor(canvas, map, theme, segThemes) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.setMap(map, theme);
+    this.setMap(map, theme, segThemes);
     // follow the container size (screen rotation, panel changes)
     new ResizeObserver(() => this.resize()).observe(canvas.parentElement);
   }
 
-  setMap(map, theme = 'summer') {
+  setMap(map, theme = 'summer', segThemes = null) {
     this.map = map;
     this.theme = themes[theme] ?? themes.summer;
+    this.segTheme = segThemes ? segThemes.map((n) => themes[n] ?? this.theme) : null;
     this.k = map.grid / 480;   // feature sizes are tuned for a 480 grid
     this.buildGround();
     this.buildOutlines();
@@ -231,8 +233,9 @@ export class MapView {
       const x = c % g, y = Math.floor(c / g), o = c * 4;
       // ground everywhere (also under mountains and a bit into the sea, so edges never fade out)
       const n = vnoise(x / (22 * this.k), y / (22 * this.k), seed) * 0.7 + vnoise(x / (6 * this.k), y / (6 * this.k), seed + 1) * 0.3;
-      let col = mix(t.groundA, t.groundB, n);
-      if (near && near[c]) col = mix(col, nearType[c] === 1 ? t.shore : t.scree, 0.5 * (1 - (near[c] - 1) / 10) ** 1.5);
+      const tc = this.segTheme && ids[c] >= 0 ? this.segTheme[ids[c]] : t;   // this cell's climate
+      let col = mix(tc.groundA, tc.groundB, n);
+      if (near && near[c]) col = mix(col, nearType[c] === 1 ? tc.shore : tc.scree, 0.5 * (1 - (near[c] - 1) / 10) ** 1.5);
       gi.data[o] = col[0]; gi.data[o + 1] = col[1]; gi.data[o + 2] = col[2]; gi.data[o + 3] = 255;
     }
     this.groundC.getContext('2d').putImageData(gi, 0, 0);
@@ -576,7 +579,7 @@ export class MapView {
 
   // trees of one segment: round crowns or low-poly pines with trunk and shadow
   drawTreesOf(x, id) {
-    const t = this.theme, sc = this.scale;
+    const t = this.segTheme ? this.segTheme[id] : this.theme, sc = this.scale;
     x.save();
     this.cssT(x);
     for (const tr of this.trees) {
@@ -656,7 +659,7 @@ export class MapView {
 
   // selected segment: thick white outline with a soft pulsing glow plus the owner colour inside;
   // targets: moving dashed white outlines. drawn every frame on top of the cached layers
-  highlight(ctx, id, color, targets, time) {
+  highlight(ctx, id, color, targets, time, targetsOnly = false) {
     const px = 1 / this.scale, pulse = 0.5 + 0.5 * Math.sin(time * 4);
     ctx.save();
     this.gridT(ctx);
@@ -667,6 +670,7 @@ export class MapView {
     ctx.strokeStyle = 'rgba(255,255,255,0.85)';
     for (const t of targets) ctx.stroke(this.segP[t]);
     ctx.setLineDash([]);
+    if (targetsOnly) { ctx.restore(); return; }
     ctx.lineWidth = (7 + 4 * pulse) * px;
     ctx.strokeStyle = `rgba(255,255,255,${0.25 + 0.2 * pulse})`;
     ctx.stroke(this.segP[id]);
