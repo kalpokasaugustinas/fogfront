@@ -13,6 +13,8 @@ export const rules = {
   routeMin: 2,        // ...when at least this many troops are above the route's reserve
   // cap scales with segment area: the largest segment on the map holds capMax
   capMax: 400,
+  // capitals (expedition) hold at least this x the strongest neutral garrison on the map
+  capitalMargin: 1.25,
   // growth: every tile produces this share of its cap per second (600-cap tile: +6/s).
   growthRate: 0.01,
   // bots gang up on the leader (side with the highest total troop growth): its tiles are worth

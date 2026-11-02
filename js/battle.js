@@ -1,10 +1,10 @@
 // battle simulation: segments, troops, buildings, armies. no drawing here,
 // so the same code runs in the browser and in headless tests.
-import { rules, buildings, effects, traits, relicGarrison } from './config.js?v=35';
-import { perks, combineMods } from './expedition.js?v=35';
-import { hops } from './mapgen.js?v=35';
-import { rng, spreadStarts, equalizeStarts } from './mapgen.js?v=35';
-import { think } from './ai.js?v=35';
+import { rules, buildings, effects, traits, relicGarrison } from './config.js?v=36';
+import { perks, combineMods } from './expedition.js?v=36';
+import { hops } from './mapgen.js?v=36';
+import { rng, spreadStarts, equalizeStarts } from './mapgen.js?v=36';
+import { think } from './ai.js?v=36';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
@@ -14,7 +14,7 @@ export class Battle {
   //   mods    = perk modifiers (expedition): speed, atk, farm, hospital, lab, growth, cost, fort,
   //             neutralDef, capitalDef, reserve, loot (see expedition.js)
   //   capital = { troops, bonus }: the faction starts in a capital (no building allowed there) that
-  //             holds up to capMax troops; the rest is a reserve that flows in over time.
+  //             holds up to max(capMax, capitalMargin x strongest neutral) troops; the rest is a reserve that flows in over time.
   //             bonus = { growth, hosp, lab, def, atk } carried over from the previous stage
   constructor(map, opts) {
     this.map = map;
@@ -75,6 +75,7 @@ export class Battle {
     }
     // expedition: stronger neutrals (scaled to the player) and fortified camps on the biggest
     // open tiles (not forest / highland, so their look stays); camp = number of houses 1-3
+    this.costScale = opts.camps?.mult ?? 1;   // building prices grow with the neutrals
     if (opts.camps) {
       const { mult, share, boost } = opts.camps, neutrals = this.segs.filter((s) => s.owner < 0);
       for (const s of neutrals) s.garrison = s.troops = Math.round(s.troops * mult);
@@ -84,6 +85,19 @@ export class Battle {
         s.garrison = s.troops = Math.round(s.troops * boost);
         s.camp = 3 - Math.floor((i / Math.max(1, want)) * 3);
       });
+    }
+    // capitals: cap at least capitalMargin x the strongest neutral garrison (rounded up to 50),
+    // so a capital can always out-hold any tile on the map; growth stays 1% of the cap
+    const top = Math.max(0, ...this.segs.filter((s) => s.owner < 0).map((s) => s.garrison));
+    const capCap = Math.max(rules.capMax, Math.ceil((top * rules.capitalMargin) / 50) * 50);
+    for (const fac of this.factions) {
+      const s = this.segs[fac.capitalSeg];
+      if (!fac.capital || !s || capCap <= s.cap) continue;
+      const total = s.troops + fac.reserve;
+      s.cap = capCap;
+      s.baseGrowth = round1(s.cap * rules.growthRate);
+      s.troops = Math.min(s.cap, total);
+      fac.reserve = total - s.troops;
     }
     this.updateGrowth();
   }
@@ -132,7 +146,12 @@ export class Battle {
   }
 
   // building price for faction f (perk: engineers)
-  costOf(f, type) { return Math.round(buildings[type].cost * (this.mods(f).cost ?? 1)); }
+  // building price: base cost x perk modifier x stage scale (expedition: same x as the neutral
+  // garrisons, so buildings stay as pricey relative to the fights), rounded to 5 when scaled
+  costOf(f, type) {
+    const c = buildings[type].cost * (this.mods(f).cost ?? 1) * this.costScale;
+    return this.costScale > 1 ? Math.round(c / 5) * 5 : Math.round(c);
+  }
 
   // faction f sends n troops from segment a to adjacent segment b
   send(f, a, b, n, auto = false) {

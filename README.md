@@ -8,12 +8,12 @@ Prototype stage.
 - **Campaign:** a generated world of ~34 regions: a continent with bays, mountain ranges and lakes, plus islands linked by sea routes. 4 rival empires hold the regions. Each region has a climate by location (snowy north, autumn east, moor west, summer south) that its battle uses. Attack any region next to one you own (or across a sea route). Difficulty grows with distance from home: more segments, more enemies, stronger neutrals, faster bots. Progress is saved in the browser.
 - **🧭 Expedition (roguelite):** 5 stages that zoom out: Valley → Region → Country → Continent → World. Win a stage and everything you hold collapses into one capital on the next, bigger map:
   - the new capital is one tile with the outline of the island you just won, placed on the coast of the bigger map
-  - all your people come along: the capital starts full (400), the rest is a reserve that flows in when there's room
-  - buildings become capital bonuses = effect × share of your segments that had them (4 farms of 10 segments → +60% × 40% = +24% growth); nothing can be built in a capital, and old capital bonuses count as one segment, so they fade unless you build again
+  - all your people come along: the capital starts full, the rest is a reserve that flows in when there's room
+  - buildings become capital bonuses = effect × share of your segments that had them (4 farms of 10 segments → +60% × 40% = +24% growth); a capital's cap is 400 or 1.25x the strongest neutral garrison on the map, whichever is higher (growth 1% of that); nothing can be built in a capital, and old capital bonuses count as one segment, so they fade unless you build again
   - the zoom-out tells it without words (~5 s): the won island shrinks over the fog to the size and place of the new capital tile (same outline), pulses gold, then the new map grows outward from it in a widening circle while the island fades into the capital
   - pick 1 of 3 perks at every zoom-out (12 in the pool: faster armies, cheaper buildings, stronger farms, plunder, ...)
   - bots scale with you: each starts with 10 + 70% of your carried people and its own capital with a shuffled bonus mix
-  - neutrals scale with you too (stage 2 on): garrisons × √(carried people / 150), at most ×4; the biggest 30% of open neutral tiles are fortified camps (×1.5 more, drawn as 2–4 houses behind a palisade)
+  - neutrals scale with you too (stage 2 on): garrisons × √(carried people / 150), at most ×4; the biggest 30% of open neutral tiles are fortified camps (×1.5 more, drawn as 2–4 houses behind a palisade); building prices rise by the same factor as the garrisons (farm 30 → up to 120)
   - lose a stage and the run is over; best run (stage reached, time) is saved
   - each stage looks further away: lakes, mountain ridges and trees get smaller and more numerous
 - **Battle:** each segment you own grows 1% of its cap per second, up to the cap. Cap scales with segment size: the largest segment on the map holds 400 (+4/s).
