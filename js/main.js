@@ -1,13 +1,13 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=47';
-import { generateMap, rng } from './mapgen.js?v=47';
-import { Battle } from './battle.js?v=47';
-import { personalities } from './ai.js?v=47';
-import { Campaign } from './campaign.js?v=47';
-import { Expedition, stages, perks } from './expedition.js?v=47';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=47';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=47';
-import { previewBuildings } from './structures.js?v=47';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=48';
+import { generateMap, rng } from './mapgen.js?v=48';
+import { Battle } from './battle.js?v=48';
+import { personalities } from './ai.js?v=48';
+import { Campaign } from './campaign.js?v=48';
+import { Expedition, stages, perks } from './expedition.js?v=48';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=48';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=48';
+import { previewBuildings } from './structures.js?v=48';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -392,7 +392,7 @@ function drawCountdown(ctx) {
     ctx.stroke();
     ctx.font = `900 ${R * 0.5}px Georgia, 'Times New Roman', serif`;
     ctx.fillStyle = '#fff6dc';
-    ctx.fillText(mode === 'expedition' && expedition?.current ? expedition.current.name + '!' : 'Conquer!', 0, -bh * 0.08);
+    ctx.fillText('Conquer!', 0, -bh * 0.08);
   }
   ctx.restore();
 }
@@ -1002,14 +1002,20 @@ addEventListener('resize', () => { if (screen === 'battle' && bv) { bv.resize();
 // time, so they need no per-frame update
 let fxs = [];
 function celebrate(id) {
-  const now = performance.now(), c = colors[battle.factions[0].color];
-  const palette = [`rgb(${c})`, '#ffd76a', '#ffffff', `rgb(${c.map((v) => Math.min(255, v + 70))})`];
-  fxs.push({ kind: 'ring', id, born: now }, { kind: 'text', id, born: now });
-  for (let i = 0; i < 26; i++) {
-    const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, sp = 70 + Math.random() * 110;
-    fxs.push({ kind: 'bit', id, born: now + Math.random() * 60, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-      spin: (Math.random() - 0.5) * 14, color: palette[i % palette.length], life: 0.9 + Math.random() * 0.5 });
+  // the tile lights up: warm glow, a light sweep across it, a gold rim, twinkling stars
+  const now = performance.now(), pts = bv.troopSpots(id, 8);
+  fxs.push({ kind: 'shine', id, born: now, life: 1.3 });
+  for (let i = 0; i < 9 && pts.length; i++) {
+    const [x, y] = pts[Math.floor(Math.random() * pts.length)];
+    fxs.push({ kind: 'star', id, x, y, born: now + 120 + Math.random() * 520, life: 0.75, size: 0.5 + Math.random() * 0.6 });
   }
+}
+// four-point twinkle star
+function star(ctx, x, y, r) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.quadraticCurveTo(x, y, x, y + r);
+  ctx.quadraticCurveTo(x, y, x - r, y); ctx.quadraticCurveTo(x, y, x, y - r);
+  ctx.fill();
 }
 function drawFx(ctx, fs) {
   const now = performance.now();
@@ -1029,25 +1035,40 @@ function drawFx(ctx, fs) {
         ctx.lineWidth = 3.5; ctx.strokeStyle = '#ff3b30';
         ctx.beginPath(); ctx.arc(x, y, fs * (2.8 - 1.4 * k), 0, Math.PI * 2); ctx.stroke();
       }
-    } else if (f.kind === 'ring') {
-      // gold shock ring
-      const k = Math.min(1, age / 0.6);
-      ctx.globalAlpha = 1 - k;
-      ctx.lineWidth = 5 * (1 - k) + 1; ctx.strokeStyle = '#ffd76a';
-      ctx.beginPath(); ctx.arc(x, y, fs * (0.8 + 2.6 * k), 0, Math.PI * 2); ctx.stroke();
-    } else if (f.kind === 'text') {
-      // 'Captured!' floats up and fades
-      ctx.globalAlpha = Math.min(1, 3 * (1.2 - age));
-      label(ctx, 'Captured!', x, y - fs * (1.6 + age * 1.6), fs * 0.95 * (1 + 0.25 * Math.max(0, 0.15 - age) / 0.15), '#ffd76a');
-    } else {
-      // confetti: thrown up and out, falls back with gravity, spinning
+    } else if (f.kind === 'shine') {
+      const k = Math.min(1, age / f.life), fade = (1 - k) ** 1.5, p = bv.segP[f.id], [x0, y0, x1, y1] = bv.boxes[f.id];
       ctx.save();
-      ctx.globalAlpha = Math.min(1, 2.5 * (f.life - age));
-      ctx.translate(x + f.vx * age, y + f.vy * age + 170 * age * age);
-      ctx.rotate(f.spin * age);
-      ctx.fillStyle = f.color;
-      ctx.fillRect(-3.5, -2, 7, 4);
+      bv.gridT(ctx);
+      ctx.clip(p);
+      ctx.globalCompositeOperation = 'lighter';
+      // warm glow over the whole tile, quick rise then a slow fade
+      ctx.globalAlpha = Math.min(1, age / 0.12) * fade;
+      ctx.fillStyle = 'rgba(255, 206, 110, 0.42)';
+      ctx.fill(p);
+      // a band of light sweeping across, left to right
+      const w = x1 - x0 + 1, c = x0 - w * 0.3 + w * 1.6 * Math.min(1, age / 0.8), bw = Math.max(8, w * 0.22);
+      const g = ctx.createLinearGradient(c - bw, y0, c + bw, y0 + bw * 0.8);
+      g.addColorStop(0, 'rgba(255, 248, 220, 0)'); g.addColorStop(0.5, 'rgba(255, 248, 220, 0.75)'); g.addColorStop(1, 'rgba(255, 248, 220, 0)');
+      ctx.globalAlpha = 1 - Math.min(1, age / 0.9);
+      ctx.fillStyle = g;
+      ctx.fillRect(x0, y0, w, y1 - y0 + 1);
+      // gold rim just inside the border
+      ctx.globalAlpha = fade;
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = (5 / bv.scale) * (1 - 0.5 * k);
+      ctx.strokeStyle = 'rgba(255, 220, 130, 0.9)';
+      ctx.stroke(p);
       ctx.restore();
+    } else if (f.kind === 'star') {
+      // twinkle: grows and shrinks while drifting up a little
+      const k = age / f.life, r = fs * 0.55 * f.size * Math.sin(Math.PI * Math.min(1, k));
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(255, 236, 170, 0.95)';
+      star(ctx, f.x, f.y - fs * 1.2 * k - fs * 0.6, r);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      star(ctx, f.x, f.y - fs * 1.2 * k - fs * 0.6, r * 0.45);
+      ctx.globalCompositeOperation = 'source-over';
     }
   }
   ctx.restore();
@@ -1078,7 +1099,7 @@ const tseg = (id) => battle.segs[id];
 const pair = (from, to) => (f, t2) => f === from && t2 === to;
 const tutorSteps = [
   { id: 'intro', hold: true, ok: 'Start', ring: () => [tutor.home],
-    text: () => "Welcome, commander! 🏰 This is your castle. Grey tiles are neutral, red is your rival." },
+    text: () => 'Welcome, commander! 🏰 This is your castle. Grey tiles are neutral; the other castle belongs to your rival.' },
   { id: 'attack', hold: true, finger: () => [tutor.home, tutor.target], allow: () => pair(tutor.home, tutor.target),
     enter() { tseg(tutor.home).troops = 40; tseg(tutor.target).troops = 8; },
     text: () => `👆 Drag from your castle to the glowing tile. ${Math.round(pct * 100)}% of your 40 troops = ${Math.floor(40 * pct)} attack its 8 defenders.` },
@@ -1093,7 +1114,7 @@ const tutorSteps = [
     enter() { setAuto(true); tseg(tutor.home).troops = Math.max(tseg(tutor.home).troops, 20); },
     text: () => '🔁 Drag from your castle to your farm tile. With Auto on, this sets a route: spare troops keep flowing there.' },
   { id: 'goal', hold: true, ok: "Let's go", ring: () => [tutor.rival],
-    text: () => '🏆 Take every red tile to win. Red wakes up now. Good luck!' },
+    text: () => '🏆 Take every enemy tile to win. Your rival wakes up now. Good luck!' },
 ];
 
 function startTutor() {
@@ -1163,7 +1184,7 @@ function drawTutor(ctx, fs) {
     ctx.globalAlpha = 1;
   };
   ctx.save();
-  for (const id of st.ring?.() ?? []) ring(id, st.id === 'goal' ? '#ff6b5e' : '#ffd76a');
+  for (const id of st.ring?.() ?? []) ring(id, st.id === 'goal' ? `rgb(${colors[battle.factions[1].color]})` : '#ffd76a');
   if (st.finger) {
     const [from, to] = st.finger();
     ring(to, '#ffd76a');

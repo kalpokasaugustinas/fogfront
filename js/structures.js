@@ -125,6 +125,7 @@ export function ground(v, x, id, type, owner) {
     // patchwork of strips at a per-segment angle, with furrows and a dirt track
     x.translate(cx, cy);
     x.scale(1, v.tilt);   // fields lie flat on the tilted ground
+    if (s.trait === 'forest') { x.beginPath(); x.arc(0, 0, u * 9.5, 0, Math.PI * 2); x.clip(); }   // clearing in the woods
     x.rotate(rnd(1, 1, seed) * Math.PI);
     const w = u * 2.6, R = v.size * 0.35;
     for (let i = -Math.ceil(R / w); i <= Math.ceil(R / w); i++) {

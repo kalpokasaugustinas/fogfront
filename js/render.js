@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=47';
-import * as structures from './structures.js?v=47';
+import { themes } from './config.js?v=48';
+import * as structures from './structures.js?v=48';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -554,8 +554,40 @@ export class MapView {
     return this.cached(`g${id}|${type}`, () => this.sprite(id, 2, (x) => structures.ground(this, x, id, type)));
   }
 
+  // building scene + the tile's own terrain (trees, boulders, reeds) around it: objects inside
+  // the building's clearings are left out, the rest is drawn behind / in front of the buildings
   topSprite(id, type, color, skin) {
-    return this.cached(`t${id}|${type}|${color}|${skin}`, () => this.sprite(id, this.u * 7, (x) => structures.top(this, x, id, type, color, skin)));
+    return this.cached(`t${id}|${type}|${color}|${skin}`, () => this.sprite(id, this.u * 7, (x) => {
+      const keep = this.terrainKeep(id, type), split = this.spots(id, 1, 0)[0]?.[1] ?? this.sy(this.map.segs[id].y);
+      this.drawTreesOf(x, id, (tr, px, py) => py <= split && keep(tr, px, py));
+      structures.top(this, x, id, type, color, skin);
+      this.drawTreesOf(x, id, (tr, px, py) => py > split && keep(tr, px, py));
+    }));
+  }
+
+  // which terrain objects stay next to building type on tile id: clearings (ellipses, css px)
+  // around the building spots; farms clear the scattered trees of open land (fields), on forest
+  // tiles only their field patch; forts clear a band along the wall
+  terrainKeep(id, type) {
+    const u = this.u, s = this.map.segs[id], holes = [];
+    const add = (pts, rx, ry) => { for (const p of pts) holes.push([p[0], p[1], rx, ry]); };
+    const main = this.spots(id, 1, 0);
+    if (type === 'farm') {
+      add(this.spots(id, 3, u * 6), u * 4, u * 2.6);
+      if (s.trait === 'forest') holes.push([this.sx(s.x), this.sy(s.y), u * 9.5, u * 9.5 * this.tilt]);
+    } else if (type === 'barracks') { add(this.spots(id, 3, u * 7), u * 4.5, u * 3); add(main, u * 7, u * 4.2); }
+    else if (type === 'fort') add(main, u * 6.5, u * 4.2);
+    else if (type === 'hospital') { add(this.spots(id, 3, u * 6), u * 4, u * 2.6); add(this.spots(id, 6, u * 4), u * 2.2, u * 1.6); }
+    else if (type === 'lab') { add(this.spots(id, 3, u * 6), u * 4, u * 2.6); add(main, u * 6.5, u * 4); }
+    else if (type === 'capital') { add(this.spots(id, 7, u * 3.2), u * 3.2, u * 2.2); add(main, u * 8, u * 4.8); }
+    else if (type.startsWith('camp')) add(main, u * (4 + Number(type.slice(4)) * 1.3) * Math.max(0.55, this.map.detail ?? 1), u * 3.4);
+    else add(main, u * 4.5, u * 2.8);   // home, relic
+    const { bdist, grid: g } = this.map, wall = (u * 2.6) / this.scale;
+    return (tr, px, py) => {
+      if (type === 'farm' && !tr.kind && s.trait !== 'forest') return false;   // plain trees (no kind)
+      if (type === 'fort' && bdist[Math.floor(tr.y) * g + Math.floor(tr.x)] < wall) return false;
+      return !holes.some(([hx, hy, rx, ry]) => ((px - hx) / rx) ** 2 + ((py - hy) / ry) ** 2 < 1);
+    };
   }
 
   // trees (and boulders / reeds) of a segment; huts = a few small shacks (neutral tiles: people live there)
@@ -731,13 +763,15 @@ export class MapView {
   }
 
   // trees of one segment: round crowns or low-poly pines with trunk and shadow
-  drawTreesOf(x, id) {
+  // keep(tree, px, py) -> false skips an object (building tiles leave their clearings empty)
+  drawTreesOf(x, id, keep = null) {
     const t = this.segTheme ? this.segTheme[id] : this.theme, sc = this.scale;
     x.save();
     this.cssT(x);
     for (const tr of this.trees) {
       if (tr.seg !== id) continue;
       const px = this.sx(tr.x), py = this.sy(tr.y), r = Math.max(1.6, tr.r * sc);
+      if (keep && !keep(tr, px, py)) continue;
       if (tr.kind === 'rock') {
         // low-poly boulder: lit top-left face, shaded right face, small shadow
         const w = r * (1 + tr.a * 0.5), h = r * 0.9;
