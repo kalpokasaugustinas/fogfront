@@ -46,7 +46,7 @@ Prototype stage.
 Keys: space = pause, 1–4 = send %, A = auto toggle, Esc = deselect.
 
 ## Menu
-A live 4-bot battle plays on a decorative island behind the menu (new island when it ends). The map is shown large (the island fills most of the screen, little fog). Glossy logo, compact 3D mode cards with progress (campaign regions, best conquest stage, quick battle wins), sound/music/help buttons.
+Loading screen (animated island badge, progress bar, a one-line tip): shown at once when a mode starts (the 3-2-1 countdown waits for it, at least 1.1 s so the tip can be read) and at boot, where it covers the page until the menu's background battle has drawn its first frame and the font is ready, so the menu appears in one go. A live 4-bot battle plays on a decorative island behind the menu (new island when it ends). The map is shown large (the island fills most of the screen, little fog). Glossy logo, compact 3D mode cards with progress (campaign regions, best conquest stage, quick battle wins), sound/music/help buttons.
 
 Commander panel (👤 on the menu): pick your colour (8), troop style (soldiers, knights, vikings, archers) and building style (classic, nordic, desert, eastern); saved in the browser. Rivals get their own colours and random, distinct styles every battle. The campaign is hidden from the menu for now (code kept).
 

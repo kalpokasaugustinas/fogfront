@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=44">
+  <link rel="stylesheet" href="style.css?v=45">
   <!-- phones held upright: turn the page to landscape before the first paint (main.js keeps it in
        sync on resize, but only runs once every module has loaded) -->
   <script>
@@ -19,10 +19,72 @@
       root.style.setProperty('--sh', innerHeight + 'px');
       root.classList.toggle('rotated', upright);
       root.classList.toggle('compact', (upright ? innerWidth : innerHeight) < 500);
+      root.classList.add('booting');   // loading screen until the menu's first frame is drawn (main.js)
     })();
   </script>
 </head>
 <body>
+  <!-- loading screen: shown at boot (html.booting) and while a game mode starts (.on); plain
+       html/css/svg so it appears instantly, before any game code has run -->
+  <div id="loading">
+    <div class="ld-scene">
+      <svg viewBox="0 0 200 200" aria-hidden="true">
+        <defs>
+          <radialGradient id="ld-sea" cx="50%" cy="45%" r="60%"><stop offset="0" stop-color="#8ccfe0"/><stop offset="1" stop-color="#4f9fbd"/></radialGradient>
+          <linearGradient id="ld-grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fd46a"/><stop offset="1" stop-color="#6aa846"/></linearGradient>
+          <clipPath id="ld-clip"><circle cx="100" cy="100" r="92"/></clipPath>
+        </defs>
+        <circle cx="100" cy="100" r="96" fill="#f6e2a8" stroke="#a3650a" stroke-width="6"/>
+        <g clip-path="url(#ld-clip)">
+          <rect width="200" height="200" fill="url(#ld-sea)"/>
+          <g class="ld-waves" stroke="#d8f1f6" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.7">
+            <path d="M20 160 q8 -5 16 0 t16 0"/><path d="M140 170 q8 -5 16 0 t16 0"/><path d="M150 40 q8 -5 16 0 t16 0"/>
+          </g>
+          <!-- island: cliff, sand rim, grass, forest, a lake -->
+          <path d="M40 122 C34 92 58 62 96 60 C138 58 168 84 162 116 C158 140 128 152 98 150 C66 150 44 142 40 122 Z" fill="#6f6a64" transform="translate(0 9)"/>
+          <path d="M40 122 C34 92 58 62 96 60 C138 58 168 84 162 116 C158 140 128 152 98 150 C66 150 44 142 40 122 Z" fill="#f1dfae"/>
+          <path d="M46 120 C42 96 62 68 96 67 C134 66 160 88 155 114 C151 135 126 144 98 143 C70 143 50 137 46 120 Z" fill="url(#ld-grass)"/>
+          <ellipse cx="128" cy="122" rx="14" ry="7" fill="#5fb3cf"/>
+          <g fill="#3f7a3c"><circle cx="64" cy="112" r="7"/><circle cx="74" cy="118" r="6"/><circle cx="60" cy="122" r="5.5"/><circle cx="140" cy="92" r="6"/><circle cx="148" cy="99" r="5"/></g>
+          <!-- castle with a waving flag -->
+          <g transform="translate(100 104)">
+            <ellipse cx="0" cy="14" rx="26" ry="6" fill="rgba(0,0,0,0.18)"/>
+            <rect x="-20" y="-8" width="40" height="22" fill="#d9d5cc"/><rect x="-20" y="-8" width="40" height="4" fill="#bdb7ab"/>
+            <rect x="-26" y="-18" width="12" height="32" fill="#cfcac0"/><rect x="14" y="-18" width="12" height="32" fill="#cfcac0"/>
+            <path d="M-28 -18 h16 l-8 -10 z M12 -18 h16 l-8 -10 z" fill="#2f74d6"/>
+            <path d="M-6 14 v-9 a6 6 0 0 1 12 0 v9 z" fill="#6b4a32"/>
+            <rect x="-1" y="-40" width="2" height="32" fill="#6b4a32"/>
+            <path class="ld-flag" d="M1 -40 q10 -3 18 2 q-8 4 -18 9 z" fill="#d1403a"/>
+          </g>
+        </g>
+        <g class="ld-clouds" fill="#ffffff">
+          <g opacity="0.85"><ellipse cx="40" cy="46" rx="22" ry="9"/><ellipse cx="54" cy="40" rx="14" ry="9"/></g>
+          <g opacity="0.75"><ellipse cx="160" cy="150" rx="20" ry="8"/><ellipse cx="148" cy="144" rx="12" ry="8"/></g>
+        </g>
+      </svg>
+    </div>
+    <div class="ld-title">FRONTLINES</div>
+    <div class="ld-bar"><span></span></div>
+    <p id="ld-tip" class="ld-tip"></p>
+  </div>
+  <script>
+    // short tips for the loading screen (main.js picks a new one every time it shows)
+    window.__tips = [
+      'Drag from your tile to a neighbour to attack.',
+      'Tap your own tile to open the build wheel.',
+      'Full tiles stop growing: spend the surplus.',
+      'Turn on Auto to pipe troops to the front.',
+      'Forts make defenders count x1.5.',
+      'Barracks: attacks from here hit x1.5.',
+      'Farms add +60% growth to their tile.',
+      'Forest and highland tiles are easier to hold.',
+      'River and lakeside tiles grow faster.',
+      'Hold a glowing obelisk to gain its perk.',
+      'A tile under attack stops growing.',
+      'Bots gang up on whoever grows fastest.',
+    ];
+    document.getElementById('ld-tip').textContent = '\u{1F4A1} ' + __tips[Math.floor(Math.random() * __tips.length)];
+  </script>
   <!-- main menu -->
   <section id="menu" class="screen">
     <!-- live demo battle behind everything -->
@@ -47,7 +109,7 @@
       <button id="btn-expedition" class="mode gold"><span class="m-ico">🧭</span><span class="m-txt"><b>Conquest</b><small id="m-expedition">Valley → World roguelite</small></span><span class="play">GO</span></button>
       <button id="btn-skirmish" class="mode green"><span class="m-ico">⚔️</span><span class="m-txt"><b>Quick battle</b><small>Random island · 3 rivals</small></span><span class="play">FIGHT</span></button>
     </div>
-    <span id="version">build 44 · 2026-11-03 10:12</span>
+    <span id="version">build 45 · 2026-11-03 10:25</span>
   </section>
 
   <!-- campaign world map -->
@@ -162,6 +224,6 @@
   </div>
 
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=44"></script>
+  <script type="module" src="js/main.js?v=45"></script>
 </body>
 </html>

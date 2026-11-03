@@ -1,13 +1,13 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=44';
-import { generateMap, rng } from './mapgen.js?v=44';
-import { Battle } from './battle.js?v=44';
-import { personalities } from './ai.js?v=44';
-import { Campaign } from './campaign.js?v=44';
-import { Expedition, stages, perks } from './expedition.js?v=44';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=44';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=44';
-import { previewBuildings } from './structures.js?v=44';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=45';
+import { generateMap, rng } from './mapgen.js?v=45';
+import { Battle } from './battle.js?v=45';
+import { personalities } from './ai.js?v=45';
+import { Campaign } from './campaign.js?v=45';
+import { Expedition, stages, perks } from './expedition.js?v=45';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=45';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=45';
+import { previewBuildings } from './structures.js?v=45';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -89,7 +89,7 @@ function renderRegionInfo() {
     <p>${r.segments} segments · ${r.bots} enem${r.bots > 1 ? 'ies' : 'y'} · neutral garrisons ${Math.round(r.neutral[0] * 100)}–${Math.round(r.neutral[1] * 100)}% of tile size</p>
     ${open ? '<button id="attack-btn" class="primary">⚔️ Attack</button>'
            : campaign.owned.has(r.id) ? '<p>✅ Yours</p>' : '<p>🔒 Conquer a neighbouring region first</p>'}`;
-  if (open) $('attack-btn').onclick = () => startBattle(campaign.battleSetup(r.id), 'campaign', r.id);
+  if (open) $('attack-btn').onclick = () => withLoading(() => startBattle(campaign.battleSetup(r.id), 'campaign', r.id));
 }
 
 $('campaign-canvas').addEventListener('pointerdown', (e) => {
@@ -691,9 +691,9 @@ function endBattle() {
 }
 $('end-continue').onclick = () => { if (mode === 'campaign') show('campaign'); else show('menu'); };
 $('end-retry').onclick = () => {
-  if (mode === 'campaign') startBattle(campaign.battleSetup(regionId), 'campaign', regionId);
-  else if (mode === 'expedition') startExpedition();
-  else startSkirmish();
+  if (mode === 'campaign') withLoading(() => startBattle(campaign.battleSetup(regionId), 'campaign', regionId));
+  else if (mode === 'expedition') withLoading(startExpedition);
+  else withLoading(startSkirmish);
 };
 
 // ---------- expedition (zoom-out roguelite) ----------
@@ -875,8 +875,8 @@ function addQuickWin() { try { localStorage.setItem(wins_key, quickWins() + 1); 
 
 // ---------- menu, help, keyboard ----------
 $('btn-campaign').onclick = () => show('campaign');
-$('btn-skirmish').onclick = startSkirmish;
-$('btn-expedition').onclick = startExpedition;
+$('btn-skirmish').onclick = () => withLoading(startSkirmish);
+$('btn-expedition').onclick = () => withLoading(startExpedition);
 $('btn-help').onclick = () => $('help').classList.remove('hidden');
 
 // commander panel: colour swatches, troop and building style cards with live previews
@@ -964,6 +964,35 @@ function playBattleSounds(dt) {
 
 // runs at the monitor's refresh rate (60, 144 Hz ...): the sim advances in fixed steps,
 // drawing interpolates between them (see acc in drawBattle)
+// loading screen while a mode starts: show it at once (with a fresh tip), let it paint, then
+// build the battle (map generation blocks for a moment); it stays at least loadMin seconds so
+// the tip can be read, and the 3-2-1 countdown waits until it's gone
+const loadMin = 1.1;
+let loading = false;
+function withLoading(start) {
+  const tips = window.__tips ?? [];
+  if (tips.length) $('ld-tip').textContent = '\u{1F4A1} ' + tips[Math.floor(Math.random() * tips.length)];
+  $('loading').classList.add('on');
+  loading = true;
+  const t0 = performance.now();
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    start();
+    // hide after the first battle frame is drawn
+    requestAnimationFrame(() => setTimeout(() => { $('loading').classList.remove('on'); loading = false; }, Math.max(0, loadMin * 1000 - (performance.now() - t0))));
+  }));
+}
+
+// boot: the menu stays hidden behind the loading screen until its background battle has drawn
+// its first frame and the game font is ready, so everything appears at once
+let booting = document.documentElement.classList.contains('booting');
+function bootDone() {
+  if (!booting) return;
+  booting = false;
+  const fonts = document.fonts?.ready ?? Promise.resolve();
+  Promise.race([fonts, new Promise((r) => setTimeout(r, 1500))])
+    .then(() => requestAnimationFrame(() => document.documentElement.classList.remove('booting')));
+}
+
 function frame(now) {
   requestAnimationFrame(frame);   // schedule first, so an error in one frame never stops the loop
   const dt = Math.min(0.1, (now - last) / 1000);
@@ -972,7 +1001,7 @@ function frame(now) {
     if (countdown > 0) {
       // 3-2-1: the map is live to look at, but nothing moves until it's over. it waits while
       // paused (e.g. the expedition zoom-out), so the first drum hits when the numbers appear
-      if (!paused) {
+      if (!paused && !loading) {
         if (countdown === 3) sfx.drum(0);
         const before = Math.ceil(countdown);
         countdown = Math.max(0, countdown - dt);
@@ -993,7 +1022,8 @@ function frame(now) {
     uiTimer -= dt;
     if (uiTimer <= 0) { updatePanel(); uiTimer = 0.15; }
   } else if (screen === 'campaign') drawCampaign();
-  else if (screen === 'menu') drawMenu(dt);
+  else if (screen === 'menu') { drawMenu(dt); bootDone(); }
+  else bootDone();
 }
 requestAnimationFrame(frame);
 setPct(0.5);
