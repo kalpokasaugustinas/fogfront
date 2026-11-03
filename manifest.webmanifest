@@ -1,7 +1,7 @@
 {
-  "name": "Frontlines",
-  "short_name": "Frontlines",
-  "description": "Grow troops, build, drag to attack: a territory strategy game.",
+  "name": "Fogfront",
+  "short_name": "Fogfront",
+  "description": "Grow foglets, build, drag to attack: a territory strategy game.",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

@@ -7,9 +7,9 @@
 //   - pick 1 of 3 perks
 // bots scale with you: base troops + 70% of your carried people, and capitals with the same
 // total bonus strength in a random mix. losing a stage ends the run.
-import { effects } from './config.js?v=54';
-import { personalities } from './ai.js?v=54';
-import { rng } from './mapgen.js?v=54';
+import { effects } from './config.js?v=55';
+import { personalities } from './ai.js?v=55';
+import { rng } from './mapgen.js?v=55';
 
 export const stages = [
   { name: 'Valley', detail: 1, cells: 12, bots: 1, shape: 'random', neutral: [0.12, 0.3] },
@@ -36,7 +36,7 @@ export const perks = [
   { id: 'conscription', icon: '📜', name: 'Conscription', desc: 'Neutral segments defend at half strength against you', mods: { neutralDef: 0.5 } },
   { id: 'walls', icon: '🧱', name: 'Great walls', desc: 'Your capital defends +60%', mods: { capitalDef: 0.6 } },
   { id: 'recruiters', icon: '📯', name: 'Recruiters', desc: 'Your reserve flows into the capital 2x faster', mods: { reserve: 2 } },
-  { id: 'plunder', icon: '💰', name: 'Plunder', desc: 'Taking an enemy segment adds 15% of its cap as troops', mods: { loot: 0.15 } },
+  { id: 'plunder', icon: '💰', name: 'Plunder', desc: 'Taking an enemy segment adds 15% of its cap as foglets', mods: { loot: 0.15 } },
   { id: 'masons', icon: '🛡️', name: 'Stonemasons', desc: 'Forts defend x1.8 instead of x1.5', mods: { fort: 1.8 } },
 ];
 

@@ -221,6 +221,9 @@ html.compact .stars span { font-size: 30px; } html.compact .stars span:nth-child
 .board tr.me td { background: rgba(255,215,106,0.45); }
 .board tr.me td:first-child { border-radius: 8px 0 0 8px; } .board tr.me td:last-child { border-radius: 0 8px 8px 0; }
 #board .card { text-align: center; }
+/* menu foglets: one band each side of the mode buttons, standing on the bottom of the screen */
+.foglets { position: absolute; bottom: 3%; width: min(330px, calc(50% - 260px)); height: min(240px, 36%); z-index: 1; pointer-events: none; }
+.foglets.left { left: 2%; } .foglets.right { right: 2%; }
 .zooming { transition: transform 1.7s cubic-bezier(0.45, 0, 0.2, 1), opacity 1.7s ease; }
 .zoom-snap { pointer-events: none; z-index: 2; }
 

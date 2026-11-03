@@ -1,6 +1,6 @@
-# Frontlines
+# Fogfront
 
-A single-player territory strategy game for the browser; on phones the first tap goes fullscreen. Conquer a world map region by region. Each region is a battle against computer opponents on a map split into segments. Grow troops, build, and do the math on which fights to pick.
+A territory strategy game (formerly Frontlines) for the browser; on phones the first tap goes fullscreen. Conquer a world map region by region. Each region is a battle against computer opponents on a map split into segments. Grow troops, build, and do the math on which fights to pick. In the game the troops are called **foglets**.
 
 Prototype stage.
 
@@ -55,7 +55,7 @@ Prototype stage.
 Keys: space = pause, 1–4 = send %, A = auto toggle, Esc = deselect.
 
 ## Menu
-Loading screen (animated island badge, progress bar, a one-line tip): shown at once when a mode starts (the 3-2-1 countdown waits for it, at least 1.1 s so the tip can be read) and at boot, where it covers the page until the menu's background battle has drawn its first frame and the font is ready, so the menu appears in one go. A live 4-bot battle plays on a decorative island behind the menu (new island when it ends). The map is shown large (the island fills most of the screen, little fog). Glossy logo, compact 3D mode cards outlined in a dark tone like the logo (dark rim, thick bottom edge, light top highlight), with progress (campaign regions, best conquest stage); large round corner buttons for profile, sound, music, leaderboard and help.
+Loading screen (animated island badge, progress bar, a one-line tip): shown at once when a mode starts (the 3-2-1 countdown waits for it, at least 1.1 s so the tip can be read) and at boot, where it covers the page until the menu's background battle has drawn its first frame and the font is ready, so the menu appears in one go. A live 4-bot battle plays on a decorative island behind the menu (new island when it ends). The map is shown large (the island fills most of the screen, little fog). Two bands of foglets (the game's troops) stand left and right of the mode buttons, blue against red, each foglet in a different kit (knight, archer, soldier, viking): they hop, shake their weapons, frown, go red-marked when furious and shout short taunts in speech bubbles (`js/foglets.js`). Glossy logo, compact 3D mode cards outlined in a dark tone like the logo (dark rim, thick bottom edge, light top highlight), with progress (campaign regions, best conquest stage); large round corner buttons for profile, sound, music, leaderboard and help.
 
 Commander panel (👤 on the menu): pick your colour (8), troop style (soldiers, knights, vikings, archers) and building style (classic, nordic, desert, eastern); saved in the browser. Rivals get their own colours and random, distinct styles every battle. The campaign is hidden from the menu for now (code kept).
 

@@ -1,14 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=54';
-import { generateMap, rng } from './mapgen.js?v=54';
-import { initAnalytics, track } from './analytics.js?v=54';
-import { Battle } from './battle.js?v=54';
-import { personalities } from './ai.js?v=54';
-import { Campaign } from './campaign.js?v=54';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=54';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=54';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=54';
-import { previewBuildings } from './structures.js?v=54';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=55';
+import { generateMap, rng } from './mapgen.js?v=55';
+import { initAnalytics, track } from './analytics.js?v=55';
+import { makeBand, drawBand } from './foglets.js?v=55';
+import { Battle } from './battle.js?v=55';
+import { personalities } from './ai.js?v=55';
+import { Campaign } from './campaign.js?v=55';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=55';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=55';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=55';
+import { previewBuildings } from './structures.js?v=55';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -539,7 +540,7 @@ $('battle-canvas').addEventListener('pointerup', (e) => {
     if (playing && canTarget(g.sid, to)) sendFrom(g.sid, to);
     // dragged back onto the same tile: stop its sending (the standing route)
     else if (playing && to === g.sid && isMine(to)) {
-      if (battle.routes.has(to)) { battle.clearRoute(to); flash('✋ Route removed: this tile keeps its troops'); }
+      if (battle.routes.has(to)) { battle.clearRoute(to); flash('✋ Route removed: this tile keeps its foglets'); }
       else flash('Cancelled');
     }
   } else if (!g.mode && playing) tapAt(g.sid);
@@ -562,7 +563,7 @@ function sendFrom(from, to) {
   if (auto && isMine(to) && battle.setRoute(0, from, to, 1 - pct)) {
     flash(`🔁 Route set: keeps ${Math.round((1 - pct) * 100)}% of cap, forwards the rest`);
     tutorEvent('route');
-  } else if (!sent) flash('Not enough troops');
+  } else if (!sent) flash('Not enough foglets');
 }
 
 function setAuto(on) {
@@ -621,7 +622,7 @@ function renderWheel() {
     g.addEventListener('pointerdown', (e) => e.stopPropagation());
     g.addEventListener('click', () => {
       if (battle.build(0, selected, g.dataset.type)) { sfx.build(); tutorEvent('build'); }
-      else flash(`${buildings[g.dataset.type].name} needs ${battle.costOf(0, g.dataset.type)} troops in this tile`);
+      else flash(`${buildings[g.dataset.type].name} needs ${battle.costOf(0, g.dataset.type)} foglets in this tile`);
     });
   }
   updateWheel();
@@ -718,8 +719,8 @@ function statsHtml(b) {
   const mine = b.segs.filter((s) => s.owner === 0);
   const blds = Object.entries(buildings).map(([k, v]) => [v.icon, mine.filter((s) => s.building === k).length]).filter(([, c]) => c);
   const cells = [
-    ['⏱️', fmtTime(b.time), 'time'], ['🗡️', st.killed, 'killed'], ['💀', st.deaths, 'troops lost'],
-    ['🌱', st.made, 'troops raised'], ['🏳️', st.captured, 'tiles taken'], ['🏚️', st.lost, 'tiles lost'],
+    ['⏱️', fmtTime(b.time), 'time'], ['🗡️', st.killed, 'killed'], ['💀', st.deaths, 'foglets lost'],
+    ['🌱', st.made, 'foglets raised'], ['🏳️', st.captured, 'tiles taken'], ['🏚️', st.lost, 'tiles lost'],
     ['🗺️', `${mine.length} / ${Math.max(st.peak, mine.length)}`, 'tiles held / peak'], ['🏗️', st.built, 'built'], ['📣', st.sent, 'orders'],
   ];
   // numbers count up when the card opens (data-n = final value); tiles pop in one after another
@@ -968,7 +969,10 @@ function newDemo() {
   if (!mv) mv = new MapView($('menu-canvas'), map, theme); else mv.setMap(map, theme);
   demoN++;
 }
+// menu mascots: blue band left, red band right, each foglet in a different kit
+const bands = [makeBand($('foglets-l'), factionColors[0], ['knight', 'archer', 'soldier'], 1, 0), makeBand($('foglets-r'), factionColors[1], ['viking', 'soldier', 'archer'], -1, 1)];
 function drawMenu(dt) {
+  for (const b of bands) drawBand(b, performance.now() / 1000);
   if (!demo || demo.state !== 'running' || demo.time > 240) newDemo();
   demoAcc += dt * rules.timeScale;
   while (demoAcc >= rules.step) { demo.step(rules.step); demoAcc -= rules.step; }
@@ -1167,17 +1171,17 @@ const tutorSteps = [
     text: () => 'Welcome, commander! 🏰 This is your castle. Grey tiles are neutral; the other castle belongs to your rival.' },
   { id: 'attack', hold: true, finger: () => [tutor.home, tutor.target], allow: () => pair(tutor.home, tutor.target),
     enter() { tseg(tutor.home).troops = 40; tseg(tutor.target).troops = 8; },
-    text: () => `👆 Drag from your castle to the glowing tile. ${Math.round(pct * 100)}% of your 40 troops = ${Math.floor(40 * pct)} attack its 8 defenders.` },
+    text: () => `👆 Drag from your castle to the glowing tile. ${Math.round(pct * 100)}% of your 40 foglets = ${Math.floor(40 * pct)} attack its 8 defenders.` },
   { id: 'capture', ring: () => [tutor.target],
-    text: () => 'Your troops march to the border and fight. The bigger number wins and keeps the difference.' },
+    text: () => 'Your foglets march to the border and fight. The bigger number wins and keeps the difference.' },
   { id: 'build', hold: true, ring: () => [tutor.target],
     enter() { tseg(tutor.target).troops = battle.costOf(0, 'farm'); },
-    text: () => `🌾 Your new tile has ${battle.costOf(0, 'farm')} troops. A Farm costs ${battle.costOf(0, 'farm')} and adds +60% growth. Tap the tile, then the glowing farm.` },
+    text: () => `🌾 Your new tile has ${battle.costOf(0, 'farm')} foglets. A Farm costs ${battle.costOf(0, 'farm')} and adds +60% growth. Tap the tile, then the glowing farm.` },
   { id: 'time', ok: 'Got it', okAfter: 3, pulse: ['speed', 'clock'],
-    text: () => '⏱️ Time runs now: every tile grows troops each second (watch the numbers). ❚❚ pauses, ▶▶ speeds up.' },
+    text: () => '⏱️ Time runs now: every tile grows foglets each second (watch the numbers). ❚❚ pauses, ▶▶ speeds up.' },
   { id: 'route', hold: true, finger: () => [tutor.home, tutor.target], allow: () => pair(tutor.home, tutor.target), pulse: ['auto'],
     enter() { setAuto(true); tseg(tutor.home).troops = Math.max(tseg(tutor.home).troops, 20); },
-    text: () => '🔁 Drag from your castle to your farm tile. With Auto on, this sets a route: spare troops keep flowing there.' },
+    text: () => '🔁 Drag from your castle to your farm tile. With Auto on, this sets a route: spare foglets keep flowing there.' },
   { id: 'goal', hold: true, ok: "Let's go", ring: () => [tutor.rival],
     text: () => '🏆 Take every enemy tile to win. Your rival wakes up now. Good luck!' },
 ];

@@ -31,7 +31,7 @@ export const rules = {
 // a captured segment keeps its building (the new owner gets it).
 export const buildings = {
   farm:     { name: 'Farm',     icon: '🌾', cost: 30, desc: '+60% growth in this segment' },
-  barracks: { name: 'Barracks', icon: '⚔️', cost: 40, desc: 'troops sent from here attack x1.5' },
+  barracks: { name: 'Barracks', icon: '⚔️', cost: 40, desc: 'foglets sent from here attack x1.5' },
   fort:     { name: 'Fort',     icon: '🛡️', cost: 40, desc: 'defenders here count x1.5' },
   hospital: { name: 'Hospital', icon: '➕', cost: 50, desc: '+50% growth in your adjacent segments' },
   lab:      { name: 'Lab',      icon: '🔬', cost: 60, desc: '+10% growth in all your segments' },

@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#a9bcbc">
-  <title>Frontlines</title>
-  <meta name="description" content="A territory strategy game for phone and desktop: grow troops, build, drag to attack and conquer the island. Free in the browser, no install.">
+  <title>Fogfront</title>
+  <meta name="description" content="A territory strategy game for phone and desktop: grow foglets, build, drag to attack and conquer the island. Free in the browser, no install.">
   <!-- link preview (chat apps, social sites) -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Frontlines: conquer the island">
-  <meta property="og:description" content="Grow troops, build, drag to attack. A quick territory strategy game in your browser.">
+  <meta property="og:title" content="Fogfront: conquer the islands beyond the fog">
+  <meta property="og:description" content="Grow foglets, build, drag to attack. A quick territory strategy game in your browser.">
   <meta property="og:url" content="https://kalpokasaugustinas.github.io/frontlines/">
   <meta property="og:image" content="https://kalpokasaugustinas.github.io/frontlines/img/og.png">
   <meta property="og:image:width" content="1200">
@@ -26,7 +26,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=54">
+  <link rel="stylesheet" href="style.css?v=55">
   <!-- phones held upright: turn the page to landscape before the first paint (main.js keeps it in
        sync on resize, but only runs once every module has loaded) -->
   <script>
@@ -80,7 +80,7 @@
         </g>
       </svg>
     </div>
-    <div class="ld-title">FRONTLINES</div>
+    <div class="ld-title">FOGFRONT</div>
     <div class="ld-bar"><span></span></div>
     <p id="ld-tip" class="ld-tip"></p>
   </div>
@@ -90,7 +90,7 @@
       'Drag from your tile to a neighbour to attack.',
       'Tap your own tile to open the build wheel.',
       'Full tiles stop growing: spend the surplus.',
-      'Turn on Auto to pipe troops to the front.',
+      'Turn on Auto to pipe foglets to the front.',
       'Forts make defenders count x1.5.',
       'Barracks: attacks from here hit x1.5.',
       'Farms add +60% growth to their tile.',
@@ -110,22 +110,25 @@
     <header class="menu-top">
       <span class="badge hidden" id="m-regions" title="Campaign regions">🏳️ 1/34</span>
       <span class="spacer"></span>
-      <button id="btn-profile" class="round" title="Commander: your colour, troops and buildings">👤</button>
+      <button id="btn-profile" class="round" title="Commander: your colour, foglets and buildings">👤</button>
       <button id="btn-sfx" class="round toggle" title="Sound">🔊</button>
       <button id="btn-music" class="round toggle" title="Music">🎵</button>
       <button id="btn-board" class="round" title="Conquest leaderboard">🏅</button>
       <button id="btn-help" class="round" title="How to play">❔</button>
     </header>
+    <!-- foglet bands shouting at each other across the menu (js/foglets.js) -->
+    <canvas id="foglets-l" class="foglets left" aria-hidden="true"></canvas>
+    <canvas id="foglets-r" class="foglets right" aria-hidden="true"></canvas>
     <div class="logo">
-      <h1>FRONTLINES</h1>
-      <div class="ribbon">Conquer the map, one region at a time</div>
+      <h1>FOGFRONT</h1>
+      <div class="ribbon">Push back the fog, one island at a time</div>
     </div>
     <div class="modes">
       <button id="btn-campaign" class="mode blue pulse hidden"><span class="m-ico">🗺️</span><span class="m-txt"><b>Campaign</b><small id="m-campaign">34 regions · 4 empires</small></span><span class="play">PLAY</span></button>
       <button id="btn-expedition" class="mode gold"><span class="m-ico">🧭</span><span class="m-txt"><b>Conquest</b><small id="m-expedition">Valley → World roguelite</small></span><span class="play">GO</span></button>
       <button id="btn-skirmish" class="mode green"><span class="m-ico">⚔️</span><span class="m-txt"><b>Quick battle</b><small>Random island · 3 rivals</small></span><span class="play">FIGHT</span></button>
     </div>
-    <span id="version">build 54 · 2026-11-03 16:58</span>
+    <span id="version">build 55 · 2026-11-03 17:24</span>
   </section>
 
   <!-- campaign world map -->
@@ -213,7 +216,7 @@
     <div class="card end-card profile-card">
       <div class="end-ribbon"><h2>Commander</h2></div>
       <h3>Colour</h3><div id="pf-colors" class="pf-row"></div>
-      <h3>Troops</h3><div id="pf-troops" class="pf-row"></div>
+      <h3>Foglets</h3><div id="pf-troops" class="pf-row"></div>
       <h3>Buildings</h3><div id="pf-buildings" class="pf-row"></div>
       <p class="hint">Rivals get their own colours and styles every battle.</p>
       <div class="end-btns"><button id="pf-done" class="mode green big-btn">Done</button></div>
@@ -225,7 +228,7 @@
     <div class="card scroll">
       <h2>🏅 Conquest leaderboard</h2>
       <div id="board-list"></div>
-      <p class="hint">Per stage (×1 Valley … ×5 World): clear 500 · each ★ 150 · speed up to 400 (less the slower; 0 after 10 min) · plus 15 × √troops killed.</p>
+      <p class="hint">Per stage (×1 Valley … ×5 World): clear 500 · each ★ 150 · speed up to 400 (less the slower; 0 after 10 min) · plus 15 × √foglets defeated.</p>
       <button id="board-close" class="primary">Close</button>
     </div>
   </div>
@@ -236,16 +239,16 @@
       <h2>How to play</h2>
       <ul>
         <li>The map is split into segments. Each one you own grows <b>1% of its cap per second</b> up to the cap (largest tile: 400). Bigger tiles grow faster and hold more.</li>
-        <li><b>Drag</b> from your tile to a neighbour to send the chosen % of troops: an attack on enemy/neutral, a move to your own.</li>
-        <li><b>Build:</b> <b>tap</b> your tile to open its <b>build wheel</b> (tiles without a structure). Tap a building to build it with that tile's troops.</li>
+        <li><b>Drag</b> from your tile to a neighbour to send the chosen % of its foglets: an attack on enemy/neutral, a move to your own.</li>
+        <li><b>Build:</b> <b>tap</b> your tile to open its <b>build wheel</b> (tiles without a structure). Tap a building to build it with that tile's foglets.</li>
         <li><b>Zoom:</b> pinch (or mouse wheel) to zoom in, drag empty ground to pan.</li>
-        <li><b>🔁 Auto</b> (on by default): sending to your own neighbour also sets a <b>route</b>. Every second the source tile forwards all troops above its reserve (100% − send %, of its cap) to the target. Chain routes to pipe troops from the back to the front. Tap a tile and press ✕ to end its route.</li>
-        <li>Fight: attackers stop at the border and fight for 1–3 seconds. Attack = troops × attack bonus, defense = defenders × defense bonus. Higher number wins; the winner keeps the difference.</li>
+        <li><b>🔁 Auto</b> (on by default): sending to your own neighbour also sets a <b>route</b>. Every second the source tile forwards all foglets above its reserve (100% − send %, of its cap) to the target. Chain routes to pipe troops from the back to the front. Tap a tile and press ✕ to end its route.</li>
+        <li>Fight: attackers stop at the border and fight for 1–3 seconds. Attack = foglets × attack bonus, defense = defenders × defense bonus. Higher number wins; the winner keeps the difference.</li>
         <li>Lakes and mountains can't be occupied or crossed.</li>
         <li>Terrain: 🏔️ Highland (next to mountains) defenders +30% · 🌲 Forest defenders +15% · 🌊 River +25% growth · 💧 Lakeside +15% growth.</li>
         <li>✨ Relic tiles: a few neutral tiles hold a shrine with a perk (shown above the number) and a stronger garrison. Whoever holds the tile gets the perk; lose the tile, lose the perk.</li>
         <li>Neutral (grey) tiles start with a garrison that matches their size and slowly regrow back to it (0.2% of cap per second) if you only damage them. Bots fight each other too: let them weaken each other.</li>
-        <li>Each segment can hold one building, paid with its own troops. Captured buildings switch sides.</li>
+        <li>Each segment can hold one building, paid with its own foglets. Captured buildings switch sides.</li>
       </ul>
       <ul id="help-buildings"></ul>
       <p><b>🧭 Conquest</b> (roguelite): 5 stages from a valley to the whole world. Win a stage and everything you hold collapses into one capital on a bigger map: all your people come along (the capital fills up, the rest waits in a 🏕️ reserve), and each building type becomes a capital bonus = its effect × the share of your segments that had it (4 farms of 10 segments → +60% × 40% = +24% growth). Nothing can be built in a capital. Bots start with part of your strength and their own capitals. Pick a perk at every zoom-out. Lose once and the run ends.</p>
@@ -259,6 +262,6 @@
   </div>
 
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=54"></script>
+  <script type="module" src="js/main.js?v=55"></script>
 </body>
 </html>
