@@ -2,7 +2,7 @@
 // shouting at each other across the menu. each one is the in-game troop figure (drawFoglet, the
 // same drawing as on the map) drawn big, with a tiny angry face added and more movement: slow
 // hops, leaning in at the foe, shaking with rage. drawn on two small canvases every menu frame
-import { drawFoglet, hexToRgb } from './render.js?v=57';
+import { drawFoglet, hexToRgb } from './render.js?v=58';
 
 const shouts = ['Grr!', 'Hey!', '!!', 'Ours!', 'Back off!', 'Charge!', 'Mine!'];
 
