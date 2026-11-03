@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=59';
-import * as structures from './structures.js?v=59';
+import { themes } from './config.js?v=60';
+import * as structures from './structures.js?v=60';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -1011,59 +1011,81 @@ export class MapView {
 // troop figures, drawn from small cached sprites (fast enough for hundreds per frame).
 // soldier = body + head; battalion = 2 x 3 tiny soldiers with a banner (zoomed-out maps)
 const unitCache = new Map();
-// style: soldier (bare head), knight (steel helmet + shield), viking (horned helmet + round
-// shield), archer (hood + bow)
-// one foglet (the troop figure): body, shaded side, head and its kit (soldier / knight / viking /
-// archer), feet at (mx, my), sc = size (1 = the 5 x 8 map figure). also drawn big on the menu
+// one foglet (the troop figure), feet at (mx, my), sc = size (1 = the 5 x 8 map figure); also drawn
+// big on the menu. body block in the team colour with a shaded side, square head, then a kit that
+// changes the whole silhouette:
+//   soldier: kettle helmet, belt, spear · knight: steel breastplate with a team stripe, plumed helm,
+//   shield · viking: horned helmet, big beard, fur collar, round shield · archer: green hood and
+//   cape, quiver, bow · wizard: long flared robe with gold hem, pointed hat with a star, white beard,
+//   staff · pirate: striped shirt, eyepatch, tricorne, cutlass · barbarian: bare chest, fur kilt in
+//   the team colour, fur hood with ears, big club
 export function drawFoglet(x, mx, my, sc, col, style = 'soldier') {
-  const body = css(col), side = css(shade(col, -0.3)), skin = 'rgb(236,206,176)';
-  x.fillStyle = body; x.fillRect(mx - 1.3 * sc, my - 4 * sc, 2.6 * sc, 4 * sc);
-  x.fillStyle = side; x.fillRect(mx + 0.2 * sc, my - 4 * sc, 1.1 * sc, 4 * sc);
-  x.fillStyle = skin; x.beginPath(); x.arc(mx, my - 5 * sc, 1.15 * sc, 0, Math.PI * 2); x.fill();
-  if (style === 'knight') {
-    x.fillStyle = '#b8c0c8'; x.beginPath(); x.arc(mx, my - 5.1 * sc, 1.25 * sc, Math.PI, 0); x.fill();
-    x.fillRect(mx - 1.25 * sc, my - 5.1 * sc, 2.5 * sc, 0.5 * sc);
-    x.fillStyle = side; x.fillRect(mx - 2.1 * sc, my - 3.6 * sc, 1.2 * sc, 2.2 * sc);   // shield
-    x.fillStyle = '#f2f2f2'; x.fillRect(mx - 1.65 * sc, my - 3.3 * sc, 0.3 * sc, 1.6 * sc);
-  } else if (style === 'viking') {
-    x.fillStyle = '#8a9096'; x.beginPath(); x.arc(mx, my - 5.2 * sc, 1.2 * sc, Math.PI, 0); x.fill();
-    x.strokeStyle = '#f4ead2'; x.lineWidth = 0.45 * sc;
-    x.beginPath(); x.moveTo(mx - 1.1 * sc, my - 5.4 * sc); x.lineTo(mx - 1.7 * sc, my - 6.6 * sc); x.moveTo(mx + 1.1 * sc, my - 5.4 * sc); x.lineTo(mx + 1.7 * sc, my - 6.6 * sc); x.stroke();
-    x.fillStyle = '#8a5a34'; x.beginPath(); x.arc(mx - 1.4 * sc, my - 2.4 * sc, 1.15 * sc, 0, Math.PI * 2); x.fill();
-    x.fillStyle = body; x.beginPath(); x.arc(mx - 1.4 * sc, my - 2.4 * sc, 0.7 * sc, 0, Math.PI * 2); x.fill();
-  } else if (style === 'archer') {
-    x.fillStyle = side; x.beginPath(); x.arc(mx, my - 5.1 * sc, 1.3 * sc, Math.PI * 0.9, Math.PI * 2.1); x.fill();
-    x.strokeStyle = '#7a5230'; x.lineWidth = 0.4 * sc;
-    x.beginPath(); x.arc(mx + 1.2 * sc, my - 3.2 * sc, 2 * sc, -Math.PI * 0.45, Math.PI * 0.45); x.stroke();
-    x.strokeStyle = 'rgba(240,235,220,0.9)'; x.lineWidth = 0.2 * sc;
-    x.beginPath(); x.moveTo(mx + 1.6 * sc, my - 5.1 * sc); x.lineTo(mx + 1.6 * sc, my - 1.3 * sc); x.stroke();
-  } else if (style === 'soldier') {
-    // kettle helmet with a wide brim, spear
-    x.strokeStyle = '#7a5230'; x.lineWidth = 0.35 * sc;
-    x.beginPath(); x.moveTo(mx + 1.75 * sc, my - 0.4 * sc); x.lineTo(mx + 1.75 * sc, my - 6.4 * sc); x.stroke();
-    x.fillStyle = '#c4ccd4'; x.beginPath(); x.moveTo(mx + 1.75 * sc, my - 7.1 * sc); x.lineTo(mx + 1.35 * sc, my - 6.2 * sc); x.lineTo(mx + 2.15 * sc, my - 6.2 * sc); x.fill();
-    x.fillStyle = '#9aa4ae'; x.beginPath(); x.ellipse(mx, my - 5.55 * sc, 1.7 * sc, 0.35 * sc, 0, 0, Math.PI * 2); x.fill();
-    x.beginPath(); x.arc(mx, my - 5.6 * sc, 0.95 * sc, Math.PI, 0); x.fill();
-  } else if (style === 'wizard') {
-    // tall pointed hat with a gold star, staff with a glowing orb
-    x.strokeStyle = '#7a5230'; x.lineWidth = 0.3 * sc;
-    x.beginPath(); x.moveTo(mx - 1.9 * sc, my - 0.3 * sc); x.lineTo(mx - 1.9 * sc, my - 5.6 * sc); x.stroke();
-    x.fillStyle = '#9fe6ff'; x.beginPath(); x.arc(mx - 1.9 * sc, my - 5.9 * sc, 0.45 * sc, 0, Math.PI * 2); x.fill();
-    x.fillStyle = side; x.beginPath(); x.moveTo(mx - 1.6 * sc, my - 5.45 * sc); x.lineTo(mx + 1.6 * sc, my - 5.45 * sc); x.lineTo(mx + 0.5 * sc, my - 7.2 * sc); x.fill();
-    x.fillStyle = '#ffd76a'; x.beginPath(); x.arc(mx + 0.25 * sc, my - 6.05 * sc, 0.25 * sc, 0, Math.PI * 2); x.fill();
-  } else if (style === 'pirate') {
-    // black tricorne with a white skull dot, red sash, curved cutlass
-    x.fillStyle = '#b8332c'; x.fillRect(mx - 1.3 * sc, my - 2.4 * sc, 2.6 * sc, 0.5 * sc);
-    x.fillStyle = '#2a2a30'; x.beginPath(); x.moveTo(mx - 1.7 * sc, my - 5.4 * sc); x.quadraticCurveTo(mx, my - 7.3 * sc, mx + 1.7 * sc, my - 5.4 * sc); x.quadraticCurveTo(mx, my - 6 * sc, mx - 1.7 * sc, my - 5.4 * sc); x.fill();
-    x.fillStyle = '#f2f2f2'; x.beginPath(); x.arc(mx, my - 6.1 * sc, 0.22 * sc, 0, Math.PI * 2); x.fill();
-    x.strokeStyle = '#d4dbe2'; x.lineWidth = 0.35 * sc;
-    x.beginPath(); x.moveTo(mx + 1.3 * sc, my - 2.2 * sc); x.quadraticCurveTo(mx + 2.4 * sc, my - 3.6 * sc, mx + 2 * sc, my - 5.4 * sc); x.stroke();
+  const body = css(col), side = css(shade(col, -0.3)), light = css(shade(col, 0.3)), skin = 'rgb(236,206,176)';
+  const R = (l, t, w, h, c) => { x.fillStyle = c; x.fillRect(mx + l * sc, my + t * sc, w * sc, h * sc); };
+  const poly = (c, pts) => { x.fillStyle = c; x.beginPath(); pts.forEach(([px, py], i) => (i ? x.lineTo : x.moveTo).call(x, mx + px * sc, my + py * sc)); x.fill(); };
+  const disc = (c, px, py, r) => { x.fillStyle = c; x.beginPath(); x.arc(mx + px * sc, my + py * sc, r * sc, 0, Math.PI * 2); x.fill(); };
+  const line = (c, w, pts) => { x.strokeStyle = c; x.lineWidth = w * sc; x.beginPath(); pts.forEach(([px, py], i) => (i ? x.lineTo : x.moveTo).call(x, mx + px * sc, my + py * sc)); x.stroke(); };
+  const steel = '#c4ccd4', steelDark = '#8e98a2', wood = '#7a5230';
+  // behind the body: capes, quivers, staffs
+  if (style === 'archer') {
+    poly('#2f6a35', [[-1.5, -4.1], [1.5, -4.1], [1.9, -0.2], [-1.9, -0.2]]);   // cape
+    R(-1.9, -5.6, 0.7, 2.6, '#8a5a34'); line('#f2ead8', 0.18, [[-1.75, -5.6], [-1.75, -6.3]]); line('#f2ead8', 0.18, [[-1.4, -5.6], [-1.3, -6.4]]);
+  }
+  if (style === 'wizard') { line(wood, 0.32, [[-1.95, -0.2], [-1.95, -5.9]]); disc('#9fe6ff', -1.95, -6.2, 0.5); disc('rgba(255,255,255,0.85)', -2.05, -6.32, 0.17); }
+  // body
+  if (style === 'wizard') {
+    poly(body, [[-1.2, -4.1], [1.2, -4.1], [1.8, 0], [-1.8, 0]]);   // flared robe
+    poly(side, [[0.25, -4.1], [1.2, -4.1], [1.8, 0], [0.45, 0]]);
+    R(-1.8, -0.45, 3.6, 0.45, '#ffd76a');
   } else if (style === 'barbarian') {
-    // fur hood with little ears, big wooden club
-    x.fillStyle = '#8a6a48'; x.beginPath(); x.arc(mx, my - 5.2 * sc, 1.35 * sc, Math.PI * 1.05, Math.PI * 1.95); x.fill();
-    x.beginPath(); x.arc(mx - 1 * sc, my - 6.1 * sc, 0.4 * sc, 0, Math.PI * 2); x.arc(mx + 1 * sc, my - 6.1 * sc, 0.4 * sc, 0, Math.PI * 2); x.fill();
-    x.fillStyle = '#6e4a2c'; x.beginPath(); x.moveTo(mx + 1.5 * sc, my - 1.5 * sc); x.lineTo(mx + 1.9 * sc, my - 1.6 * sc); x.lineTo(mx + 2.4 * sc, my - 5.4 * sc); x.lineTo(mx + 1.4 * sc, my - 5.3 * sc); x.fill();
-    x.beginPath(); x.arc(mx + 1.9 * sc, my - 5.5 * sc, 0.6 * sc, 0, Math.PI * 2); x.fill();
+    R(-1.3, -4, 2.6, 2, skin); R(0.2, -4, 1.1, 2, 'rgb(212,180,150)');   // bare chest
+    line('#6e4a2c', 0.3, [[-1.2, -3.9], [1.2, -2.2]]);   // strap
+    R(-1.3, -2, 2.6, 2, body); R(0.2, -2, 1.1, 2, side);   // fur kilt
+    for (let i = 0; i < 4; i++) poly(side, [[-1.3 + i * 0.65, -0.05], [-1 + i * 0.65, 0.35], [-0.65 + i * 0.65, -0.05]]);
+  } else {
+    R(-1.3, -4, 2.6, 4, body); R(0.2, -4, 1.1, 4, side);
+  }
+  if (style === 'pirate') for (const y of [-3.4, -2.4, -1.4]) R(-1.3, y, 2.6, 0.45, 'rgba(255,255,255,0.85)');
+  if (style === 'soldier' || style === 'pirate') R(-1.3, -2, 2.6, 0.4, '#5e3b20');   // belt
+  if (style === 'knight') { R(-1.3, -4, 2.6, 2.3, steel); R(0.2, -4, 1.1, 2.3, steelDark); R(-0.3, -4, 0.6, 4, light); }
+  if (style === 'viking') R(-1.45, -4.1, 2.9, 0.7, '#8a6a48');   // fur collar
+  // head: square with a slightly rounded look (map scale reads as a block)
+  R(-1.15, -6.15, 2.3, 2.25, skin);
+  R(0.45, -6.15, 0.7, 2.25, 'rgba(180,140,110,0.35)');
+  // headgear + face kit
+  if (style === 'soldier') {
+    line(wood, 0.35, [[1.8, -0.4], [1.8, -6.4]]);
+    poly(steel, [[1.8, -7.15], [1.4, -6.25], [2.2, -6.25]]);
+    x.fillStyle = '#9aa4ae'; x.beginPath(); x.ellipse(mx, my - 6.05 * sc, 1.75 * sc, 0.35 * sc, 0, 0, Math.PI * 2); x.fill();
+    R(-0.95, -6.95, 1.9, 0.9, '#9aa4ae');
+  } else if (style === 'knight') {
+    R(-1.3, -6.5, 2.6, 1.15, steel); R(0.3, -6.5, 1, 1.15, steelDark);   // helm over the brow
+    R(-0.12, -5.5, 0.24, 0.8, steelDark);   // nose guard
+    poly(body, [[-0.3, -6.5], [0.3, -6.5], [1.1, -7.2], [-0.5, -7.2]]);   // plume
+    R(-2.3, -3.8, 1.3, 2.6, side); R(-2.3, -3.8, 1.3, 0.35, steel); R(-1.8, -3.5, 0.3, 1.9, '#f2f2f2');   // shield
+  } else if (style === 'viking') {
+    R(-1.25, -6.55, 2.5, 0.85, '#8a9096');
+    line('#f4ead2', 0.5, [[-1.1, -6.3], [-1.9, -7.1]]); line('#f4ead2', 0.5, [[1.1, -6.3], [1.9, -7.1]]);
+    poly('#c8782e', [[-1.15, -4.8], [1.15, -4.8], [0.9, -3.4], [0, -2.9], [-0.9, -3.4]]);   // beard
+    disc('#8a5a34', -1.55, -2.3, 1.2); disc(body, -1.55, -2.3, 0.75); disc('#d8dde2', -1.55, -2.3, 0.25);
+  } else if (style === 'archer') {
+    poly('#3f7a3c', [[-1.35, -4.4], [-1.35, -6.4], [-0.6, -7.2], [1.35, -6.4], [1.35, -5.6], [-0.4, -5.9], [-0.7, -4.4]]);   // hood
+    line(wood, 0.4, [[1.4, -6.1], [2.2, -4.6], [2.2, -2.2], [1.4, -0.9]]);   // bow
+    line('rgba(240,235,220,0.9)', 0.15, [[1.4, -6.1], [1.4, -0.9]]);
+  } else if (style === 'wizard') {
+    poly('#f4f4f6', [[-0.9, -4.6], [0.95, -4.6], [0.7, -3], [0, -2.4], [-0.6, -3]]);   // beard
+    poly(side, [[-1.7, -6], [1.7, -6], [0.7, -7.2]]);   // hat
+    R(-1.7, -6.15, 3.4, 0.35, side);
+    disc('#ffd76a', 0.35, -6.55, 0.25);
+  } else if (style === 'pirate') {
+    R(-1.15, -5.65, 2.3, 0.22, '#1d1d22'); R(0.25, -5.6, 0.6, 0.5, '#1d1d22');   // eyepatch
+    poly('#2a2a30', [[-1.9, -6.0], [0, -7.25], [1.9, -6.0], [0, -6.45]]);   // tricorne
+    disc('#f2f2f2', 0, -6.75, 0.22);
+    line('#d4dbe2', 0.38, [[1.3, -1.8], [2.3, -3.2], [2.1, -5.2]]); R(1.05, -2, 0.6, 0.35, '#c9a23a');   // cutlass + guard
+  } else if (style === 'barbarian') {
+    poly('#8a6a48', [[-1.4, -5.1], [-1.4, -6.5], [1.4, -6.5], [1.4, -5.1], [1.05, -5.9], [-1.05, -5.9]]);   // fur hood
+    disc('#8a6a48', -1.05, -6.75, 0.42); disc('#8a6a48', 1.05, -6.75, 0.42);
+    poly('#6e4a2c', [[1.4, -1.4], [1.85, -1.5], [2.45, -5.1], [1.35, -5]]); disc('#6e4a2c', 1.9, -5.3, 0.65);   // club
   }
 }
 

@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=59';
-import { generateMap, rng } from './mapgen.js?v=59';
-import { initAnalytics, track } from './analytics.js?v=59';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=59';
-import { Battle } from './battle.js?v=59';
-import { personalities } from './ai.js?v=59';
-import { Campaign } from './campaign.js?v=59';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=59';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=59';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=59';
-import { previewBuildings } from './structures.js?v=59';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=60';
+import { generateMap, rng } from './mapgen.js?v=60';
+import { initAnalytics, track } from './analytics.js?v=60';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=60';
+import { Battle } from './battle.js?v=60';
+import { personalities } from './ai.js?v=60';
+import { Campaign } from './campaign.js?v=60';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=60';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=60';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=60';
+import { previewBuildings } from './structures.js?v=60';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
