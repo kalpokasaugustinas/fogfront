@@ -1,13 +1,13 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=46';
-import { generateMap, rng } from './mapgen.js?v=46';
-import { Battle } from './battle.js?v=46';
-import { personalities } from './ai.js?v=46';
-import { Campaign } from './campaign.js?v=46';
-import { Expedition, stages, perks } from './expedition.js?v=46';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=46';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=46';
-import { previewBuildings } from './structures.js?v=46';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=47';
+import { generateMap, rng } from './mapgen.js?v=47';
+import { Battle } from './battle.js?v=47';
+import { personalities } from './ai.js?v=47';
+import { Campaign } from './campaign.js?v=47';
+import { Expedition, stages, perks } from './expedition.js?v=47';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=47';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=47';
+import { previewBuildings } from './structures.js?v=47';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -138,7 +138,7 @@ function startBattle(setup, m, rid = -1) {
   battle = new Battle(map, setup);
   mode = m; regionId = rid; selected = -1; drag = null; paused = false; userPaused = false; key = '';
   endTutor(false);
-  tutorWanted = !autoplay && !tutorSeen() && (m === 'skirmish' || (m === 'expedition' && expedition.stage === 0));
+  tutorWanted = false;   // startTutorial sets it after this
   countdown = autoplay ? 0 : 3; goFlash = 0;
   const theme = setup.theme ?? themeNames[setup.seed % themeNames.length];
   if (!bv) bv = new MapView($('battle-canvas'), map, theme); else bv.setMap(map, theme);
@@ -528,11 +528,13 @@ function tapAt(sid) {
 
 function sendFrom(from, to) {
   const n = Math.floor(battle.segs[from].troops * pct);
+  if (!tutorAllows(from, to)) { flash('👆 Follow the tutorial: drag along the glowing path'); return; }
   const sent = battle.send(0, from, to, n);
-  if (sent && !isMine(to)) tutorEvent('attack', to);
+  if (sent && !isMine(to)) tutorEvent('attack');
   // auto on + own target: also set a standing route that keeps (1 - pct) of the cap
   if (auto && isMine(to) && battle.setRoute(0, from, to, 1 - pct)) {
     flash(`🔁 Route set: keeps ${Math.round((1 - pct) * 100)}% of cap, forwards the rest`);
+    tutorEvent('route');
   } else if (!sent) flash('Not enough troops');
 }
 
@@ -601,7 +603,10 @@ function renderWheel() {
 function updateWheel() {
   if (wheelFor < 0) return;
   const s = battle.segs[wheelFor];
-  for (const g of $('wheel').querySelectorAll('.sector')) g.classList.toggle('off', s.troops < battle.costOf(0, g.dataset.type));
+  for (const g of $('wheel').querySelectorAll('.sector')) {
+    g.classList.toggle('off', s.troops < battle.costOf(0, g.dataset.type));
+    g.classList.toggle('hint', !!tutor && tutorSteps[tutor.step].id === 'build' && g.dataset.type === 'farm');   // tutorial: build this
+  }
   const r = pageRect(bv.canvas), wr = pageRect($('battle-wrap'));
   const left = Math.round(r.left - wr.left + (bv.sx(s.x) * r.width) / bv.size), top = Math.round(r.top - wr.top + (bv.sy(s.y) * r.height) / bv.cssH);
   const pos = `${left}px,${top}px`;
@@ -707,20 +712,27 @@ function endBattle() {
   $('end-continue').classList.remove('hidden');
   if (won && mode === 'campaign') { campaign.conquer(regionId); pickedRegion = -1; }
   if (won && mode === 'skirmish') addQuickWin();
+  if (mode === 'tutorial') markTutorSeen();
   const st = battle.stats;
-  $('end-title').textContent = won ? (mode === 'campaign' ? 'Region conquered!' : 'Victory!') : 'Defeated';
+  $('end-title').textContent = won ? (mode === 'campaign' ? 'Region conquered!' : mode === 'tutorial' ? 'Tutorial complete!' : 'Victory!') : 'Defeated';
   $('end-stats').innerHTML = statsHtml(battle);
   // quick battle: always offer a fresh map; campaign: retry only after a loss
   $('end-retry').textContent = mode === 'skirmish' ? '▶ Play again' : '↻ Retry';
   $('end-retry').classList.toggle('hidden', won && mode !== 'skirmish');
   $('end-continue').textContent = won ? 'Continue' : 'Menu';
+  if (mode === 'tutorial') $('end-continue').textContent = afterTutor === startExpedition ? '▶ Conquest' : afterTutor ? '▶ Quick battle' : 'Menu';
   showEnd(won, won ? battle : null);
   setTrack(won ? 'victory' : 'defeat');
 }
-$('end-continue').onclick = () => { if (mode === 'campaign') show('campaign'); else show('menu'); };
+$('end-continue').onclick = () => {
+  if (mode === 'campaign') show('campaign');
+  else if (mode === 'tutorial' && afterTutor) withLoading(afterTutor);
+  else show('menu');
+};
 $('end-retry').onclick = () => {
   if (mode === 'campaign') withLoading(() => startBattle(campaign.battleSetup(regionId), 'campaign', regionId));
   else if (mode === 'expedition') withLoading(startExpedition);
+  else if (mode === 'tutorial') withLoading(() => startTutorial(afterTutor));
   else withLoading(startSkirmish);
 };
 
@@ -920,8 +932,8 @@ function addQuickWin() { try { localStorage.setItem(wins_key, quickWins() + 1); 
 
 // ---------- menu, help, keyboard ----------
 $('btn-campaign').onclick = () => show('campaign');
-$('btn-skirmish').onclick = () => withLoading(startSkirmish);
-$('btn-expedition').onclick = () => withLoading(startExpedition);
+$('btn-skirmish').onclick = viaTutor(startSkirmish);
+$('btn-expedition').onclick = viaTutor(startExpedition);
 $('btn-help').onclick = () => $('help').classList.remove('hidden');
 
 // commander panel: colour swatches, troop and building style cards with live previews
@@ -1041,92 +1053,128 @@ function drawFx(ctx, fs) {
   ctx.restore();
 }
 
-// ---------- first-game tutorial ----------
-// a coach card walks a new player through attack, capture, build, auto and the goal. it runs once
-// (first skirmish or conquest stage 1), can be skipped, and can be replayed from the help.
-// hold steps freeze the sim (the map stays touchable) until the player does the step.
+// ---------- tutorial: a scripted battle on a fixed map ----------
+// shown before the first quick battle / conquest (and from the help). each step tells the player
+// one move; hold steps stop time until it's made (only that move is allowed), the 'time' step lets
+// it run to show growth and the speed buttons. the rival bot sleeps until the last step.
 const tutorKey = 'frontlines.tutorial';
-const tutorSteps = [
-  { id: 'attack', hold: true, text: '👆 Drag from your castle to the glowing tile to attack it.' },
-  { id: 'capture', text: 'Your troops march to the border and fight. The bigger number wins.' },
-  { id: 'build', text: '🔨 Tap a tile you own (not the castle) and pick a building. It costs that tile\'s troops.' },
-  { id: 'auto', hold: true, ok: true, text: '🔁 Auto is on: drag to your own tile to set a route that pipes spare troops to the front.' },
-  { id: 'goal', hold: true, ok: true, text: '🏆 Wipe out every rival to win. Bots gang up on whoever grows fastest. Good luck!' },
-];
-let tutor = null, tutorWanted = false;   // tutor = { step, t, from, to } while it runs
+let tutor = null, tutorWanted = false, afterTutor = null;   // tutor = { step, t, home, target, rival }
 function tutorSeen() { try { return localStorage.getItem(tutorKey) === '1'; } catch { return false; } }
-function startTutor() { tutor = { step: -1, t: 0 }; nextTutor(); }
-function tutorHold() { return !!tutor && !!tutorSteps[tutor.step].hold; }
-function nextTutor() {
-  tutor.step++; tutor.t = 0;
-  if (tutor.step >= tutorSteps.length) { endTutor(true); return; }
-  const st = tutorSteps[tutor.step];
-  if (st.id === 'attack') {
-    // point at the weakest non-own neighbour of your capital (neutral first)
-    const home = battle.segs.find((s) => s.owner === 0 && s.capital) ?? battle.segs.find((s) => s.owner === 0);
-    const opts = home ? home.adj.map((i) => battle.segs[i]).filter((s) => s.owner !== 0) : [];
-    opts.sort((a, b) => (a.owner < 0 ? 0 : 1e6) + a.troops - ((b.owner < 0 ? 0 : 1e6) + b.troops));
-    tutor.from = home?.id ?? -1; tutor.to = opts[0]?.id ?? -1;
-  }
-  $('tutor-step').textContent = `TUTORIAL ${tutor.step + 1}/${tutorSteps.length}`;
-  $('tutor-text').textContent = st.text;
-  $('tutor-ok').classList.toggle('hidden', !st.ok);
-  $('tutor-ok').textContent = tutor.step === tutorSteps.length - 1 ? "Let's go" : 'Got it';
-  $('auto').classList.toggle('tutor-pulse', st.id === 'auto');
-  $('tutor').classList.remove('hidden');
+function markTutorSeen() { try { localStorage.setItem(tutorKey, '1'); } catch { /* not saved */ } }
+
+function startTutorial(next = null) {
+  afterTutor = next;
+  startBattle({
+    seed: 20261103, cells: 9, shape: 'blob', neutral: [0.2, 0.3], relics: 0, theme: 'summer',
+    factions: [{ ai: false, color: 0 }, { ai: true, color: 1, think: 1e9, personality: personalities.turtle }],
+  }, 'tutorial');
+  battle.factions[1].timer = 1e9;   // asleep: no first move either
+  tutorWanted = true;
 }
-function endTutor(done) {
-  if (done) { try { localStorage.setItem(tutorKey, '1'); } catch { /* not saved */ } }
-  tutor = null;
-  $('tutor').classList.add('hidden');
-  $('auto').classList.remove('tutor-pulse');
-}
-// player actions that finish a step: 'attack' (sent troops at a tile), 'capture', 'build'
-function tutorEvent(type, id) {
-  if (!tutor) return;
-  const st = tutorSteps[tutor.step];
-  if (st.id !== type) return;
-  if (type === 'attack') tutor.to = id;
-  if (type === 'capture') tutor.built = id;
+// menu: the first quick battle / conquest goes through the tutorial first
+function viaTutor(start) { return () => withLoading(tutorSeen() ? start : () => startTutorial(start)); }
+
+const tseg = (id) => battle.segs[id];
+const pair = (from, to) => (f, t2) => f === from && t2 === to;
+const tutorSteps = [
+  { id: 'intro', hold: true, ok: 'Start', ring: () => [tutor.home],
+    text: () => "Welcome, commander! 🏰 This is your castle. Grey tiles are neutral, red is your rival." },
+  { id: 'attack', hold: true, finger: () => [tutor.home, tutor.target], allow: () => pair(tutor.home, tutor.target),
+    enter() { tseg(tutor.home).troops = 40; tseg(tutor.target).troops = 8; },
+    text: () => `👆 Drag from your castle to the glowing tile. ${Math.round(pct * 100)}% of your 40 troops = ${Math.floor(40 * pct)} attack its 8 defenders.` },
+  { id: 'capture', ring: () => [tutor.target],
+    text: () => 'Your troops march to the border and fight. The bigger number wins and keeps the difference.' },
+  { id: 'build', hold: true, ring: () => [tutor.target],
+    enter() { tseg(tutor.target).troops = battle.costOf(0, 'farm'); },
+    text: () => `🌾 Your new tile has ${battle.costOf(0, 'farm')} troops. A Farm costs ${battle.costOf(0, 'farm')} and adds +60% growth. Tap the tile, then the glowing farm.` },
+  { id: 'time', ok: 'Got it', okAfter: 3, pulse: ['speed', 'clock'],
+    text: () => '⏱️ Time runs now: every tile grows troops each second (watch the numbers). ❚❚ pauses, ▶▶ speeds up.' },
+  { id: 'route', hold: true, finger: () => [tutor.home, tutor.target], allow: () => pair(tutor.home, tutor.target), pulse: ['auto'],
+    enter() { setAuto(true); tseg(tutor.home).troops = Math.max(tseg(tutor.home).troops, 20); },
+    text: () => '🔁 Drag from your castle to your farm tile. With Auto on, this sets a route: spare troops keep flowing there.' },
+  { id: 'goal', hold: true, ok: "Let's go", ring: () => [tutor.rival],
+    text: () => '🏆 Take every red tile to win. Red wakes up now. Good luck!' },
+];
+
+function startTutor() {
+  // the tiles the script points at: your start, its weakest neutral neighbour, the rival's start
+  const home = battle.segs.find((s) => s.owner === 0), rival = battle.segs.find((s) => s.owner === 1);
+  const opts = home.adj.map(tseg).filter((s) => s.owner < 0).sort((x, y) => x.troops - y.troops);
+  tutor = { step: -1, t: 0, home: home.id, target: (opts[0] ?? tseg(home.adj[0])).id, rival: rival?.id ?? -1 };
   nextTutor();
 }
-// steps without a button get one after a while (a lost attack, no troops to build ...)
+function tutorHold() { return !!tutor && !!tutorSteps[tutor.step].hold; }
+// may the player send from -> to right now? (hold steps only allow the move they ask for)
+function tutorAllows(from, to) {
+  if (!tutor) return true;
+  const st = tutorSteps[tutor.step];
+  return st.allow ? st.allow()(from, to) : !st.hold;
+}
+function nextTutor() {
+  tutor.step++; tutor.t = 0; tutor.advanceAt = 0;
+  if (tutor.step >= tutorSteps.length) { endTutor(true); return; }
+  const st = tutorSteps[tutor.step];
+  st.enter?.();
+  $('tutor-step').textContent = `TUTORIAL ${tutor.step + 1}/${tutorSteps.length} · ${st.hold ? '⏸ time stopped' : '▶ time running'}`;
+  $('tutor-step').classList.toggle('run', !st.hold);
+  $('tutor-text').textContent = st.text();
+  $('tutor-ok').textContent = st.ok ?? 'Next';
+  $('tutor-ok').classList.toggle('hidden', !st.ok || !!st.okAfter);
+  for (const id of ['auto', 'speed', 'clock']) $(id).classList.toggle('tutor-pulse', !!st.pulse?.includes(id));
+  $('tutor').classList.remove('hidden');
+  wheelFor = -2;   // re-render the build wheel (farm hint on / off)
+  renderWheel();
+}
+function endTutor(done) {
+  if (done) markTutorSeen();
+  if (tutor && battle?.factions[1]) { battle.factions[1].think = 3; battle.factions[1].timer = 2; }   // the rival wakes up
+  tutor = null;
+  $('tutor').classList.add('hidden');
+  for (const id of ['auto', 'speed', 'clock']) $(id).classList.remove('tutor-pulse');
+}
+// player actions that finish a step: 'attack' (sent troops at the target), 'capture', 'build', 'route'
+function tutorEvent(type) {
+  if (!tutor || tutorSteps[tutor.step].id !== type) return;
+  if (type === 'capture') tutor.advanceAt = tutor.t + 1.2;   // let the celebration play first
+  else nextTutor();
+}
 function tutorTick(dt) {
   if (screen !== 'battle' || battle.state !== 'running') { endTutor(false); return; }
+  const st = tutorSteps[tutor.step];
   tutor.t += dt;
-  if (tutor.t > 12 && $('tutor-ok').classList.contains('hidden')) { $('tutor-ok').textContent = 'Next'; $('tutor-ok').classList.remove('hidden'); }
+  if (tutor.advanceAt && tutor.t >= tutor.advanceAt) { nextTutor(); return; }
+  if (st.okAfter && tutor.t > st.okAfter) $('tutor-ok').classList.remove('hidden');
+  // a step that waits for something that may not happen (lost fight ...) gets a way on
+  if (!st.ok && !st.hold && tutor.t > 12) $('tutor-ok').classList.remove('hidden');
 }
 $('tutor-ok').onclick = () => { if (tutor) nextTutor(); };
 $('tutor-skip').onclick = () => endTutor(true);
-$('help-tutor').onclick = () => {
-  try { localStorage.removeItem(tutorKey); } catch { /* storage blocked: it shows anyway this time */ }
-  $('help').classList.add('hidden');
-  withLoading(startSkirmish);
-};
-// on-map hints: a finger sliding from your castle to the target, rings on the tile to watch
+$('help-tutor').onclick = () => { $('help').classList.add('hidden'); withLoading(() => startTutorial(null)); };
+
+// on-map hints: a finger sliding along the move to make, pulsing rings on the tiles to watch
 function drawTutor(ctx, fs) {
   if (!tutor) return;
-  const id = tutorSteps[tutor.step].id, now = performance.now() / 1000;
+  const st = tutorSteps[tutor.step], now = performance.now() / 1000;
   const ring = (sid, col) => {
     if (sid < 0) return;
-    const s = battle.segs[sid], x = bv.sx(s.x), y = bv.sy(s.y), p = (now * 1.4) % 1;
+    const s = tseg(sid), x = bv.sx(s.x), y = bv.sy(s.y), p = (now * 1.4) % 1;
     ctx.globalAlpha = 1 - p; ctx.lineWidth = 3; ctx.strokeStyle = col;
     ctx.beginPath(); ctx.arc(x, y, fs * (1.3 + 1.4 * p), 0, Math.PI * 2); ctx.stroke();
     ctx.globalAlpha = 1;
   };
   ctx.save();
-  if (id === 'attack' && tutor.from >= 0 && tutor.to >= 0) {
-    ring(tutor.to, '#ffd76a');
-    const a = battle.segs[tutor.from], b = battle.segs[tutor.to];
-    const x1 = bv.sx(a.x), y1 = bv.sy(a.y), x2 = bv.sx(b.x), y2 = bv.sy(b.y);
+  for (const id of st.ring?.() ?? []) ring(id, st.id === 'goal' ? '#ff6b5e' : '#ffd76a');
+  if (st.finger) {
+    const [from, to] = st.finger();
+    ring(to, '#ffd76a');
+    const a = tseg(from), b = tseg(to), x1 = bv.sx(a.x), y1 = bv.sy(a.y), x2 = bv.sx(b.x), y2 = bv.sy(b.y);
     const k = Math.min(1, ((now * 0.8) % 1) / 0.75), e = k * k * (3 - 2 * k);
     ctx.setLineDash([7, 6]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,215,106,0.8)';
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + (x2 - x1) * e, y1 + (y2 - y1) * e); ctx.stroke();
     ctx.setLineDash([]);
     ctx.font = `${Math.round(fs * 1.8)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('👆', x1 + (x2 - x1) * e + fs * 0.3, y1 + (y2 - y1) * e + fs * 0.9);
-  } else if (id === 'capture') ring(tutor.to, '#ffd76a');
-  else if (id === 'build' && tutor.built >= 0 && battle.segs[tutor.built].owner === 0 && !battle.segs[tutor.built].building) ring(tutor.built, '#ffffff');
+  }
   ctx.restore();
 }
 
@@ -1146,7 +1194,7 @@ function playBattleSounds(dt) {
       if (alarmCool <= 0) { sfx.alarm(); alarmCool = 1.5; }
     }
     // you took a tile: cheer + confetti
-    if (e.type === 'capture' && e.owner === 0 && e.id !== undefined) { sfx.cheer(); celebrate(e.id); tutorEvent('capture', e.id); }
+    if (e.type === 'capture' && e.owner === 0 && e.id !== undefined) { sfx.cheer(); celebrate(e.id); tutorEvent('capture'); }
   }
   if (paused || battle.state !== 'running') return;
   const marching = battle.armies.filter((a) => !a.fight && !a.clash), fights = battle.armies.filter((a) => a.fight || a.clash).length;

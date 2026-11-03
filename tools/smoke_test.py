@@ -52,6 +52,7 @@ try:
         browser = p.chromium.launch()
         for name, vp in [("portrait", {"width": 390, "height": 844}), ("landscape", {"width": 1280, "height": 720})]:
             page = browser.new_page(viewport=vp, device_scale_factor=2 if name == "portrait" else 1)
+            page.add_init_script("localStorage.setItem('frontlines.tutorial', '1')")   # the tutorial battle has its own check
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
             page.goto(f"http://localhost:{port}/index.html")
