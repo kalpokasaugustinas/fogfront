@@ -12,12 +12,13 @@ Prototype stage.
   - buildings become capital bonuses = effect × share of your segments that had them (4 farms of 10 segments → +60% × 40% = +24% growth); a capital's cap is 400 or 1.25x the strongest neutral garrison on the map, whichever is higher (growth 1% of that); nothing can be built in a capital, and old capital bonuses count as one segment, so they fade unless you build again
   - the zoom-out tells it without words (~5 s): the won island shrinks over the fog to the size and place of the new capital tile (same outline), pulses gold, then the new map grows outward from it in a widening circle while the island fades into the capital
   - pick 1 of 3 perks at every zoom-out (12 in the pool: faster armies, cheaper buildings, stronger farms, plunder, ...); the picked card jumps, glows gold and throws sparks while the others drop away
-  - Continent and World (stages 4–5) are drawn as a bigger map: troop badges and labels are smaller (×0.65 / ×0.49) and after the zoom-out the camera glides in on your capital (×1.55 / ×2.0), so tiles stay distinct and readable; pan or pinch out for the overview
+  - Continent and World (stages 4–5) are drawn as a bigger map: troop badges and labels are smaller (×0.74 / ×0.58) and after the zoom-out the camera glides in on your capital (×1.35 / ×1.7), so tiles stay distinct and readable; pan or pinch out for the overview
   - bots scale with you: each starts with 10 + 70% of your carried people and its own capital with a shuffled bonus mix
   - neutrals scale with you too (stage 2 on): garrisons × √(carried people / 150), at most ×4; the biggest 30% of open neutral tiles are fortified camps (×1.5 more, drawn as 2–4 houses behind a palisade); building prices rise by the same factor as the garrisons (farm 30 → up to 120)
   - lose a stage and the run is over; best run (stage reached, time) is saved
   - score per stage (w = stage 1–5): clear 500·w · 150·w per ★ (win, no tile lost, under 6:00) · speed 400·w·(1 − real seconds / 600), 0 after 10 min · plus 15·√troops killed; a lost stage scores only its kills. A perfect fast world run is ~20–25k. Every stage card shows its points; a finished run is ranked in the 🏅 leaderboard (top 10 runs on this device, menu button 🏅)
   - each stage looks further away: lakes, mountain ridges and trees get smaller and more numerous
+  - stage sizes (tiles): 12 · 15 · 18 · 22 · 27, so tiles stay big enough to read; the next stage's map is generated in a background worker while you pick a perk, so it starts without a pause
 - **Game speed:** the sim runs at 0.8 game seconds per real second at ×1 (`rules.timeScale`); all rates below are per game second, clocks show real time.
 - **Tutorial:** the first Quick battle or Conquest starts with a scripted tutorial battle on a fixed 9-tile map (you vs one sleeping red bot); its end card then starts the mode you picked. A coach card (right side) shows one move at a time; on ⏸ steps time is stopped and only that move works:
   1. welcome: your castle, neutral tiles, the rival's castle · 2. drag castle → glowing tile (finger animation; castle 40 vs 8 defenders) · 3. ▶ watch the march, fight and capture · 4. the new tile gets exactly a farm's price (30): tap it, the farm sector of the build wheel glows · 5. ▶ time runs: tiles grow, the clock and speed buttons pulse · 6. drag castle → farm tile to set an Auto route · 7. take every enemy tile; the rival wakes up (no colours named: you can pick any colour).
@@ -82,6 +83,9 @@ Vanilla JS modules plus canvas 2D. No build step, no dependencies.
 | `tools/build_audio.py` | turns the downloaded tracks/clips into the files in `audio/` |
 | `js/structures.js` | building scenes that fill a segment: farmland, fort walls and towers, castle with soldiers, hospital, lab |
 | `js/main.js` | screens, input, HUD, frame loop |
+| `js/mapworker.js` | runs map generation in a background worker (the next conquest map is built while the perk card is up) |
+| `js/analytics.js` | anonymous GoatCounter visit + event counter (off until a site code is set) |
+| `manifest.webmanifest`, `img/` | install-as-app manifest (fullscreen, landscape), icons, link-preview image |
 
 ## Performance
 Runs at the monitor's refresh rate (60, 144 Hz ...). The simulation steps at 10 Hz; armies and route arrows interpolate between steps. Terrain, borders and rocks are drawn once per map; each segment's overlay, trees and building scene is a cached sprite, so captures and new buildings only re-stack sprites (~1 ms). The smoke test prints frame times and the rebuild cost.
@@ -100,3 +104,8 @@ Needs Python Playwright. The test runs 12 bot-only battles headless, plays a cam
 
 ## Build number
 The menu shows `build N · date time`. A git pre-commit hook (`tools/pre-commit` → `.git/hooks/pre-commit`) runs `tools/stamp_version.py`, which stamps the label and adds `?v=N` to css/js files so browsers load the new version. After a fresh clone, install the hook with `cp tools/pre-commit .git/hooks/pre-commit`.
+
+## Install, analytics, licence
+- Phones: "Add to Home screen" installs it as an app (fullscreen, landscape) via `manifest.webmanifest`; shared links show a preview card (`img/og.png`).
+- Analytics: `js/analytics.js` loads GoatCounter (no cookies, no personal data) once its site `code` is set, and counts page views plus game events (`play-*`, `tutorial-done`, `*-won/lost`, `conquest-stage-N-won/lost`). Never on localhost.
+- Licence: all rights reserved (see [LICENSE](LICENSE)); the music and sound effects keep their own licences (audio/CREDITS.md).

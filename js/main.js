@@ -1,13 +1,14 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=53';
-import { generateMap, rng } from './mapgen.js?v=53';
-import { Battle } from './battle.js?v=53';
-import { personalities } from './ai.js?v=53';
-import { Campaign } from './campaign.js?v=53';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=53';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=53';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=53';
-import { previewBuildings } from './structures.js?v=53';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=54';
+import { generateMap, rng } from './mapgen.js?v=54';
+import { initAnalytics, track } from './analytics.js?v=54';
+import { Battle } from './battle.js?v=54';
+import { personalities } from './ai.js?v=54';
+import { Campaign } from './campaign.js?v=54';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=54';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=54';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=54';
+import { previewBuildings } from './structures.js?v=54';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -130,9 +131,28 @@ function dress(factions, seed, withPlayer = true) {
   return factions;
 }
 
+// next conquest map, built in a worker while the perk card is up; startBattle takes it when it
+// matches (else, or without worker support, it generates the map itself as before)
+let nextMap = null;   // { key, map | null }
+const mapOpts = (setup) => ({ seed: setup.seed, cells: setup.cells, grid: rules.grid, shape: setup.shape ?? 'random', obstacles: true, detail: setup.detail ?? 1, stamp: setup.stamp ?? null });
+const mapKey = (o) => `${o.seed}|${o.cells}|${o.detail}|${o.shape}`;
+function preloadMap(setup) {
+  const opts = mapOpts(setup), key = mapKey(opts);
+  nextMap = { key, map: null };
+  try {
+    // same ?v= build stamp as this module, so the worker never mixes old and new files
+    const w = new Worker(new URL('./mapworker.js' + new URL(import.meta.url).search, import.meta.url), { type: 'module' });
+    w.onmessage = (e) => { if (nextMap?.key === key) nextMap.map = e.data; w.terminate(); };
+    w.onerror = () => w.terminate();
+    w.postMessage(opts);
+  } catch { /* no module workers: the stage generates its map on start */ }
+}
+
 function startBattle(setup, m, rid = -1) {
   // battle maps: random island shape + lakes/mountains (setup.shape can force a shape)
-  const map = generateMap({ seed: setup.seed, cells: setup.cells, grid: rules.grid, shape: setup.shape ?? 'random', obstacles: true, detail: setup.detail ?? 1, stamp: setup.stamp ?? null });
+  const opts = mapOpts(setup), pre = nextMap?.key === mapKey(opts) ? nextMap.map : null;
+  const map = pre ?? generateMap(opts);
+  nextMap = null;
   if (autoplay) setup.factions[0] = { ai: true, color: 0, think: 1.5, personality: personalities.aggressive };
   dress(setup.factions, setup.seed);
   battle = new Battle(map, setup);
@@ -153,6 +173,7 @@ function startBattle(setup, m, rid = -1) {
 }
 
 function startSkirmish() {
+  track('play-quick-battle');
   const seed = Math.floor(Math.random() * 1e9), r = rng(seed), types = Object.keys(personalities);
   startBattle({
     seed, cells: 22, neutral: [0.15, 0.35],
@@ -745,6 +766,7 @@ function endBattle() {
   $('end-continue').classList.remove('hidden');
   if (won && mode === 'campaign') { campaign.conquer(regionId); pickedRegion = -1; }
   if (won && mode === 'skirmish') addQuickWin();
+  track(`${mode}-${won ? 'won' : 'lost'}`);
   if (mode === 'tutorial') markTutorSeen();
   const st = battle.stats;
   $('end-title').textContent = won ? (mode === 'campaign' ? 'Region conquered!' : mode === 'tutorial' ? 'Tutorial complete!' : 'Victory!') : 'Defeated';
@@ -775,6 +797,7 @@ $('end-retry').onclick = () => {
 let expedition = null;
 
 function startExpedition() {
+  track('play-conquest');
   expedition = new Expedition(Math.floor(Math.random() * 1e9));
   startBattle(expedition.setup(), 'expedition');
   flash(`🧭 Stage 1: ${expedition.current.name}`);
@@ -783,6 +806,7 @@ function startExpedition() {
 // stage over: run lost / world won / collapse into the next capital and pick a perk
 function endStage(won) {
   $('end-perks').innerHTML = '';
+  track(`conquest-stage-${expedition.stage + 1}-${won ? 'won' : 'lost'}`);
   const last = expedition.stage === stages.length - 1;
   const gain = expedition.record({ won, stars: won ? starsOf(battle).filter(Boolean).length : 0, secs: battle.time / rules.timeScale, killed: battle.stats.killed });
   if (!won || last) {
@@ -837,6 +861,7 @@ function endStage(won) {
   $('end-continue').classList.add('hidden');
   showEnd(true, battle);
   setTrack('victory');
+  preloadMap(expedition.setup());
 }
 
 // zoom-out: the old map shrinks into the new capital while the bigger map fades in around it
@@ -1121,7 +1146,7 @@ function drawFx(ctx, fs) {
 const tutorKey = 'frontlines.tutorial';
 let tutor = null, tutorWanted = false, afterTutor = null;   // tutor = { step, t, home, target, rival }
 function tutorSeen() { try { return localStorage.getItem(tutorKey) === '1'; } catch { return false; } }
-function markTutorSeen() { try { localStorage.setItem(tutorKey, '1'); } catch { /* not saved */ } }
+function markTutorSeen() { if (!tutorSeen()) track('tutorial-done'); try { localStorage.setItem(tutorKey, '1'); } catch { /* not saved */ } }
 
 function startTutorial(next = null) {
   afterTutor = next;
@@ -1388,4 +1413,5 @@ syncAudioButtons();
 renderMenuStats();
 
 // hooks for headless tests
-window.__fl = { skipCountdown: () => { countdown = 0; goFlash = 0; }, setCam, get tutor() { return tutor; }, endTutor, nextTutor, campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv, audioState, audioFiles };
+window.__fl = { skipCountdown: () => { countdown = 0; goFlash = 0; }, setCam, get nextMap() { return nextMap; }, get tutor() { return tutor; }, endTutor, nextTutor, campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv, audioState, audioFiles };
+initAnalytics();
