@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=65';
-import { generateMap, rng } from './mapgen.js?v=65';
-import { initAnalytics, track } from './analytics.js?v=65';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=65';
-import { Battle } from './battle.js?v=65';
-import { personalities } from './ai.js?v=65';
-import { Campaign } from './campaign.js?v=65';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=65';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=65';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=65';
-import { previewBuildings } from './structures.js?v=65';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=66';
+import { generateMap, rng } from './mapgen.js?v=66';
+import { initAnalytics, track } from './analytics.js?v=66';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=66';
+import { Battle } from './battle.js?v=66';
+import { personalities } from './ai.js?v=66';
+import { Campaign } from './campaign.js?v=66';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=66';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=66';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=66';
+import { previewBuildings } from './structures.js?v=66';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -205,9 +205,21 @@ function paintBattle() {
 
 // troop figures in tiles, tile numbers, sea routes and armies (marching / fighting) for battle b
 // drawn on view v; ac = not-yet-simulated time (smooth motion); numbers = draw the number badges
-// big conquest maps (continent, world) are drawn as a larger map: badges and labels shrink by
-// mapScale and the camera starts zoomed in by 1 / mapScale, so tiles look big next to their numbers
-const mapScale = (m) => ((m.detail ?? 1) < 0.5 ? m.detail / 0.65 : 1);
+// maps whose land covers only part of the canvas (world-shaped conquest maps can come out small)
+// are drawn as a larger map: badges and labels shrink by mapScale and the camera glides in by
+// 1 / mapScale after the zoom-out, so tiles look big next to their numbers
+const mapScale = (m) => Math.min(1, Math.max(0.55, landSpan(m) / 0.8));
+// how much of the map the land spans (bounding box side, 0-1), computed once per map
+function landSpan(m) {
+  if (m.landSpan != null) return m.landSpan;
+  const g = m.grid;
+  let x0 = g, y0 = g, x1 = 0, y1 = 0;
+  for (let y = 0; y < g; y += 2) for (let x = 0; x < g; x += 2) {
+    if (m.ids[y * g + x] < 0) continue;
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  return (m.landSpan = x1 < x0 ? 1 : Math.max(x1 - x0, y1 - y0) / g);
+}
 function drawUnits(ctx, v, b, ac, numbers) {
   const fs = Math.max(11, Math.min(18, v.size / 30)) * mapScale(b.map);
   // troop figures: one soldier per troopsPerDot troops (battalions of x5 on zoomed-out maps)
@@ -1074,6 +1086,17 @@ $('test-fill').onclick = () => {
   if (!battle) return;
   for (const s of battle.segs) if (s.owner === 0) s.troops = s.cap;
   flash('🧪 Your tiles are full');
+};
+// test: instant win. every bot tile (with its foglets) becomes yours and bot armies vanish; the
+// next sim step sees no bots left and ends the battle as won (conquest goes on to the perk card)
+$('test-win').onclick = () => {
+  if (!battle || battle.state !== 'running') return;
+  for (const s of battle.segs) if (s.owner > 0) s.owner = 0;
+  battle.armies = battle.armies.filter((a) => a.owner === 0);
+  for (const f of battle.factions) if (f.id > 0) f.reserve = 0;
+  battle.version++;
+  battle.updateGrowth();
+  battle.step(rules.step);   // ends it now, even while paused
 };
 // leave: a finished battle goes straight back; a running one asks first (and pauses meanwhile)
 let pausedBeforeLeave = false;

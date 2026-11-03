@@ -7,16 +7,16 @@
 //   - pick 1 of 3 perks
 // bots scale with you: base troops + 70% of your carried people, and capitals with the same
 // total bonus strength in a random mix. losing a stage ends the run.
-import { effects } from './config.js?v=65';
-import { personalities } from './ai.js?v=65';
-import { rng } from './mapgen.js?v=65';
+import { effects } from './config.js?v=66';
+import { personalities } from './ai.js?v=66';
+import { rng } from './mapgen.js?v=66';
 
 export const stages = [
   { name: 'Valley', detail: 1, cells: 12, bots: 1, shape: 'random', neutral: [0.12, 0.3] },
   { name: 'Region', detail: 0.8, cells: 15, bots: 2, shape: 'random', neutral: [0.18, 0.38] },
   { name: 'Country', detail: 0.62, cells: 18, bots: 3, shape: 'random', neutral: [0.24, 0.46] },
-  { name: 'Continent', detail: 0.48, cells: 22, bots: 3, shape: 'world', neutral: [0.3, 0.55] },
-  { name: 'World', detail: 0.38, cells: 27, bots: 4, shape: 'world', neutral: [0.36, 0.64] },
+  { name: 'Continent', detail: 0.6, cells: 18, bots: 3, shape: 'world', neutral: [0.3, 0.55] },
+  { name: 'World', detail: 0.6, cells: 20, bots: 4, shape: 'world', neutral: [0.36, 0.64] },
 ];
 
 // neutral scaling in stages 2-5: garrison x sqrt(carried troops / campBase), at most campMax;
