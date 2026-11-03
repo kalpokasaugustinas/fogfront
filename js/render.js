@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=48';
-import * as structures from './structures.js?v=48';
+import { themes } from './config.js?v=49';
+import * as structures from './structures.js?v=49';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -566,7 +566,7 @@ export class MapView {
   }
 
   // which terrain objects stay next to building type on tile id: clearings (ellipses, css px)
-  // around the building spots; farms clear the scattered trees of open land (fields), on forest
+  // around the building spots; farms clear the scattered trees of open land (fields), on terrain
   // tiles only their field patch; forts clear a band along the wall
   terrainKeep(id, type) {
     const u = this.u, s = this.map.segs[id], holes = [];
@@ -574,7 +574,7 @@ export class MapView {
     const main = this.spots(id, 1, 0);
     if (type === 'farm') {
       add(this.spots(id, 3, u * 6), u * 4, u * 2.6);
-      if (s.trait === 'forest') holes.push([this.sx(s.x), this.sy(s.y), u * 9.5, u * 9.5 * this.tilt]);
+      if (s.trait) { const r = structures.fieldPatch(this, s); holes.push([this.sx(s.x), this.sy(s.y), r, r * this.tilt]); }   // field patch
     } else if (type === 'barracks') { add(this.spots(id, 3, u * 7), u * 4.5, u * 3); add(main, u * 7, u * 4.2); }
     else if (type === 'fort') add(main, u * 6.5, u * 4.2);
     else if (type === 'hospital') { add(this.spots(id, 3, u * 6), u * 4, u * 2.6); add(this.spots(id, 6, u * 4), u * 2.2, u * 1.6); }
@@ -584,7 +584,7 @@ export class MapView {
     else add(main, u * 4.5, u * 2.8);   // home, relic
     const { bdist, grid: g } = this.map, wall = (u * 2.6) / this.scale;
     return (tr, px, py) => {
-      if (type === 'farm' && !tr.kind && s.trait !== 'forest') return false;   // plain trees (no kind)
+      if (type === 'farm' && !tr.kind && !s.trait) return false;   // plain trees (no kind)
       if (type === 'fort' && bdist[Math.floor(tr.y) * g + Math.floor(tr.x)] < wall) return false;
       return !holes.some(([hx, hy, rx, ry]) => ((px - hx) / rx) ** 2 + ((py - hy) / ry) ** 2 < 1);
     };

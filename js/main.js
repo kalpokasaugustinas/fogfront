@@ -1,13 +1,13 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=48';
-import { generateMap, rng } from './mapgen.js?v=48';
-import { Battle } from './battle.js?v=48';
-import { personalities } from './ai.js?v=48';
-import { Campaign } from './campaign.js?v=48';
-import { Expedition, stages, perks } from './expedition.js?v=48';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=48';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=48';
-import { previewBuildings } from './structures.js?v=48';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=49';
+import { generateMap, rng } from './mapgen.js?v=49';
+import { Battle } from './battle.js?v=49';
+import { personalities } from './ai.js?v=49';
+import { Campaign } from './campaign.js?v=49';
+import { Expedition, stages, perks } from './expedition.js?v=49';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=49';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=49';
+import { previewBuildings } from './structures.js?v=49';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -703,6 +703,12 @@ function showEnd(won, starsFor) {
   requestAnimationFrame(tick);
 }
 
+// the end card's second button is red when it reads 'Withdraw', green otherwise
+function withdrawLook() {
+  const w = $('end-continue').textContent === 'Withdraw';
+  $('end-continue').classList.toggle('red', w);
+  $('end-continue').classList.toggle('green', !w);
+}
 function endBattle() {
   const won = battle.state === 'won';
   if (mode === 'expedition') return endStage(won);
@@ -719,8 +725,10 @@ function endBattle() {
   // quick battle: always offer a fresh map; campaign: retry only after a loss
   $('end-retry').textContent = mode === 'skirmish' ? '▶ Play again' : '↻ Retry';
   $('end-retry').classList.toggle('hidden', won && mode !== 'skirmish');
-  $('end-continue').textContent = won ? 'Continue' : 'Menu';
+  // quick battle: play again or withdraw to the menu (no 'continue': there is nothing to continue)
+  $('end-continue').textContent = mode === 'skirmish' ? 'Withdraw' : won ? 'Continue' : 'Menu';
   if (mode === 'tutorial') $('end-continue').textContent = afterTutor === startExpedition ? '▶ Conquest' : afterTutor ? '▶ Quick battle' : 'Menu';
+  withdrawLook();
   showEnd(won, won ? battle : null);
   setTrack(won ? 'victory' : 'defeat');
 }
@@ -755,9 +763,10 @@ function endStage(won) {
     const record = expedition.saveBest(reached);
     $('end-title').textContent = won ? 'The world is yours!' : 'Conquest over';
     $('end-stats').innerHTML = `<p class="next-up">Reached stage ${reached} · total time ${fmtTime(expedition.time + (won ? 0 : battle.time))}${record ? ' · 🏆 new best' : ''}</p>` + statsHtml(battle);
-    $('end-retry').textContent = '▶ New expedition';
+    $('end-retry').textContent = '▶ New conquest';
     $('end-retry').classList.remove('hidden');
-    $('end-continue').textContent = 'Menu';
+    $('end-continue').textContent = 'Withdraw';
+    withdrawLook();
     $('end-continue').classList.remove('hidden');
     showEnd(won, won ? battle : null);
     setTrack(won ? 'victory' : 'defeat');

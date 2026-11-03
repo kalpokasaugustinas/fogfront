@@ -115,6 +115,9 @@ function cross(x, cx, cy, s, col) {
 
 const fieldColors = [[226, 198, 112], [150, 172, 92], [176, 132, 92], [184, 196, 112], [212, 184, 96]];
 
+// radius (css px) of the field patch a farm gets on a terrain tile: about half the tile's size
+export function fieldPatch(v, s) { return Math.min(v.u * 8, 0.5 * Math.sqrt(s.area / Math.PI) * v.scale); }
+
 export function ground(v, x, id, type, owner) {
   usePalette('classic');
   const s = v.map.segs[id], u = v.u, cx = v.sx(s.x), cy = v.sy(s.y), seed = v.seed + id * 31;
@@ -125,7 +128,9 @@ export function ground(v, x, id, type, owner) {
     // patchwork of strips at a per-segment angle, with furrows and a dirt track
     x.translate(cx, cy);
     x.scale(1, v.tilt);   // fields lie flat on the tilted ground
-    if (s.trait === 'forest') { x.beginPath(); x.arc(0, 0, u * 9.5, 0, Math.PI * 2); x.clip(); }   // clearing in the woods
+    // on a terrain tile the fields are a patch in the middle, so the forest floor, scree or shore
+    // around them still shows what kind of tile it is (plain land is fully farmed)
+    if (s.trait) { x.beginPath(); x.arc(0, 0, fieldPatch(v, s), 0, Math.PI * 2); x.clip(); }
     x.rotate(rnd(1, 1, seed) * Math.PI);
     const w = u * 2.6, R = v.size * 0.35;
     for (let i = -Math.ceil(R / w); i <= Math.ceil(R / w); i++) {
