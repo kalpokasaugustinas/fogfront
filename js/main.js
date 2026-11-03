@@ -1,13 +1,13 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=38';
-import { generateMap, rng } from './mapgen.js?v=38';
-import { Battle } from './battle.js?v=38';
-import { personalities } from './ai.js?v=38';
-import { Campaign } from './campaign.js?v=38';
-import { Expedition, stages, perks } from './expedition.js?v=38';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=38';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=38';
-import { previewBuildings } from './structures.js?v=38';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=39';
+import { generateMap, rng } from './mapgen.js?v=39';
+import { Battle } from './battle.js?v=39';
+import { personalities } from './ai.js?v=39';
+import { Campaign } from './campaign.js?v=39';
+import { Expedition, stages, perks } from './expedition.js?v=39';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=39';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=39';
+import { previewBuildings } from './structures.js?v=39';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -886,6 +886,12 @@ $('help-close').onclick = () => $('help').classList.add('hidden');
 $('campaign-back').onclick = () => show('menu');
 $('campaign-reset').onclick = () => {
   if (confirm('Reset campaign progress?')) { campaign.reset(); pickedRegion = -1; paintCampaign(); }
+};
+// testing aid: fill every tile you own to its cap (capital too)
+$('test-fill').onclick = () => {
+  if (!battle) return;
+  for (const s of battle.segs) if (s.owner === 0) s.troops = s.cap;
+  flash('🧪 Your tiles are full');
 };
 $('battle-quit').onclick = () => {
   if (battle.state !== 'running' || confirm('Leave this battle?')) show(mode === 'campaign' ? 'campaign' : 'menu');

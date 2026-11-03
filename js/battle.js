@@ -1,10 +1,10 @@
 // battle simulation: segments, troops, buildings, armies. no drawing here,
 // so the same code runs in the browser and in headless tests.
-import { rules, buildings, effects, traits, relicGarrison } from './config.js?v=38';
-import { perks, combineMods } from './expedition.js?v=38';
-import { hops } from './mapgen.js?v=38';
-import { rng, spreadStarts, equalizeStarts } from './mapgen.js?v=38';
-import { think } from './ai.js?v=38';
+import { rules, buildings, effects, traits, relicGarrison } from './config.js?v=39';
+import { perks, combineMods } from './expedition.js?v=39';
+import { hops } from './mapgen.js?v=39';
+import { rng, spreadStarts, equalizeStarts } from './mapgen.js?v=39';
+import { think } from './ai.js?v=39';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
@@ -198,17 +198,23 @@ export class Battle {
     // attack - defense like an instant fight, just spread over 1-3 s (bigger fights last longer)
     const A = a.n * a.atk, D = t.troops * this.fightDef(t, a.owner);
     const dur = Math.min(rules.fightMax, rules.fightMin + (rules.fightMax - rules.fightMin) * Math.min(1, Math.min(A, D) / rules.fightScale));
-    a.fight = { k: Math.max(1, Math.min(A, D) / dur), time: 0 };
+    a.fight = { k: Math.max(1, Math.min(A, D) / dur), k0: A, time: 0 };
     this.events.push({ type: 'fight', owner: a.owner, prev: t.owner, size: Math.min(A, D) });
   }
 
   // enemy armies on the same road in opposite directions meet halfway and fight there
   // (instead of passing through each other and both taking a tile); fights at a border count too
+  // an army fighting at a tile's border blocks that road at once: troops leaving the tile toward
+  // it run straight into it. an army whose opponent is busy in another clash waits behind it
+  // (no slipping past to take an emptied tile); it fights once that clash is over
   meet() {
+    for (const a of this.armies) a.hold = false;
     for (const a of this.armies) {
       if (a.done || a.clash) continue;
       for (const b of this.armies) {
-        if (b === a || b.done || b.clash || b.owner === a.owner || b.from !== a.to || b.to !== a.from || a.t + b.t < 1) continue;
+        if (b === a || b.done || b.owner === a.owner || b.from !== a.to || b.to !== a.from) continue;
+        if (a.t + b.t < 1 && !a.fight && !b.fight) continue;
+        if (b.clash) { a.hold = true; continue; }
         const A = a.n * a.atk, B = b.n * b.atk;
         const dur = Math.min(rules.fightMax, rules.fightMin + (rules.fightMax - rules.fightMin) * Math.min(1, Math.min(A, B) / rules.fightScale));
         const k = Math.max(1, Math.min(A, B) / dur);
@@ -243,7 +249,9 @@ export class Battle {
     if (t.owner === a.owner) { a.fight = null; a.stopAt = 1; return; }   // someone else took it for us: walk in
     a.fight.time += dt;
     const dm = this.fightDef(t, a.owner);
-    const d = Math.min(a.fight.k * dt, a.n * a.atk, t.troops * dm);
+    // the rate set on arrival can be tiny (tile had just emptied itself) and lose to the tile's
+    // growth or incoming routes; at least a.k0 / fightMax, so every fight ends within fightMax
+    const d = Math.min(Math.max(a.fight.k, a.fight.k0 / rules.fightMax) * dt, a.n * a.atk, t.troops * dm);
     a.n -= d / a.atk;
     t.troops -= d / dm;
     if (a.owner === 0) { this.stats.deaths += d / a.atk; this.stats.killed += d / dm; }
@@ -295,7 +303,11 @@ export class Battle {
   step(dt) {
     if (this.state !== 'running') return;
     this.time += dt;
+    // tiles under attack at their border don't grow (else a near-empty tile regrows faster than
+    // a small army can kill it, and the fight drags on)
+    const sieged = new Set(this.armies.filter((a) => a.fight && !a.done).map((a) => a.to));
     for (const s of this.segs) {
+      if (sieged.has(s.id)) continue;
       if (s.owner < 0) {
         // neutrals regrow (slower than owned tiles) but only back to their starting garrison
         if (s.troops < s.garrison) s.troops = Math.min(s.garrison, s.troops + s.baseGrowth * rules.neutralRegrow * dt);
@@ -320,6 +332,7 @@ export class Battle {
     for (const a of this.armies) {
       if (a.clash) { this.clashStep(a, dt); continue; }
       if (a.fight) { this.fightStep(a, dt); continue; }
+      if (a.hold) continue;   // waiting behind a clash on its road
       a.t = Math.min(a.stopAt, a.t + dt / a.dur);
       if (a.t >= a.stopAt) this.arrive(a);
     }
