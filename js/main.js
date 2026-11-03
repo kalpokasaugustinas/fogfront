@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=62';
-import { generateMap, rng } from './mapgen.js?v=62';
-import { initAnalytics, track } from './analytics.js?v=62';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=62';
-import { Battle } from './battle.js?v=62';
-import { personalities } from './ai.js?v=62';
-import { Campaign } from './campaign.js?v=62';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=62';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=62';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=62';
-import { previewBuildings } from './structures.js?v=62';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=63';
+import { generateMap, rng } from './mapgen.js?v=63';
+import { initAnalytics, track } from './analytics.js?v=63';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=63';
+import { Battle } from './battle.js?v=63';
+import { personalities } from './ai.js?v=63';
+import { Campaign } from './campaign.js?v=63';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=63';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=63';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=63';
+import { previewBuildings } from './structures.js?v=63';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -675,6 +675,30 @@ function updatePanel() {
   const res = battle.factions[0].reserve;
   $('clock').textContent = fmtTime(battle.time) + (res >= 1 ? ` · 🏕️ ${Math.floor(res)}` : '');
   $('clock').title = res >= 1 ? 'Reserve: flows into your capital when it has room' : '';
+  renderPerks();
+}
+
+// conquest perk column (left, under the top-left hud): the perks picked so far, then the relic
+// perks of tiles you hold (gold ring, gone when the tile is lost). rebuilt only when the list changes
+let perkKey = '';
+function renderPerks() {
+  const on = mode === 'expedition' && expedition;
+  const picked = on ? expedition.perks : [];
+  const relics = on ? [...new Set(battle.segs.filter((s) => s.owner === 0 && s.relic).map((s) => s.relic))] : [];
+  const k = picked.join() + '|' + relics.join();
+  if (k === perkKey) return;
+  perkKey = k;
+  const bar = $('perk-bar');
+  bar.innerHTML = '';
+  for (const [id, relic] of [...picked.map((id) => [id, false]), ...relics.map((id) => [id, true])]) {
+    const p = perks.find((x) => x.id === id), b = document.createElement('button');
+    b.className = 'perk-chip' + (relic ? ' relic' : '');
+    b.textContent = p.icon;
+    b.title = `${p.name}: ${p.desc}`;
+    b.onclick = () => flash(`${p.icon} ${p.name}${relic ? ' (relic)' : ''}: ${p.desc}`, 2600);
+    bar.appendChild(b);
+  }
+  bar.classList.toggle('hidden', !bar.children.length);
 }
 
 for (const b of document.querySelectorAll('#pct button')) {
@@ -942,11 +966,11 @@ function zoomOut() {
 }
 
 let flashTimer = 0;
-function flash(msg) {
+function flash(msg, ms = 1200) {
   $('toast').textContent = msg;
   $('toast').classList.add('show');
   clearTimeout(flashTimer);
-  flashTimer = setTimeout(() => $('toast').classList.remove('show'), 1200);
+  flashTimer = setTimeout(() => $('toast').classList.remove('show'), ms);
 }
 
 // game time shown as real minutes:seconds at speed x1 (the sim runs at rules.timeScale)

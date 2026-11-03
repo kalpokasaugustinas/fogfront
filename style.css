@@ -254,6 +254,7 @@ html.compact .stars span { font-size: 30px; } html.compact .stars span:nth-child
   color: #fff;
   position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0;
   background: #000c; padding: 8px 14px; border-radius: 10px; pointer-events: none; transition: 0.2s; z-index: 20;
+  max-width: min(420px, calc(100vw - 32px)); text-align: center;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 
@@ -300,6 +301,21 @@ html.compact #tutor p { font-size: 13px; margin: 2px 0 6px; }
 #seg-info .chips span { font-size: 11.5px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: rgba(30,50,55,0.08); }
 #seg-info .chips span.gold { background: rgba(224,150,26,0.18); color: #8a5a08; }
 #clock { font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* conquest perk column: round gold-rimmed chips stacked under the top-left hud; relic perks
+   (from tiles you hold) get a sparkle and a brighter ring */
+#perk-bar { position: absolute; z-index: 3; left: 10px; top: 62px; display: flex; flex-direction: column; gap: 6px; }
+#perk-bar.hidden { display: none; }
+.perk-chip { width: 40px; height: 40px; border-radius: 50%; padding: 0; font-size: 19px; line-height: 1; position: relative;
+  background: linear-gradient(180deg, #fff8e6, #f3dca6); border: 2px solid #c98a1c;
+  box-shadow: 0 3px 0 #9c6612, 0 5px 10px rgba(0,0,0,0.18), inset 0 2px 0 rgba(255,255,255,0.7);
+  animation: perk-pop 0.35s ease-out; }
+.perk-chip:active { transform: translateY(2px); box-shadow: 0 1px 0 #9c6612, inset 0 2px 0 rgba(255,255,255,0.7); }
+.perk-chip.relic { border-color: #ffbf2e; background: linear-gradient(180deg, #fffbe0, #ffe38a); }
+.perk-chip.relic::after { content: '✨'; position: absolute; right: -6px; top: -6px; font-size: 12px; }
+@keyframes perk-pop { 0% { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+html.compact #perk-bar { left: 6px; top: 46px; gap: 5px; }
+html.compact .perk-chip { width: 34px; height: 34px; font-size: 16px; }
 
 /* stage badge: gold shield-ribbon with the current stage */
 .stage-badge { position: relative; white-space: nowrap; padding: 6px 16px 6px 34px; font-weight: 900; font-size: 15px; color: #fff; letter-spacing: 0.5px;

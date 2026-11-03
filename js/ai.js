@@ -2,9 +2,10 @@
 // personality: { build: chance to build per think, risk: troop safety margin,
 //                actions: max moves per think (build, attack or reinforce, shared budget
 //                so a big empire doesn't act faster than a small one),
-//                grudge: extra value for player segments }
-import { rules, buildings, effects } from './config.js?v=62';
-import { hops } from './mapgen.js?v=62';
+//                grudge: extra value for player segments,
+//                allow: optional list of building types (balance tests) }
+import { rules, buildings, effects } from './config.js?v=63';
+import { hops } from './mapgen.js?v=63';
 
 export const personalities = {
   aggressive: { build: 0.25, risk: 1.15, actions: 2, grudge: 0.3 },
@@ -39,7 +40,10 @@ export function think(b, f) {
     const reserve = 4;
     for (const s of shuffle(mine, b.rand)) {
       if (s.building) continue;
-      const type = pickBuilding(b, s, front[s.id], mine.length);
+      let type = pickBuilding(b, s, front[s.id], mine.length);
+      // balance tests: personality.allow limits the buildings (falls back to a farm, else the first allowed)
+      if (p.allow && !p.allow.includes(type)) type = p.allow.includes('farm') ? 'farm' : p.allow[0];
+      if (!type) break;
       if (s.troops >= b.costOf(me, type) + reserve && b.build(me, s.id, type)) { budget--; break; }
     }
   }
