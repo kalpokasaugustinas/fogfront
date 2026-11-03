@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=40';
-import * as structures from './structures.js?v=40';
+import { themes } from './config.js?v=41';
+import * as structures from './structures.js?v=41';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -398,7 +398,7 @@ export class MapView {
     }
     for (const pts of this.map.rivers ?? []) {
       for (const [j, [rx, ry]] of pts.entries()) {
-        if (j % 2 || hash(j, 16, rx | 0) < 0.4) continue;
+        if (j % 3 || hash(j, 16, rx | 0) < 0.4) continue;   // points every 0.75 cells
         const side = hash(j, 17, ry | 0) < 0.5 ? -1 : 1, x = rx + side * 4.5 * k, y = ry + (hash(j, 18, rx | 0) - 0.5) * 3 * k;
         if (reedOk(x, y) && segAt(x, y).trait === 'river') this.trees.push({ kind: 'reed', x, y, r: rr, seg: segAt(x, y).id });
       }
@@ -606,7 +606,7 @@ export class MapView {
     x.lineCap = 'round';
     x.lineJoin = 'round';
     for (const raw of this.map.rivers ?? []) {
-      const pts = chaikin(chaikin(raw)).slice(2, -2);   // open line: drop the wrap-around corner
+      const pts = raw;   // already smooth and dense (mapgen smoothCourse)
       const pieces = 6, len = pts.length;
       for (const [col, extra, alpha, thin] of [[t.shore, 5, 0.6, 1], [t.foam, 2.6, 0.95, 1], [water, 0, 1, 1], [t.seaLight, 0, 0.6, 0.3]]) {
         x.strokeStyle = css(col, alpha);

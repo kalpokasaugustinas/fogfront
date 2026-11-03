@@ -1,13 +1,13 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=40';
-import { generateMap, rng } from './mapgen.js?v=40';
-import { Battle } from './battle.js?v=40';
-import { personalities } from './ai.js?v=40';
-import { Campaign } from './campaign.js?v=40';
-import { Expedition, stages, perks } from './expedition.js?v=40';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=40';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=40';
-import { previewBuildings } from './structures.js?v=40';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=41';
+import { generateMap, rng } from './mapgen.js?v=41';
+import { Battle } from './battle.js?v=41';
+import { personalities } from './ai.js?v=41';
+import { Campaign } from './campaign.js?v=41';
+import { Expedition, stages, perks } from './expedition.js?v=41';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=41';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=41';
+import { previewBuildings } from './structures.js?v=41';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -186,6 +186,28 @@ function drawUnits(ctx, v, b, ac, numbers) {
   const z = Math.max(1, Math.min(1.9, v.size / 480)), dpr = v.dpr;   // figure scale: small but visible
   const kind = (b.map.detail ?? 1) < 0.7 ? 'battalion' : 'soldier';
   const per = rules.troopsPerDot * (kind === 'battalion' ? 5 : 1), sp = (kind === 'battalion' ? 12 : 4.6) * z;
+  // relic obelisks (tile without a building): a slow pulsing glow around the gem and a faint
+  // light pool at its foot, added on top of the cached sprite so the special tiles catch the eye
+  const glow = 0.5 + 0.5 * Math.sin(performance.now() / 650);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const s of b.segs) {
+    if (!s.relic || s.building) continue;
+    const [p] = v.spots(s.id, 1, 0), u = v.u;
+    if (!p) continue;
+    const gx = p[0], gy = p[1] - u * 5.3, r = u * (2.8 + 0.9 * glow);
+    const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, r);
+    g.addColorStop(0, `rgba(255, 220, 120, ${0.32 + 0.2 * glow})`); g.addColorStop(0.4, `rgba(255, 200, 90, ${0.12 + 0.1 * glow})`); g.addColorStop(1, 'rgba(255, 190, 80, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(gx, gy, r, 0, Math.PI * 2); ctx.fill();
+    const f = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], u * 4.5);
+    f.addColorStop(0, `rgba(255, 210, 110, ${0.08 + 0.07 * glow})`); f.addColorStop(1, 'rgba(255, 210, 110, 0)');
+    ctx.fillStyle = f;
+    ctx.save(); ctx.translate(p[0], p[1]); ctx.scale(1, 0.55); ctx.translate(-p[0], -p[1]);
+    ctx.beginPath(); ctx.arc(p[0], p[1], u * 4.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
   for (const s of b.segs) {
     const spots = v.troopSpots(s.id, sp);
     const n = Math.min(spots.length, Math.ceil(s.troops / per - 0.01));
