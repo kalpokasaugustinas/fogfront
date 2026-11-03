@@ -142,8 +142,10 @@ html.compact .stats b { font-size: 16px; } html.compact .end-card { padding-top:
 html.compact .stars span { font-size: 30px; } html.compact .stars span:nth-child(2) { font-size: 38px; }
 .blds { font-size: 13px; color: var(--muted); margin: 4px 0 8px; }
 /* ---------- end screen ---------- */
-#end { background: radial-gradient(circle at 50% 45%, rgba(40,60,80,0.35), rgba(14,22,30,0.72)); overflow-y: auto; display: flex; align-items: flex-start; padding-top: 40px; }
-#end .rays { position: fixed; left: 50%; top: 45%; width: 190vmax; height: 190vmax; margin: -95vmax 0 0 -95vmax; pointer-events: none; opacity: 0;
+#end { background: radial-gradient(circle at 50% 45%, rgba(40,60,80,0.35), rgba(14,22,30,0.72)); overflow-y: auto; overscroll-behavior: contain; display: flex; align-items: flex-start; padding-top: 40px; }
+/* the sunburst is far bigger than the screen: a screen-sized clip keeps it out of the card's scroll area */
+#end .rays-clip { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+#end .rays { position: absolute; left: 50%; top: 45%; width: 190vmax; height: 190vmax; margin: -95vmax 0 0 -95vmax; pointer-events: none; opacity: 0;
   background: repeating-conic-gradient(from 0deg, rgba(255,215,106,0.2) 0deg 9deg, rgba(255,215,106,0) 9deg 22.5deg);
   -webkit-mask: radial-gradient(circle, #000 0, rgba(0,0,0,0.6) 25%, transparent 60%); mask: radial-gradient(circle, #000 0, rgba(0,0,0,0.6) 25%, transparent 60%);
   animation: spin 40s linear infinite; }
