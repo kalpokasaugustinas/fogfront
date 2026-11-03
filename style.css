@@ -241,10 +241,9 @@ html.compact .stars span { font-size: 30px; } html.compact .stars span:nth-child
 .board tr.me td:first-child { border-radius: 8px 0 0 8px; } .board tr.me td:last-child { border-radius: 0 8px 8px 0; }
 #board .card { text-align: center; }
 /* menu foglets: one band each side of the mode buttons, standing on the bottom of the screen */
-/* full screen height (rocketing foglets fly out of the top), from the screen edge (walk-ins come in
-   from outside); the band itself stands in the bottom part */
-.foglets { position: absolute; top: 0; bottom: 0; width: min(400px, calc(50% - 250px)); height: 100%; z-index: 6; pointer-events: none; }
-.foglets.left { left: 0; } .foglets.right { right: 0; }
+/* full screen (rocketing foglets fly diagonally across the menu); each band stands in its side strip
+   (foglets.js: min(400px, 50% - 250px) wide), taps pass through */
+.foglets { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 6; pointer-events: none; }
 .zooming { transition: transform 1.7s cubic-bezier(0.45, 0, 0.2, 1), opacity 1.7s ease; }
 .zoom-snap { pointer-events: none; z-index: 2; }
 

@@ -1,19 +1,29 @@
 // menu mascots: two small bands of foglets (yours on the left, a rival band on the right) hopping and
 // shouting at each other across the menu. each one is the in-game troop figure (drawFoglet, the
 // same drawing as on the map) drawn big, with a tiny angry face added and more movement: hops,
-// leaning in at the foe, shaking with rage, and now and then one blasting off like a rocket while a
-// new one walks in. drawn on two side canvases every menu frame
-import { drawFoglet, hexToRgb } from './render.js?v=60';
+// leaning in at the foe, shaking with rage, and now and then one blasting off like a rocket diagonally
+// across the menu while a new one hops in. each band draws on its own full-screen canvas (so rockets
+// can cross the screen); the band stands in its side strip
+import { drawFoglet, hexToRgb } from './render.js?v=61';
 
-const shouts = ['Grr!', 'Hey!', '!!', 'Ours!', 'Back off!', 'Charge!', 'Mine!'];
+// taunts: plain war cries mixed with short nods to games and films (never long quotes)
+const shouts = [
+  'Grr!', 'Hey!', 'Ours!', 'Back off!', 'Charge!', 'Mine!',
+  'Out of bubblegum!', 'DONKEY!', "I'll make you cry like an onion!", 'Wololo!', 'Leeeroy!',
+  'All your base!', 'Finish him!', 'You shall not pass!', 'Get over here!', 'This is FOGFRONT!',
+  'Hadouken!', 'The cake is a lie!', 'Fus ro dah!', 'It\'s-a me!', 'Wubba lubba!', 'Ogres have layers!',
+];
+// what a rocket shouts on blast-off
+const launches = ['Wheee!', 'Do a barrel roll!', 'To infinity!', 'Up up and away!', 'Yippee-ki-yay!', 'Houston, bye!'];
 
 // band = { canvas, color, styles, face: 1 (looks right) | -1 (looks left), seed }
 // each foglet has a mode: idle (hopping, shouting) -> charge (hops faster and faster) -> fly (blasts
-// off like a rocket, flame + smoke, out of the top of the screen) -> gone -> walk (a new foglet walks
-// in from the screen edge to the empty spot) -> idle. one rocket per band every 9-15 s
+// off like a rocket, flame + smoke, diagonally up across the menu and off screen) -> gone -> walk (a
+// new foglet hops in from the screen edge to the empty spot, same hop rhythm as the rest) -> idle.
+// one rocket every 20 s on the menu (first after 20 s), the two bands taking turns
 export function makeBand(canvas, color, styles, face, seed) {
   return {
-    canvas, col: hexToRgb(color), styles, face, seed, last: 0, puffs: [], nextRocket: 7 + seed * 5,
+    canvas, col: hexToRgb(color), styles, face, seed, last: 0, puffs: [],
     hops: styles.map((_, i) => (seed * 1.7 + i * 2.1) % 1),
     acts: styles.map(() => ({ mode: 'idle', t0: 0 })),
     bubbles: styles.map((_, i) => ({ text: '', until: 0, next: 1 + seed * 0.7 + i * 0.9 })),
@@ -24,6 +34,8 @@ export function makeBand(canvas, color, styles, face, seed) {
 export function dressBand(b, color, styles) { b.col = hexToRgb(color); b.styles = styles; }
 
 const charge = 1.4, gone = 0.9, walk = 2.4;   // seconds per rocket phase
+const rocketEvery = 20;   // seconds on the menu between rockets
+const clock = { next: 0, turn: 0 };   // shared by both bands: when the next rocket goes, whose turn
 
 // draw one band at time t (seconds)
 export function drawBand(b, t) {
@@ -34,16 +46,19 @@ export function drawBand(b, t) {
   const x = c.getContext('2d');
   x.setTransform(dpr, 0, 0, dpr, 0, 0);
   x.clearRect(0, 0, w, h);
-  // the canvas runs the full screen height (so rockets leave the screen); the band stands in the
-  // bottom box. figure scale: a foglet is ~4 x 8 units, with room for hops, hats, bubbles, leaning
-  const hb = Math.min(h * 0.5, 320), n = b.styles.length, s = Math.min(hb / 13.5, w / (n * 5.4));
+  // the band stands in the bottom of its side strip (sw wide, next to the mode buttons). figure
+  // scale: a foglet is ~4 x 8 units, with room for hops, hats, bubbles, leaning
+  const sw = Math.min(400, w / 2 - 250);
+  if (sw < 60) return;   // no room beside the buttons
+  const ox = b.face > 0 ? 0 : w - sw, hb = Math.min(h * 0.5, 320), n = b.styles.length, s = Math.min(hb / 13.5, sw / (n * 5.4));
+  // the rocket clock restarts whenever the menu comes back (the menu wasn't drawn for a while)
+  if (!clock.next || t - b.last > 1) clock.next = t + rocketEvery;
   const dt = Math.min(0.1, Math.max(0, t - (b.last || t))); b.last = t;
-  if (!b.started) { b.started = t; b.nextRocket += t; }
-  // time for a rocket: an idle foglet starts charging
-  if (t > b.nextRocket) {
+  // time for a rocket (this band's turn): an idle foglet starts charging
+  if (t > clock.next && clock.turn === b.seed) {
     const idle = b.acts.map((a, i) => (a.mode === 'idle' ? i : -1)).filter((i) => i >= 0);
     if (idle.length) { const i = idle[Math.floor((t * 13) % idle.length)]; b.acts[i] = { mode: 'charge', t0: t }; b.bubbles[i].until = 0; }
-    b.nextRocket = t + 9 + ((t * 7.3 + b.seed * 3) % 6);
+    clock.next = t + rocketEvery; clock.turn = 1 - clock.turn;
   }
   drawPuffs(x, b, t, s);
   const talk = [];   // speech bubbles drawn last, over everyone
@@ -51,7 +66,7 @@ export function drawBand(b, t) {
   for (const i of [...b.styles.keys()].sort((p, q) => (q % 2) - (p % 2))) {
     const back = i % 2 === 1, k = n === 1 ? 0.5 : i / (n - 1);
     const sc = s * (back ? 0.85 : 1);
-    const gx = b.face > 0 ? w * (0.15 + 0.52 * k) : w * (0.85 - 0.52 * k), gy = h - 18 - hb * (back ? 0.16 : 0.03);   // 18 px clear of the build label
+    const gx = ox + (b.face > 0 ? sw * (0.15 + 0.52 * k) : sw * (0.85 - 0.52 * k)), gy = h - 18 - hb * (back ? 0.16 : 0.03);   // 18 px clear of the build label
     const act = b.acts[i], tau = t - act.t0;
     // phase changes
     if (act.mode === 'gone' && tau > gone) { act.mode = 'walk'; act.t0 = t; }
@@ -60,13 +75,7 @@ export function drawBand(b, t) {
     // rage comes and goes; furious foglets hop higher, lean in further and shake
     const ph = b.seed * 1.7 + i * 2.1, rage = act.mode === 'charge' ? 1 : 0.5 + 0.5 * Math.max(0, Math.sin(t * 0.6 + ph));
     let px = gx, lift = 0, hop = 0, squash = 1, lean = 0;
-    if (act.mode === 'walk') {
-      // walks in from the screen edge, easing into its spot, with a little step bob
-      const e = 1 - (1 - Math.min(1, tau / walk)) ** 2, from = b.face > 0 ? -4 * sc : w + 4 * sc;
-      px = from + (gx - from) * e;
-      hop = Math.abs(Math.sin(tau * Math.PI * 3)) * 0.5 * sc * (1 - e * 0.6);
-      lean = 0.12 * b.face * (1 - e);
-    } else {
+    {
       // hop rhythm: 1.25-1.8 a second, steady (phase advanced per frame); charging speeds it up 6x
       const boost = act.mode === 'charge' ? 1 + 5 * Math.min(1, tau / charge) : 1;
       if (act.mode !== 'fly') b.hops[i] = (b.hops[i] + dt * 1.2 * (1.05 + 0.45 * rage) * boost) % 1;
@@ -77,20 +86,25 @@ export function drawBand(b, t) {
       const shake = rage > 0.75 ? Math.sin(t * 40 + i) * (act.mode === 'charge' ? 0.3 : 0.12) * sc : 0;
       lean = (0.08 + 0.18 * lunge + 0.06 * rage) * b.face + Math.sin(t * 3 + ph) * 0.04;
       px = gx + b.face * lunge * 1.4 * sc + shake;
+      // a new foglet hops in from the screen edge, easing into its spot (same hops as the others)
+      if (act.mode === 'walk') { const e = 1 - (1 - Math.min(1, tau / walk)) ** 2, from = b.face > 0 ? -4 * sc : w + 4 * sc; px = from + (gx - from) * e; }
       if (act.mode === 'charge' && tau > charge) { act.mode = 'fly'; act.t0 = t; }
       if (act.mode === 'fly') {
-        // blast-off: accelerating straight up, a slight wobble, flame under the feet, smoke behind
+        // blast-off: accelerating diagonally up across the menu toward the other side, tilted along
+        // its path with a slight wobble, flame under the feet, smoke behind
         const ft = t - act.t0;   // flight time (not tau: that was the charge's clock on the switch frame)
-        lift = 2 * sc + 1400 * ft * ft + 120 * ft;
-        lean = Math.sin(ft * 18) * 0.08; squash = 1.12; hop = 0;
-        b.puffs.push({ x: px + (Math.random() - 0.5) * sc, y: gy - lift + 0.5 * sc, t0: t, r: (0.6 + Math.random() * 0.6) * sc });
-        if (gy - lift < -14 * sc) { act.mode = 'gone'; act.t0 = t; continue; }
+        lift = 2 * sc + 220 * ft * ft + 60 * ft;   // ~1.5 s across the screen
+        px += b.face * (260 * ft * ft + 80 * ft);
+        lean = b.face * 0.8 + Math.sin(ft * 18) * 0.06; squash = 1.12; hop = 0;
+        b.puffs.push({ x: px - b.face * 0.8 * sc + (Math.random() - 0.5) * sc, y: gy - lift + 0.6 * sc, t0: t, r: (0.6 + Math.random() * 0.6) * sc });
+        act.fx = px; act.fy = gy - lift;   // where it is (tests)
+        if (gy - lift < -14 * sc || px < -14 * sc || px > w + 14 * sc) { act.mode = 'gone'; act.t0 = t; continue; }
       }
     }
-    if (act.mode === 'fly') flame(x, px, gy - lift, sc, t);
+    if (act.mode === 'fly') flame(x, px, gy - lift, sc, t, lean);
     figure(x, px, gy - lift, sc, b.col, b.styles[i], b.face, hop, squash, lean, rage, t + ph, act.mode !== 'fly');
     const bub = b.bubbles[i];
-    if (act.mode === 'charge') { talk.push([px + b.face * 1.2 * sc, gy - hop - 8.6 * sc, s, tau < 0.7 ? 'Hmm…' : 'Wheee!', 1]); continue; }
+    if (act.mode === 'charge') { talk.push([px + b.face * 1.2 * sc, gy - hop - 8.6 * sc, s, tau < 0.7 ? 'Hmm…' : (act.cry ??= launches[Math.floor((t * 17) % launches.length)]), 1]); continue; }
     if (act.mode !== 'idle') continue;
     // one speaker per band at a time, so bubbles never pile up
     if (t > bub.next && b.bubbles.some((o) => o !== bub && t < o.until)) bub.next = t + 0.6;
@@ -101,9 +115,11 @@ export function drawBand(b, t) {
 }
 
 // rocket flame under a flying foglet's feet (flickering, white-hot core)
-function flame(x, px, fy, s, t) {
+// (rotated with the foglet's tilt, so it points back along the flight path)
+function flame(x, px, fy, s, t, tilt = 0) {
   const f = 1 + 0.25 * Math.sin(t * 60) + 0.15 * Math.sin(t * 37);
   x.save();
+  x.translate(px, fy); x.rotate(tilt); x.translate(-px, -fy);
   x.globalCompositeOperation = 'lighter';
   const g = x.createLinearGradient(px, fy, px, fy + 5 * s * f);
   g.addColorStop(0, 'rgba(255,250,210,0.95)'); g.addColorStop(0.35, 'rgba(255,190,70,0.9)'); g.addColorStop(1, 'rgba(255,90,30,0)');
