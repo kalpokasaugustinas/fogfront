@@ -31,9 +31,9 @@ export const rules = {
 // a captured segment keeps its building (the new owner gets it).
 export const buildings = {
   farm:     { name: 'Farm',     icon: '🌾', cost: 30, desc: '+60% growth in this segment' },
-  barracks: { name: 'Barracks', icon: '⚔️', cost: 40, desc: 'foglets sent from here attack x1.5' },
-  fort:     { name: 'Fort',     icon: '🛡️', cost: 40, desc: 'defenders here count x1.5' },
-  hospital: { name: 'Hospital', icon: '➕', cost: 50, desc: '+50% growth in your adjacent segments' },
+  barracks: { name: 'Barracks', icon: '⚔️', cost: 25, desc: 'foglets sent from here attack x1.5' },
+  fort:     { name: 'Fort',     icon: '🛡️', cost: 40, desc: 'defenders here count x1.75' },
+  hospital: { name: 'Hospital', icon: '➕', cost: 70, desc: '+50% growth in your adjacent segments' },
   lab:      { name: 'Lab',      icon: '🔬', cost: 60, desc: '+10% growth in all your segments' },
 };
 
@@ -42,7 +42,7 @@ export const effects = {
   hospitalGrowth: 0.5,  // +50% per adjacent own hospital
   labGrowth: 0.1,       // +10% per lab owned, everywhere
   barracksAttack: 1.5,  // attack multiplier of armies sent from barracks
-  fortDefense: 1.5,     // defense multiplier of fort segments
+  fortDefense: 1.75,    // defense multiplier of fort segments
 };
 
 // terrain traits: each segment gets at most one, from what's on the map around it

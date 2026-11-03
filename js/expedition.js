@@ -7,9 +7,9 @@
 //   - pick 1 of 3 perks
 // bots scale with you: base troops + 70% of your carried people, and capitals with the same
 // total bonus strength in a random mix. losing a stage ends the run.
-import { effects } from './config.js?v=63';
-import { personalities } from './ai.js?v=63';
-import { rng } from './mapgen.js?v=63';
+import { effects } from './config.js?v=64';
+import { personalities } from './ai.js?v=64';
+import { rng } from './mapgen.js?v=64';
 
 export const stages = [
   { name: 'Valley', detail: 1, cells: 12, bots: 1, shape: 'random', neutral: [0.12, 0.3] },
@@ -24,20 +24,20 @@ export const stages = [
 export const campBase = 150, campMax = 4, campShare = 0.3, campBoost = 1.5;
 export const botCarry = 0.7;   // share of the player's carried people each bot starts with
 
-// perks: mods are multipliers unless noted (capitalDef, loot are added; fort replaces x1.5)
+// perks: mods are multipliers unless noted (capitalDef, loot are added; fort replaces x1.75)
 export const perks = [
   { id: 'march', icon: '🥾', name: 'Forced march', desc: 'Your armies move 30% faster', mods: { speed: 1.3 } },
-  { id: 'veterans', icon: '🎖️', name: 'Veterans', desc: 'Your armies attack +20%', mods: { atk: 1.2 } },
+  { id: 'veterans', icon: '🎖️', name: 'Veterans', desc: 'Your armies attack +12%', mods: { atk: 1.12 } },
   { id: 'granary', icon: '🌾', name: 'Granary', desc: 'Farms +50% stronger', mods: { farm: 1.5 } },
-  { id: 'healers', icon: '➕', name: 'Healers', desc: 'Hospitals +50% stronger', mods: { hospital: 1.5 } },
-  { id: 'scholars', icon: '🔬', name: 'Scholars', desc: 'Labs +50% stronger', mods: { lab: 1.5 } },
+  { id: 'healers', icon: '➕', name: 'Healers', desc: 'Hospitals +30% stronger', mods: { hospital: 1.3 } },
+  { id: 'scholars', icon: '🔬', name: 'Scholars', desc: 'Labs twice as strong', mods: { lab: 2 } },
   { id: 'fertile', icon: '🌱', name: 'Fertile land', desc: '+12% growth everywhere', mods: { growth: 1.12 } },
-  { id: 'engineers', icon: '🛠️', name: 'Engineers', desc: 'Buildings cost 30% less', mods: { cost: 0.7 } },
-  { id: 'conscription', icon: '📜', name: 'Conscription', desc: 'Neutral segments defend at half strength against you', mods: { neutralDef: 0.5 } },
-  { id: 'walls', icon: '🧱', name: 'Great walls', desc: 'Your capital defends +60%', mods: { capitalDef: 0.6 } },
-  { id: 'recruiters', icon: '📯', name: 'Recruiters', desc: 'Your reserve flows into the capital 2x faster', mods: { reserve: 2 } },
-  { id: 'plunder', icon: '💰', name: 'Plunder', desc: 'Taking an enemy segment adds 15% of its cap as foglets', mods: { loot: 0.15 } },
-  { id: 'masons', icon: '🛡️', name: 'Stonemasons', desc: 'Forts defend x1.8 instead of x1.5', mods: { fort: 1.8 } },
+  { id: 'engineers', icon: '🛠️', name: 'Engineers', desc: 'Buildings cost 40% less', mods: { cost: 0.6 } },
+  { id: 'conscription', icon: '📜', name: 'Conscription', desc: 'Neutral segments defend 25% weaker against you', mods: { neutralDef: 0.75 } },
+  { id: 'walls', icon: '🧱', name: 'Great walls', desc: 'Your capital defends x2', mods: { capitalDef: 1 } },
+  { id: 'recruiters', icon: '📯', name: 'Recruiters', desc: 'Your reserve flows into the capital 3x faster', mods: { reserve: 3 } },
+  { id: 'plunder', icon: '💰', name: 'Plunder', desc: 'Taking an enemy segment adds 2% of its cap as foglets', mods: { loot: 0.02 } },
+  { id: 'masons', icon: '🛡️', name: 'Stonemasons', desc: 'Forts defend x2 instead of x1.75', mods: { fort: 2 } },
 ];
 
 // merge modifier sets: multipliers multiply, capitalDef/loot add, fort takes the best

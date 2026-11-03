@@ -81,8 +81,16 @@ async def main():
             async def worker(i):
                 page = await browser.new_page()
                 page.on("pageerror", lambda e: print("page error:", e))
-                await page.goto(f"http://localhost:{port}/tools/")
-                await page.evaluate("async ([n, c]) => { window.bal = await import('/tools/balance.js'); window.bal.makePool(n, c); }", [args.maps, args.cells])
+                # pages start together and the local server now and then drops a module fetch: retry
+                for attempt in range(3):
+                    try:
+                        await page.goto(f"http://localhost:{port}/tools/")
+                        await page.evaluate("async ([n, c]) => { window.bal = await import('/tools/balance.js'); window.bal.makePool(n, c); }", [args.maps, args.cells])
+                        break
+                    except Exception:
+                        if attempt == 2:
+                            raise
+                        await asyncio.sleep(1 + i)
                 if i == 0:
                     stats.update(await page.evaluate("() => bal.poolStats()"))
                 while not queue.empty():

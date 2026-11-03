@@ -48,12 +48,12 @@ Prototype stage.
 | Building | Cost | Effect |
 |---|---|---|
 | 🌾 Farm | 30 | +60% growth in this segment |
-| ⚔️ Barracks | 40 | troops sent from here attack x1.5 |
-| 🛡️ Fort | 40 | defenders here count x1.5 |
-| ➕ Hospital | 50 | +50% growth in your adjacent segments |
+| ⚔️ Barracks | 25 | troops sent from here attack x1.5 |
+| 🛡️ Fort | 40 | defenders here count x1.75 |
+| ➕ Hospital | 70 | +50% growth in your adjacent segments |
 | 🔬 Lab | 60 | +10% growth in all your segments |
 
-- **Bots** have personalities (aggressive, builder, turtle). They pick targets by value per troop needed, build according to position (front line: fort or barracks; behind the front: farm, hospital or lab), and push troops from the back to the front.
+- **Bots** have personalities (aggressive, builder, turtle). They pick targets by value per troop needed, build what pays back fastest on that tile (foglets gained per second per foglet spent: farm on big tiles, hospital among owned neighbours, lab in a big empire, barracks on a front tile that attacks, fort on a threatened front tile), and push troops from the back to the front.
 
 Keys: space = pause, 1–4 = send %, A = auto toggle, Esc = deselect.
 
@@ -109,7 +109,9 @@ Balance simulations (headless bot-vs-bot 1v1, ~0.15 s a game, 4 browser pages in
 ```
 python tools/balance.py [buildings|perks|all] [--seeds N] [--maps N] [--set farm.cost=40 hospitalGrowth=0.4]
 ```
-One side is a variant (no buildings, one building banned, only one building allowed, or a perk in a conquest-like start with 600-foglet capitals and camps), the other the normal bot. Every game is played both ways round, because faction 0 has a clear first-mover edge between equal bots. Output: the variant's win share with a 95% margin, average game length, buildings held at the end, and a price-vs-impact table (payback time of each building on the pool's median tile). `--set` changes a price or effect for both sides, to test a change before editing `js/config.js`. Bots only build through `personality.allow` (ai.js) in these tests; the game's own bots are unchanged.
+One side is a variant (no buildings, one building banned, only one building allowed, or a perk in a conquest-like start with 600-foglet capitals and camps), the other the normal bot. Every game is played both ways round, because faction 0 has a clear first-mover edge between equal bots. Output: the variant's win share with a 95% margin, average game length, buildings held at the end, and a price-vs-impact table (payback time of each building on the pool's median tile). `--set` changes a price or effect for both sides, to test a change before editing `js/config.js`. Bots only build through `personality.allow` (ai.js) in these tests.
+
+Balance pass (build 64): bots used to put a barracks on every front tile and lost to bots that built nothing (68%); they now pick the building that pays back fastest and beat no-buildings 71%. Prices: hospital 50 → 70, barracks 40 → 25, forts x1.5 → x1.75. Perks, win share vs no perk: plunder 99% → 64% (15% → 2% loot), conscription 79% → 68%, veterans 70% → 55%, healers 59%, engineers 60%, fertile 64%; the rest 47–55%.
 
 ## Build number
 The menu shows `build N · date time`. A git pre-commit hook (`tools/pre-commit` → `.git/hooks/pre-commit`) runs `tools/stamp_version.py`, which stamps the label and adds `?v=N` to css/js files so browsers load the new version. After a fresh clone, install the hook with `cp tools/pre-commit .git/hooks/pre-commit`.

@@ -4,8 +4,8 @@
 //                so a big empire doesn't act faster than a small one),
 //                grudge: extra value for player segments,
 //                allow: optional list of building types (balance tests) }
-import { rules, buildings, effects } from './config.js?v=63';
-import { hops } from './mapgen.js?v=63';
+import { rules, buildings, effects } from './config.js?v=64';
+import { hops } from './mapgen.js?v=64';
 
 export const personalities = {
   aggressive: { build: 0.25, risk: 1.15, actions: 2, grudge: 0.3 },
@@ -40,9 +40,7 @@ export function think(b, f) {
     const reserve = 4;
     for (const s of shuffle(mine, b.rand)) {
       if (s.building) continue;
-      let type = pickBuilding(b, s, front[s.id], mine.length);
-      // balance tests: personality.allow limits the buildings (falls back to a farm, else the first allowed)
-      if (p.allow && !p.allow.includes(type)) type = p.allow.includes('farm') ? 'farm' : p.allow[0];
+      const type = pickBuilding(b, s, front[s.id], mine, p.allow);
       if (!type) break;
       if (s.troops >= b.costOf(me, type) + reserve && b.build(me, s.id, type)) { budget--; break; }
     }
@@ -128,19 +126,32 @@ export function think(b, f) {
   }
 }
 
-// choose a building that fits the segment's position
-function pickBuilding(b, s, frontDist, count) {
-  const me = s.owner, segs = b.segs;
-  if (frontDist === 0) {
-    // on the front: fort if a neighbour could take it, else barracks
-    const threat = s.adj.some((a) => segs[a].owner >= 0 && segs[a].owner !== me && segs[a].troops > s.troops * 0.8);
-    return threat ? 'fort' : 'barracks';
+// choose the building that pays back fastest on this tile: extra foglets per second (or the
+// per-second worth of extra attack / defense) per foglet it costs. allow = optional list of
+// building types (balance tests); null = all
+function pickBuilding(b, s, frontDist, mine, allow) {
+  const me = s.owner, segs = b.segs, m = b.mods(me);
+  const own = (a) => segs[a].owner === me;
+  const value = {
+    // own growth up
+    farm: effects.farmGrowth * (m.farm ?? 1) * s.baseGrowth,
+    // growth up on every owned neighbour
+    hospital: effects.hospitalGrowth * (m.hospital ?? 1) * s.adj.filter(own).reduce((v, a) => v + segs[a].baseGrowth, 0),
+    // growth up everywhere (labs stack)
+    lab: effects.labGrowth * (m.lab ?? 1) * mine.reduce((v, x) => v + x.baseGrowth, 0),
+    // front tiles only: the attack bonus on what flows out, halved (the front moves on, and a
+    // tile left behind gets nothing from it; sims: full value made bots worse than no buildings)
+    barracks: frontDist === 0 ? (effects.barracksAttack - 1) * s.growth * 0.5 : 0,
+    // threatened front tiles only: extra defense on what sits there, spread over ~30 s
+    fort: frontDist === 0 && s.adj.some((a) => segs[a].owner >= 0 && segs[a].owner !== me && segs[a].troops > s.troops * 0.8)
+      ? ((m.fort ?? effects.fortDefense) - 1) * s.troops / 30 : 0,
+  };
+  let best = null, bestScore = 0;
+  for (const type of allow ?? Object.keys(value)) {
+    const score = value[type] / b.costOf(me, type);
+    if (score > bestScore || (allow?.length === 1 && !best)) { best = type; bestScore = score; }
   }
-  const hasLab = segs.some((x) => x.owner === me && x.building === 'lab');
-  if (count >= 6 && !hasLab) return 'lab';
-  const ownNbrs = s.adj.filter((a) => segs[a].owner === me).length;
-  if (ownNbrs >= 3 && ownNbrs * effects.hospitalGrowth > effects.farmGrowth) return 'hospital';
-  return 'farm';
+  return best;
 }
 
 function shuffle(arr, rand) {
