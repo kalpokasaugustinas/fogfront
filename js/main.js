@@ -1,13 +1,13 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=52';
-import { generateMap, rng } from './mapgen.js?v=52';
-import { Battle } from './battle.js?v=52';
-import { personalities } from './ai.js?v=52';
-import { Campaign } from './campaign.js?v=52';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=52';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=52';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=52';
-import { previewBuildings } from './structures.js?v=52';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=53';
+import { generateMap, rng } from './mapgen.js?v=53';
+import { Battle } from './battle.js?v=53';
+import { personalities } from './ai.js?v=53';
+import { Campaign } from './campaign.js?v=53';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=53';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=53';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=53';
+import { previewBuildings } from './structures.js?v=53';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -960,9 +960,6 @@ function drawMenu(dt) {
 function renderMenuStats() {
   const best = Expedition.best();
   $('m-regions').textContent = `🏳️ ${campaign.owned.size}/${campaign.regions.length}`;
-  const top = Expedition.runs()[0];
-  $('m-best').textContent = top ? `🏅 ${top.points.toLocaleString()}` : best ? `🧭 Stage ${best.stage}` : '🏅 —';
-  $('m-wins').textContent = `🏆 ${quickWins()}`;
   $('m-campaign').textContent = `${campaign.owned.size}/${campaign.regions.length} regions conquered`;
   $('m-expedition').textContent = best ? `Best: stage ${best.stage}/5` : 'Valley → World roguelite';
 }
