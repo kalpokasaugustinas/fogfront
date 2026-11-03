@@ -362,12 +362,20 @@ export function top(v, x, id, type, owner, skin) {
       x.fillRect(sx - u * 0.35, sy - u * 1.3, u * 0.7, u * 1.3);
     }
     shadow(x, p[0] + u * 0.8, p[1], u * 1.4, u * 0.45);
-    x.fillStyle = css(lt(stone, 0.1));
+    // pale sandstone obelisk (stands out from the grey stones) with a gold rune line up its face
+    x.fillStyle = css([236, 226, 196]);
     x.beginPath(); x.moveTo(p[0] - u * 0.8, p[1]); x.lineTo(p[0] - u * 0.45, p[1] - u * 4.6); x.lineTo(p[0] + u * 0.45, p[1] - u * 4.6); x.lineTo(p[0] + u * 0.8, p[1]); x.fill();
-    x.fillStyle = css(stoneDark);
+    x.fillStyle = css([196, 178, 140]);
     x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(p[0] + u * 0.8, p[1]); x.lineTo(p[0] + u * 0.45, p[1] - u * 4.6); x.lineTo(p[0], p[1] - u * 4.6); x.fill();
-    x.fillStyle = 'rgba(255, 215, 106, 0.45)';
-    x.beginPath(); x.arc(p[0], p[1] - u * 5.3, u * 1.5, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = css([255, 200, 70], 0.95);
+    x.lineWidth = Math.max(1, u * 0.22);
+    x.beginPath(); x.moveTo(p[0] - u * 0.32, p[1] - u * 0.6); x.lineTo(p[0] - u * 0.22, p[1] - u * 4.1); x.stroke();
+    for (let i = 1; i <= 3; i++) { x.beginPath(); x.moveTo(p[0] - u * 0.55, p[1] - u * i * 1.1); x.lineTo(p[0] - u * 0.05, p[1] - u * i * 1.1); x.stroke(); }
+    // soft halo around the gem (the live pulse is drawn on top every frame, see main.js)
+    const halo = x.createRadialGradient(p[0], p[1] - u * 5.3, 0, p[0], p[1] - u * 5.3, u * 2.4);
+    halo.addColorStop(0, 'rgba(255, 230, 140, 0.6)'); halo.addColorStop(1, 'rgba(255, 215, 106, 0)');
+    x.fillStyle = halo;
+    x.beginPath(); x.arc(p[0], p[1] - u * 5.3, u * 2.4, 0, Math.PI * 2); x.fill();
     x.fillStyle = css([255, 205, 80]);
     x.beginPath(); x.moveTo(p[0], p[1] - u * 6.2); x.lineTo(p[0] - u * 0.6, p[1] - u * 5.3); x.lineTo(p[0], p[1] - u * 4.5); x.lineTo(p[0] + u * 0.6, p[1] - u * 5.3); x.fill();
   } else if (type === 'hospital') {
