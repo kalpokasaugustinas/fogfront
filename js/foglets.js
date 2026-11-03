@@ -4,17 +4,19 @@
 // leaning in at the foe, shaking with rage, and now and then one blasting off like a rocket diagonally
 // across the menu while a new one hops in. each band draws on its own full-screen canvas (so rockets
 // can cross the screen); the band stands in its side strip
-import { drawFoglet, hexToRgb } from './render.js?v=61';
+import { drawFoglet, hexToRgb } from './render.js?v=62';
 
-// taunts: plain war cries mixed with short nods to games and films (never long quotes)
-const shouts = [
-  'Grr!', 'Hey!', 'Ours!', 'Back off!', 'Charge!', 'Mine!',
-  'Out of bubblegum!', 'DONKEY!', "I'll make you cry like an onion!", 'Wololo!', 'Leeeroy!',
-  'All your base!', 'Finish him!', 'You shall not pass!', 'Get over here!', 'This is FOGFRONT!',
-  'Hadouken!', 'The cake is a lie!', 'Fus ro dah!', 'It\'s-a me!', 'Wubba lubba!', 'Ogres have layers!',
-];
-// what a rocket shouts on blast-off
-const launches = ['Wheee!', 'Do a barrel roll!', 'To infinity!', 'Up up and away!', 'Yippee-ki-yay!', 'Houston, bye!'];
+// taunts: mostly plain war cries; now and then (refShare of the time) a short nod to a game or
+// film, so the jokes stay fresh. launch cries work the same way
+const refShare = 0.29;
+const shouts = ['Grr!', 'Hey!', 'Ours!', 'Back off!', 'Charge!', 'Mine!', 'Come here!', 'Hmph!', 'Bring it!', 'Fight me!',
+  'My hill!', 'Shoo!', 'Nope!', 'Ha!', 'You and what army?', 'Boo!', 'Get lost!', 'Huzzah!'];
+const refs = ['Out of bubblegum!', 'DONKEY!', "I'll make you cry like an onion!", 'Wololo!', 'Leeeroy!', 'All your base!',
+  'Finish him!', 'You shall not pass!', 'Get over here!', 'This is FOGFRONT!', 'Hadouken!', 'The cake is a lie!',
+  'Fus ro dah!', "It's-a me!", 'Ogres have layers!'];
+const launches = ['Wheee!', 'Bye!', 'Up I go!', 'Woooo!', 'See ya!'];
+const launchRefs = ['Do a barrel roll!', 'To infinity!', 'Yippee-ki-yay!', 'Houston, bye!'];
+const pick = (plain, ref) => { const list = Math.random() < refShare ? ref : plain; return list[Math.floor(Math.random() * list.length)]; };
 
 // band = { canvas, color, styles, face: 1 (looks right) | -1 (looks left), seed }
 // each foglet has a mode: idle (hopping, shouting) -> charge (hops faster and faster) -> fly (blasts
@@ -104,11 +106,11 @@ export function drawBand(b, t) {
     if (act.mode === 'fly') flame(x, px, gy - lift, sc, t, lean);
     figure(x, px, gy - lift, sc, b.col, b.styles[i], b.face, hop, squash, lean, rage, t + ph, act.mode !== 'fly');
     const bub = b.bubbles[i];
-    if (act.mode === 'charge') { talk.push([px + b.face * 1.2 * sc, gy - hop - 8.6 * sc, s, tau < 0.7 ? 'Hmm…' : (act.cry ??= launches[Math.floor((t * 17) % launches.length)]), 1]); continue; }
+    if (act.mode === 'charge') { talk.push([px + b.face * 1.2 * sc, gy - hop - 8.6 * sc, s, tau < 0.7 ? 'Hmm…' : (act.cry ??= pick(launches, launchRefs)), 1]); continue; }
     if (act.mode !== 'idle') continue;
     // one speaker per band at a time, so bubbles never pile up
     if (t > bub.next && b.bubbles.some((o) => o !== bub && t < o.until)) bub.next = t + 0.6;
-    if (t > bub.next) { bub.text = shouts[Math.floor((t * 7 + i * 3 + b.seed * 5) % shouts.length)]; bub.until = t + 1.2; bub.next = t + 2.8 + ((i * 1.3 + b.seed) % 2.4); }
+    if (t > bub.next) { bub.text = pick(shouts, refs); bub.until = t + 1.2; bub.next = t + 2.8 + ((i * 1.3 + b.seed) % 2.4); }
     if (t < bub.until) talk.push([px + b.face * 1.2 * sc, gy - hop - 8.6 * sc, s, bub.text, 1 - Math.max(0, (t - bub.until + 0.25) / 0.25)]);
   }
   for (const [bx, by, sc, text, a] of talk) bubble(x, bx, by, sc, text, a, w);
