@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=69';
-import { generateMap, rng } from './mapgen.js?v=69';
-import { initAnalytics, track } from './analytics.js?v=69';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=69';
-import { Battle } from './battle.js?v=69';
-import { personalities } from './ai.js?v=69';
-import { Campaign } from './campaign.js?v=69';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=69';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=69';
-import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=69';
-import { previewBuildings } from './structures.js?v=69';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=70';
+import { generateMap, rng } from './mapgen.js?v=70';
+import { initAnalytics, track } from './analytics.js?v=70';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=70';
+import { Battle } from './battle.js?v=70';
+import { personalities } from './ai.js?v=70';
+import { Campaign } from './campaign.js?v=70';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=70';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=70';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=70';
+import { previewBuildings } from './structures.js?v=70';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -437,7 +437,9 @@ function localPos(e) {
 // zooming settles, the view re-renders at a higher resolution so it stays sharp
 let zoomMax = 5;   // 5x, more on big conquest maps (5 / mapScale, set in startBattle)
 const cam = { z: 1, x: 0, y: 0 }, pointers = new Map();
-let pinch = null, boostTimer = 0;
+let pinch = null, boostTimer = 0, boostLock = false;   // lock: the zoom-out has set the boost itself
+// render resolution for zoom z (MapView.resize caps the pixels), so zoomed-in maps stay sharp
+const boostFor = (z) => (z >= 3.6 ? 4 : z >= 2.6 ? 3 : z >= 1.9 ? 2 : z >= 1.4 ? 1.5 : 1);
 function setCam(z, x, y) {
   const w = $('battle-wrap').clientWidth, h = $('battle-wrap').clientHeight;
   cam.z = Math.min(zoomMax, Math.max(1, z));
@@ -446,8 +448,9 @@ function setCam(z, x, y) {
   $('cam').style.transform = cam.z === 1 ? '' : `translate(${cam.x}px, ${cam.y}px) scale(${cam.z})`;
   clearTimeout(boostTimer);
   boostTimer = setTimeout(() => {
-    // render resolution follows the zoom, so zoomed-in maps stay sharp (capped in MapView.resize)
-    const boost = cam.z >= 3.6 ? 4 : cam.z >= 2.6 ? 3 : cam.z >= 1.9 ? 2 : cam.z >= 1.4 ? 1.5 : 1;
+    // render resolution follows the zoom (a change rebuilds every layer, so it waits for the zoom to settle)
+    if (boostLock) return;
+    const boost = boostFor(cam.z);
     if (bv && bv.boost !== boost) { bv.boost = boost; bv.resize(); }
   }, 300);
 }
@@ -876,7 +879,7 @@ function endStage(won) {
         sp.style.setProperty('--d', `${70 + Math.random() * 50}px`);
         btn.appendChild(sp);
       }
-      setTimeout(() => { $('end').classList.add('hidden'); $('end-perks').classList.remove('chosen'); zoomOut(); }, 1100);
+      setTimeout(() => { $('end').classList.add('hidden'); $('end-perks').classList.remove('chosen'); zoomOut(); }, 750);
     };
     $('end-perks').appendChild(btn);
   }
@@ -898,11 +901,12 @@ const zoomSteps = { hold: 0.5, shrink: 2.2, glow: 0.7, reveal: 1.8 };   // secon
 function zoomOut() {
   const wrap = bv.canvas.parentElement, old = bv.canvas;
   // the player may be zoomed in / panned (pinch, drag) or mid-gesture: put the camera back to the
-  // whole map first and drop the zoom render boost, so the snapshot and the new map line up
+  // whole map first, so the snapshot and the new map line up. the render boost stays as it is (the
+  // snapshot doesn't need a rebuild) and is locked until the new map's camera has glided in
   pointers.clear(); pinch = gesture = null;
+  boostLock = true;
   setCam(1, 0, 0);
   clearTimeout(boostTimer);
-  if (bv.boost !== 1) { bv.boost = 1; bv.resize(); key = ''; }
   // old island: bounding box of its tiles, in canvas css px
   const om = bv.map, g = om.grid;
   let x0 = g, y0 = g, x1 = 0, y1 = 0;
@@ -926,10 +930,20 @@ function zoomOut() {
   Object.assign(snap.style, { position: 'absolute', left: so.x + 'px', top: so.y + 'px', width: old.clientWidth + 'px', height: old.clientHeight + 'px', transformOrigin: '0 0' });
   snap.className = 'zoom-snap';
   wrap.appendChild(snap);
-  startBattle(expedition.setup(), 'expedition');
-  paused = true;
   old.style.opacity = '0';
-  requestAnimationFrame(() => {
+  paused = true;
+  const w0 = performance.now();
+  // the snapshot goes on screen first; the heavy part (new battle, map view, first draw of every
+  // layer, ~0.5-1 s on big maps) runs behind it and counts as the hold, instead of adding to it
+  requestAnimationFrame(() => setTimeout(() => {
+    const setup = expedition.setup();
+    // the new map renders straight away at the resolution of the zoom its camera glides to, so its
+    // layers are built once (not again when the glide ends)
+    bv.boost = boostFor(1 / mapScale({ detail: setup.detail }));
+    startBattle(setup, 'expedition');
+    paused = true;
+    old.style.opacity = '0';
+    drawBattle();
     const capId = battle.factions[0].capitalSeg, nr = { width: old.clientWidth, height: old.clientHeight }, no = { x: old.offsetLeft, y: old.offsetTop };
     const box = bv.boxes[capId] ?? [0, 0, g - 1, g - 1];
     const cc = { x: bv.sx((box[0] + box[2] + 1) / 2), y: bv.sy((box[1] + box[3] + 1) / 2), w: (box[2] - box[0] + 1) * bv.scale };
@@ -939,7 +953,7 @@ function zoomOut() {
     const { hold, shrink, glow, reveal } = zoomSteps, total = hold + shrink + glow + reveal;
     const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
     const phase = (t, a, d) => Math.min(1, Math.max(0, (t - a) / d));
-    const t0 = performance.now();
+    const t0 = performance.now() - Math.min(hold * 1000, performance.now() - w0);   // work done = hold used up
     const tick = (now) => {
       const t = (now - t0) / 1000;
       // 1. shrink (scale falls off exponentially, so it reads as a steady pull-back)
@@ -967,10 +981,11 @@ function zoomOut() {
       wrap.style.backgroundPosition = 'center, 0 0';
       paused = false;
       setSpeed(speed);
+      boostLock = false;
       focusHome(1 / mapScale(battle.map));
     };
     requestAnimationFrame(tick);
-  });
+  }, 0));
 }
 
 let flashTimer = 0;
@@ -1076,6 +1091,8 @@ $('campaign-reset').onclick = () => {
   if (confirm('Reset campaign progress?')) { campaign.reset(); pickedRegion = -1; paintCampaign(); }
 };
 // testing aid: fill every tile you own to its cap (capital too)
+// test buttons (🧪 fill, 🏆 win): hidden unless the url has ?test, or on localhost
+if (!/[?&]test(=|&|$)/.test(location.search) && !/^(localhost|127\.)/.test(location.hostname)) for (const id of ['test-fill', 'test-win']) $(id).classList.add('hidden');
 $('test-fill').onclick = () => {
   if (!battle) return;
   for (const s of battle.segs) if (s.owner === 0) s.troops = s.cap;
@@ -1382,6 +1399,9 @@ function bootDone() {
 // density, lower the pixel budget (and re-render) until it keeps up; it never goes below native
 let slowEma = 1 / 60, fpsCool = 0;
 function guardFps(dt) {
+  // not during the conquest zoom-out: its one-off load would read as slow frames and trigger a
+  // full re-render (another stall) right as the new map appears
+  if (boostLock) { slowEma = 1 / 60; return; }
   slowEma += (dt - slowEma) * 0.05;
   fpsCool -= dt;
   const base = window.devicePixelRatio || 1;

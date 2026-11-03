@@ -210,7 +210,7 @@ html.compact .stars span { font-size: 30px; } html.compact .stars span:nth-child
 /* perk picked: the card jumps, glows gold and throws sparks; the others drop away */
 .perk { position: relative; }
 #end-perks.chosen .perk { pointer-events: none; }
-.perk.picked { z-index: 2; animation: perk-pick 1.1s both cubic-bezier(0.2, 1.4, 0.4, 1); }
+.perk.picked { z-index: 2; animation: perk-pick 0.75s both cubic-bezier(0.2, 1.4, 0.4, 1); }
 .perk.picked::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
   background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.75) 50%, transparent 70%) -150% 0 / 250% 100% no-repeat; animation: perk-shine 0.7s 0.1s both; }
 .perk.picked .ico { animation: perk-ico 0.7s both; }
