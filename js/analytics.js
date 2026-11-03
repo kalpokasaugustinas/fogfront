@@ -2,7 +2,7 @@
 // counts page views plus a few game events (modes started, tutorial, wins, conquest stages) and
 // js errors players hit.
 // off while code is empty, and never on localhost (tests)
-const code = 'fogfront';   // goatcounter site code: https://fogfront.goatcounter.com
+const code = 'fogfront';   // goatcounter site code (kept from the game's old name): https://fogfront.goatcounter.com
 
 const on = () => !!code && !/^(localhost|127\.)/.test(location.hostname);
 

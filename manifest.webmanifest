@@ -1,6 +1,6 @@
 {
-  "name": "Fogfront",
-  "short_name": "Fogfront",
+  "name": "Fogtide",
+  "short_name": "Fogtide",
   "description": "Grow foglets, build, drag to attack: a territory strategy game.",
   "start_url": "./",
   "scope": "./",

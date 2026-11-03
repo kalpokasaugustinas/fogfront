@@ -4,7 +4,7 @@
 // leaning in at the foe, shaking with rage, and now and then one blasting off like a rocket diagonally
 // across the menu while a new one hops in. each band draws on its own full-screen canvas (so rockets
 // can cross the screen); the band stands in its side strip
-import { drawFoglet, hexToRgb } from './render.js?v=70';
+import { drawFoglet, hexToRgb } from './render.js?v=71';
 
 // taunts: mostly plain war cries; now and then (refShare of the time) a short nod to a game or
 // film, so the jokes stay fresh. launch cries work the same way
@@ -12,7 +12,7 @@ const refShare = 0.29;
 const shouts = ['Grr!', 'Hey!', 'Ours!', 'Back off!', 'Charge!', 'Mine!', 'Come here!', 'Hmph!', 'Bring it!', 'Fight me!',
   'My hill!', 'Shoo!', 'Nope!', 'Ha!', 'You and what army?', 'Boo!', 'Get lost!', 'Huzzah!'];
 const refs = ['Out of bubblegum!', 'DONKEY!', "I'll make you cry like an onion!", 'Wololo!', 'Leeeroy!', 'All your base!',
-  'Finish him!', 'You shall not pass!', 'Get over here!', 'This is FOGFRONT!', 'Hadouken!', 'The cake is a lie!',
+  'Finish him!', 'You shall not pass!', 'Get over here!', 'This is FOGTIDE!', 'Hadouken!', 'The cake is a lie!',
   'Fus ro dah!', "It's-a me!", 'Ogres have layers!'];
 const launches = ['Wheee!', 'Bye!', 'Up I go!', 'Woooo!', 'See ya!'];
 const launchRefs = ['Do a barrel roll!', 'To infinity!', 'Yippee-ki-yay!', 'Houston, bye!'];
