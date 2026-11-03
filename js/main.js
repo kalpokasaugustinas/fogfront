@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=66';
-import { generateMap, rng } from './mapgen.js?v=66';
-import { initAnalytics, track } from './analytics.js?v=66';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=66';
-import { Battle } from './battle.js?v=66';
-import { personalities } from './ai.js?v=66';
-import { Campaign } from './campaign.js?v=66';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=66';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=66';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=66';
-import { previewBuildings } from './structures.js?v=66';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=67';
+import { generateMap, rng } from './mapgen.js?v=67';
+import { initAnalytics, track } from './analytics.js?v=67';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=67';
+import { Battle } from './battle.js?v=67';
+import { personalities } from './ai.js?v=67';
+import { Campaign } from './campaign.js?v=67';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=67';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=67';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=67';
+import { previewBuildings } from './structures.js?v=67';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -157,6 +157,7 @@ function startBattle(setup, m, rid = -1) {
   if (autoplay) setup.factions[0] = { ai: true, color: 0, think: 1.5, personality: personalities.aggressive };
   dress(setup.factions, setup.seed);
   battle = new Battle(map, setup);
+  zoomMax = 5 / mapScale(map);
   mode = m; regionId = rid; selected = -1; drag = null; paused = false; userPaused = false; key = '';
   endTutor(false);
   tutorWanted = false;   // startTutorial sets it after this
@@ -205,25 +206,12 @@ function paintBattle() {
 
 // troop figures in tiles, tile numbers, sea routes and armies (marching / fighting) for battle b
 // drawn on view v; ac = not-yet-simulated time (smooth motion); numbers = draw the number badges
-// maps whose land covers only part of the canvas (world-shaped conquest maps can come out small)
-// are drawn as a larger map: badges and labels shrink by mapScale and the camera glides in by
-// 1 / mapScale after the zoom-out, so tiles look big next to their numbers
-const mapScale = (m) => Math.min(1, Math.max(0.55, landSpan(m) / 0.8));
-// how much of the map the land spans (bounding box side, 0-1), computed once per map
-function landSpan(m) {
-  if (m.landSpan != null) return m.landSpan;
-  const g = m.grid;
-  let x0 = g, y0 = g, x1 = 0, y1 = 0;
-  for (let y = 0; y < g; y += 2) for (let x = 0; x < g; x += 2) {
-    if (m.ids[y * g + x] < 0) continue;
-    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
-  }
-  return (m.landSpan = x1 < x0 ? 1 : Math.max(x1 - x0, y1 - y0) / g);
-}
+// big conquest maps (continent, world): badges, labels and figures shrink by mapScale (render.js)
+// and the camera glides in by 1 / mapScale after the zoom-out
 function drawUnits(ctx, v, b, ac, numbers) {
   const fs = Math.max(11, Math.min(18, v.size / 30)) * mapScale(b.map);
   // troop figures: one soldier per troopsPerDot troops (battalions of x5 on zoomed-out maps)
-  const z = Math.max(1, Math.min(1.9, v.size / 480)), dpr = v.dpr;   // figure scale: small but visible
+  const z = Math.max(1, Math.min(1.9, v.size / 480)) * mapScale(b.map), dpr = v.dpr;   // figure scale: small but visible
   const kind = (b.map.detail ?? 1) < 0.7 ? 'battalion' : 'soldier';
   const per = rules.troopsPerDot * (kind === 'battalion' ? 5 : 1), sp = (kind === 'battalion' ? 12 : 4.6) * z;
   // relic obelisks (tile without a building): a slow pulsing glow around the gem and a faint
@@ -447,7 +435,8 @@ function localPos(e) {
 // the map sits in #cam, which is scaled / moved with a css transform (cheap, no redraw). pinch or
 // mouse wheel zooms (1x-5x) around the fingers / cursor; one finger on empty ground pans. when
 // zooming settles, the view re-renders at a higher resolution so it stays sharp
-const zoomMax = 5, cam = { z: 1, x: 0, y: 0 }, pointers = new Map();
+let zoomMax = 5;   // 5x, more on big conquest maps (5 / mapScale, set in startBattle)
+const cam = { z: 1, x: 0, y: 0 }, pointers = new Map();
 let pinch = null, boostTimer = 0;
 function setCam(z, x, y) {
   const w = $('battle-wrap').clientWidth, h = $('battle-wrap').clientHeight;

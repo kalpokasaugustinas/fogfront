@@ -261,7 +261,7 @@ export function ground(v, x, id, type, owner) {
       const r = 3.5 + Number(type.slice(4)) * 1.2;
       x.fillStyle = css(snow ? [220, 218, 214] : [178, 160, 122], 0.7);
       x.beginPath(); x.ellipse(p[0], p[1] - u * 0.5, u * r, u * r * 0.58, 0, 0, Math.PI * 2); x.fill();
-    })(u * Math.max(0.55, v.map.detail ?? 1));
+    })(u * Math.max(0.62, v.map.detail ?? 1));
   } else if (type === 'home') {
     // starting tile: a small dirt yard and a path around the single house
     const [p] = v.spots(id, 1, 0);
@@ -416,7 +416,7 @@ export function top(v, x, id, type, owner, skin) {
       x.fillStyle = css([240, 150, 60]);
       x.beginPath(); x.moveTo(p[0] - u * 0.35, p[1] - u * 0.3); x.lineTo(p[0], p[1] - u * 1.3); x.lineTo(p[0] + u * 0.35, p[1] - u * 0.3); x.fill();
       stakes(0, 11);
-    })(u * Math.max(0.55, v.map.detail ?? 1));
+    })(u * Math.max(0.62, v.map.detail ?? 1));
   } else if (type === 'home') {
     // starting tile: one house with a roof in the owner's colour, a little fence and a tree
     const [p] = v.spots(id, 1, 0);

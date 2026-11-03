@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=66';
-import * as structures from './structures.js?v=66';
+import { themes } from './config.js?v=67';
+import * as structures from './structures.js?v=67';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -212,6 +212,11 @@ function chaikin(p) {
   return out;
 }
 
+// map scale: conquest stages 4-5 are bigger maps (feature scale detail < 0.62). everything drawn on
+// them (buildings, trees, foglets, badges) shrinks by this, and the camera starts zoomed in by its
+// inverse, so things look the same size as on stage 3 while the map holds more tiles
+export const mapScale = (m) => Math.min(1, (m?.detail ?? 1) / 0.62);
+
 export class MapView {
   // segThemes (optional): theme name per segment, e.g. campaign regions with their own climate
   constructor(canvas, map, theme, segThemes) {
@@ -264,7 +269,8 @@ export class MapView {
     this.under = this.base = this.rocks = this.layerGround = this.layerOwner = this.layerObjects = null;
     this.sprites = new Map();
     this.ofsX = this.ofsY = 0;
-    this.u = Math.max(3.5, size / 92);   // building scale unit in css px
+    // building scale unit in css px; bigger conquest maps (mapScale < 1) draw everything smaller
+    this.u = Math.max(3.5, size / 92) * mapScale(this.map);
     this.spotCache = new Map();
   }
 
@@ -366,20 +372,20 @@ export class MapView {
       // a cluster = a small wood: 6-17 trees packed together
       const count = 6 + Math.floor(hash(i++, 3, this.seed) * 12);
       for (let j = 0; j < count; j++) {
-        const a = hash(i++, 4, this.seed) * Math.PI * 2, d = Math.sqrt(hash(i++, 5, this.seed)) * 14 * k * Math.max(0.5, dt);
+        const a = hash(i++, 4, this.seed) * Math.PI * 2, d = Math.sqrt(hash(i++, 5, this.seed)) * 14 * k * Math.max(0.25, dt);
         const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
-        if (ok(x, y)) this.trees.push({ x, y, r: (3.4 + hash(i++, 6, this.seed) * 2.2) * k * Math.max(0.45, dt), seg: ids[Math.floor(y) * g + Math.floor(x)] });
+        if (ok(x, y)) this.trees.push({ x, y, r: (3.4 + hash(i++, 6, this.seed) * 2.2) * k * Math.max(0.22, dt), seg: ids[Math.floor(y) * g + Math.floor(x)] });
       }
     }
     // forest tiles: woodland over the whole tile (jittered grid, a few clearings)
-    const sp = 6.5 * k * Math.max(0.5, dt), rock = 12 * k * Math.max(0.5, dt);
+    const sp = 6.5 * k * Math.max(0.25, dt), rock = 12 * k * Math.max(0.25, dt);
     const segAt = (x, y) => segs[ids[Math.floor(y) * g + Math.floor(x)]];
     for (let gy = sp / 2; gy < g; gy += sp * 0.8) {
       for (let gx = sp / 2; gx < g; gx += sp) {
         const x = gx + (hash(i++, 8, this.seed) - 0.5) * sp, y = gy + (hash(i++, 9, this.seed) - 0.5) * sp * 0.8;
         if (!ok(x, y) || segAt(x, y).trait !== 'forest') continue;
         if (vnoise(x / (14 * k), y / (14 * k), this.seed + 6) < 0.28) continue;   // clearing
-        this.trees.push({ x, y, r: (3 + hash(i++, 6, this.seed) * 2) * k * Math.max(0.45, dt), seg: segAt(x, y).id });
+        this.trees.push({ x, y, r: (3 + hash(i++, 6, this.seed) * 2) * k * Math.max(0.22, dt), seg: segAt(x, y).id });
       }
     }
     // highland tiles: scattered low-poly boulders
@@ -387,7 +393,7 @@ export class MapView {
       for (let gx = rock / 2; gx < g; gx += rock) {
         const x = gx + (hash(i++, 10, this.seed) - 0.5) * rock, y = gy + (hash(i++, 11, this.seed) - 0.5) * rock * 0.8;
         if (!ok(x, y) || segAt(x, y).trait !== 'highland' || hash(i++, 12, this.seed) < 0.35) continue;
-        this.trees.push({ kind: 'rock', x, y, r: (1.6 + hash(i++, 13, this.seed) * 2) * k * Math.max(0.5, dt), seg: segAt(x, y).id, a: hash(i++, 14, this.seed) });
+        this.trees.push({ kind: 'rock', x, y, r: (1.6 + hash(i++, 13, this.seed) * 2) * k * Math.max(0.25, dt), seg: segAt(x, y).id, a: hash(i++, 14, this.seed) });
       }
     }
     // reeds: lakeside tiles along the shore, river tiles along the banks
@@ -582,7 +588,7 @@ export class MapView {
     else if (type === 'hospital') { add(this.spots(id, 3, u * 6), u * 4, u * 2.6); add(this.spots(id, 6, u * 4), u * 2.2, u * 1.6); }
     else if (type === 'lab') { add(this.spots(id, 3, u * 6), u * 4, u * 2.6); add(main, u * 6.5, u * 4); }
     else if (type === 'capital') { add(this.spots(id, 7, u * 3.2), u * 3.2, u * 2.2); add(main, u * 8, u * 4.8); }
-    else if (type.startsWith('camp')) add(main, u * (4 + Number(type.slice(4)) * 1.3) * Math.max(0.55, this.map.detail ?? 1), u * 3.4);
+    else if (type.startsWith('camp')) add(main, u * (4 + Number(type.slice(4)) * 1.3) * Math.max(0.62, this.map.detail ?? 1), u * 3.4);
     else add(main, u * 4.5, u * 2.8);   // home, relic
     const { bdist, grid: g } = this.map, wall = (u * 2.6) / this.scale;
     return (tr, px, py) => {

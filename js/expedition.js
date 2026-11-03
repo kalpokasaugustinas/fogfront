@@ -7,16 +7,16 @@
 //   - pick 1 of 3 perks
 // bots scale with you: base troops + 70% of your carried people, and capitals with the same
 // total bonus strength in a random mix. losing a stage ends the run.
-import { effects } from './config.js?v=66';
-import { personalities } from './ai.js?v=66';
-import { rng } from './mapgen.js?v=66';
+import { effects } from './config.js?v=67';
+import { personalities } from './ai.js?v=67';
+import { rng } from './mapgen.js?v=67';
 
 export const stages = [
   { name: 'Valley', detail: 1, cells: 12, bots: 1, shape: 'random', neutral: [0.12, 0.3] },
   { name: 'Region', detail: 0.8, cells: 15, bots: 2, shape: 'random', neutral: [0.18, 0.38] },
   { name: 'Country', detail: 0.62, cells: 18, bots: 3, shape: 'random', neutral: [0.24, 0.46] },
-  { name: 'Continent', detail: 0.6, cells: 18, bots: 3, shape: 'world', neutral: [0.3, 0.55] },
-  { name: 'World', detail: 0.6, cells: 20, bots: 4, shape: 'world', neutral: [0.36, 0.64] },
+  { name: 'Continent', detail: 0.42, cells: 22, bots: 3, shape: 'world', neutral: [0.3, 0.55] },
+  { name: 'World', detail: 0.32, cells: 27, bots: 4, shape: 'world', neutral: [0.36, 0.64] },
 ];
 
 // neutral scaling in stages 2-5: garrison x sqrt(carried troops / campBase), at most campMax;
@@ -101,7 +101,8 @@ export class Expedition {
   // battle setup for the current stage
   setup() {
     const st = this.current, r = rng(this.seed + this.stage * 7919);
-    const types = Object.keys(personalities), themes = ['summer', 'autumn', 'winter', 'moor'];
+    // a season per stage: summer valley -> autumn region -> moor country -> desert continent -> winter world
+    const types = Object.keys(personalities), themes = ['summer', 'autumn', 'moor', 'desert', 'winter'];
     const carried = this.capital?.troops ?? 0;
     const bots = [1, 2, 3, 4].slice(0, st.bots).map((color) => ({
       ai: true, color, think: Math.max(1.8, 3.2 - this.stage * 0.3),
@@ -113,7 +114,7 @@ export class Expedition {
       seed: Math.floor(r() * 1e9),
       cells: st.cells,
       shape: st.shape,
-      theme: themes[Math.floor(r() * themes.length)],
+      theme: themes[this.stage] ?? themes[0],
       neutral: st.neutral,
       detail: st.detail,
       stamp: this.shape,   // previous island outline -> shape of the new capital

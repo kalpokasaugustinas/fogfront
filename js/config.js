@@ -93,6 +93,14 @@ export const themes = {
     rockDark: [70, 70, 80], rockLight: [112, 112, 122], cap: [250, 250, 252], capAt: 0.7,
     tree: 'pine', trees: 0.9, treeDark: [64, 78, 76], treeLight: [96, 112, 108], treeSnow: [250, 251, 252], lineNeutral: [120, 128, 140],
   },
+  desert: {
+    rockTop: [232, 200, 158], rockSide: [156, 108, 74], rockSideDark: [122, 82, 56], fogA: [242, 234, 220], fogB: [214, 200, 180],
+    sea: '#7fb7b2', seaLight: [170, 212, 204], foam: [240, 248, 244], shadow: [92, 72, 52],
+    groundA: [222, 186, 126], groundB: [236, 206, 150], shore: [244, 226, 182], scree: [192, 158, 116], lip: [246, 230, 196],
+    cliffLight: [236, 210, 172], cliffDark: [196, 160, 120],
+    rockDark: [150, 108, 76], rockLight: [204, 160, 116], cap: [232, 204, 162], capAt: 0.97,
+    tree: 'round', trees: 0.35, treeDark: [100, 112, 58], treeLight: [138, 146, 78], lineNeutral: [122, 96, 58],
+  },
   moor: {
     rockTop: [226, 212, 172], rockSide: [72, 70, 86], rockSideDark: [52, 50, 66], fogA: [230, 232, 226], fogB: [190, 195, 189],
     sea: '#a2aca5', seaLight: [200, 208, 200], foam: [238, 242, 236], shadow: [50, 56, 60],
