@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=49';
-import * as structures from './structures.js?v=49';
+import { themes } from './config.js?v=50';
+import * as structures from './structures.js?v=50';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -246,8 +246,10 @@ export class MapView {
     this.tilt = 0.8;
     const pad = 0.12;   // extra height (as a share of width): cliffs + raised objects
     const size = Math.max(50, Math.floor(Math.min(r.width, r.height / (this.tilt + pad))));
-    // zoomed in (boost > 1): render sharper, up to 2 device px per css px (phones already have more)
-    const base = window.devicePixelRatio || 1, dpr = Math.max(base, Math.min(2, base * (this.boost ?? 1)));
+    // zoomed in (boost > 1): render sharper, boost x the screen's own density, so a phone at 2x zoom
+    // gets 2x its pixels too; capped at ~4 M px per layer (~6 cached layers, several drawn each frame)
+    const base = window.devicePixelRatio || 1, css = size * size * (this.tilt + pad);
+    const dpr = Math.max(base, Math.min(base * (this.boost ?? 1), Math.sqrt((this.pxCap ?? 4e6) / css)));
     if (size === this.size && dpr === this.dpr && this.under) return;
     this.size = size;
     this.dpr = dpr;

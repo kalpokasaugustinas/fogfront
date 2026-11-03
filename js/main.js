@@ -1,13 +1,13 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=49';
-import { generateMap, rng } from './mapgen.js?v=49';
-import { Battle } from './battle.js?v=49';
-import { personalities } from './ai.js?v=49';
-import { Campaign } from './campaign.js?v=49';
-import { Expedition, stages, perks } from './expedition.js?v=49';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=49';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=49';
-import { previewBuildings } from './structures.js?v=49';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=50';
+import { generateMap, rng } from './mapgen.js?v=50';
+import { Battle } from './battle.js?v=50';
+import { personalities } from './ai.js?v=50';
+import { Campaign } from './campaign.js?v=50';
+import { Expedition, stages, perks } from './expedition.js?v=50';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=50';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=50';
+import { previewBuildings } from './structures.js?v=50';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -421,7 +421,8 @@ function setCam(z, x, y) {
   $('cam').style.transform = cam.z === 1 ? '' : `translate(${cam.x}px, ${cam.y}px) scale(${cam.z})`;
   clearTimeout(boostTimer);
   boostTimer = setTimeout(() => {
-    const boost = cam.z >= 1.9 ? 2 : cam.z >= 1.4 ? 1.5 : 1;
+    // render resolution follows the zoom, so zoomed-in maps stay sharp (capped in MapView.resize)
+    const boost = cam.z >= 3.6 ? 4 : cam.z >= 2.6 ? 3 : cam.z >= 1.9 ? 2 : cam.z >= 1.4 ? 1.5 : 1;
     if (bv && bv.boost !== boost) { bv.boost = boost; bv.resize(); }
   }, 300);
 }
@@ -515,6 +516,11 @@ $('battle-canvas').addEventListener('pointerup', (e) => {
   if (g.mode === 'drag') {
     const to = bv.segAt(e.clientX, e.clientY);
     if (playing && canTarget(g.sid, to)) sendFrom(g.sid, to);
+    // dragged back onto the same tile: stop its sending (the standing route)
+    else if (playing && to === g.sid && isMine(to)) {
+      if (battle.routes.has(to)) { battle.clearRoute(to); flash('✋ Route removed: this tile keeps its troops'); }
+      else flash('Cancelled');
+    }
   } else if (!g.mode && playing) tapAt(g.sid);
   drag = null;
 });
@@ -1268,10 +1274,24 @@ function bootDone() {
     .then(() => requestAnimationFrame(() => document.documentElement.classList.remove('booting')));
 }
 
+// sharp zoom costs pixels: if frames get slow while the map renders above the screen's own
+// density, lower the pixel budget (and re-render) until it keeps up; it never goes below native
+let slowEma = 1 / 60, fpsCool = 0;
+function guardFps(dt) {
+  slowEma += (dt - slowEma) * 0.05;
+  fpsCool -= dt;
+  const base = window.devicePixelRatio || 1;
+  if (fpsCool > 0 || slowEma < 0.024 || bv.dpr <= base * 1.01) return;
+  bv.pxCap = (bv.pxCap ?? 4e6) * 0.7;
+  bv.resize(); key = '';
+  fpsCool = 2; slowEma = 1 / 60;
+}
+
 function frame(now) {
   requestAnimationFrame(frame);   // schedule first, so an error in one frame never stops the loop
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
+  if (screen === 'battle' && bv) guardFps(dt);
   if (screen === 'battle' && battle) {
     if (countdown > 0) {
       // 3-2-1: the map is live to look at, but nothing moves until it's over. it waits while
