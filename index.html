@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=43">
+  <link rel="stylesheet" href="style.css?v=44">
   <!-- phones held upright: turn the page to landscape before the first paint (main.js keeps it in
        sync on resize, but only runs once every module has loaded) -->
   <script>
@@ -30,7 +30,7 @@
     <div class="menu-fog"></div>
     <header class="menu-top">
       <span class="badge hidden" id="m-regions" title="Campaign regions">🏳️ 1/34</span>
-      <span class="badge" id="m-best" title="Best expedition">🧭 —</span>
+      <span class="badge" id="m-best" title="Best conquest">🧭 —</span>
       <span class="badge" id="m-wins" title="Quick battle wins">🏆 0</span>
       <span class="spacer"></span>
       <button id="btn-profile" class="round" title="Commander: your colour, troops and buildings">👤</button>
@@ -44,10 +44,10 @@
     </div>
     <div class="modes">
       <button id="btn-campaign" class="mode blue pulse hidden"><span class="m-ico">🗺️</span><span class="m-txt"><b>Campaign</b><small id="m-campaign">34 regions · 4 empires</small></span><span class="play">PLAY</span></button>
-      <button id="btn-expedition" class="mode gold"><span class="m-ico">🧭</span><span class="m-txt"><b>Expedition</b><small id="m-expedition">Valley → World roguelite</small></span><span class="play">GO</span></button>
+      <button id="btn-expedition" class="mode gold"><span class="m-ico">🧭</span><span class="m-txt"><b>Conquest</b><small id="m-expedition">Valley → World roguelite</small></span><span class="play">GO</span></button>
       <button id="btn-skirmish" class="mode green"><span class="m-ico">⚔️</span><span class="m-txt"><b>Quick battle</b><small>Random island · 3 rivals</small></span><span class="play">FIGHT</span></button>
     </div>
-    <span id="version">build 43 · 2026-11-03 10:01</span>
+    <span id="version">build 44 · 2026-11-03 10:12</span>
   </section>
 
   <!-- campaign world map -->
@@ -111,6 +111,19 @@
     </div>
   </section>
 
+  <!-- leave confirmation: pauses the battle; nothing of the running battle / run is saved -->
+  <div id="leave" class="overlay hidden">
+    <div class="card end-card leave-card">
+      <div class="end-ribbon"><h2>Leave battle?</h2></div>
+      <p class="leave-icon">🏳️</p>
+      <p id="leave-text">Are you sure you want to withdraw? Your progress in this battle will not be saved.</p>
+      <div class="end-btns">
+        <button id="leave-stay" class="mode green big-btn">Keep fighting</button>
+        <button id="leave-go" class="mode red big-btn">Withdraw</button>
+      </div>
+    </div>
+  </div>
+
   <!-- commander panel: colour, troop style, building style (saved in the browser) -->
   <div id="profile" class="overlay hidden">
     <div class="card end-card profile-card">
@@ -141,7 +154,7 @@
         <li>Each segment can hold one building, paid with its own troops. Captured buildings switch sides.</li>
       </ul>
       <ul id="help-buildings"></ul>
-      <p><b>🧭 Expedition</b> (roguelite): 5 stages from a valley to the whole world. Win a stage and everything you hold collapses into one capital on a bigger map: all your people come along (the capital fills up, the rest waits in a 🏕️ reserve), and each building type becomes a capital bonus = its effect × the share of your segments that had it (4 farms of 10 segments → +60% × 40% = +24% growth). Nothing can be built in a capital. Bots start with part of your strength and their own capitals. Pick a perk at every zoom-out. Lose once and the run ends.</p>
+      <p><b>🧭 Conquest</b> (roguelite): 5 stages from a valley to the whole world. Win a stage and everything you hold collapses into one capital on a bigger map: all your people come along (the capital fills up, the rest waits in a 🏕️ reserve), and each building type becomes a capital bonus = its effect × the share of your segments that had it (4 farms of 10 segments → +60% × 40% = +24% growth). Nothing can be built in a capital. Bots start with part of your strength and their own capitals. Pick a perk at every zoom-out. Lose once and the run ends.</p>
       <p>Win: wipe out every enemy faction. Keys: space = pause, 1–4 = send %, A = auto toggle, Esc = deselect.</p>
       <p class="credits"><b>Music:</b> "Aphelion", "Song Of The Forge" by Scott Buckley (CC BY 4.0) · "Five Armies" by Kevin MacLeod, incompetech.com (CC BY 4.0) · "Heroic Demise" by Matthew Pablo, matthewpablo.com (CC BY 3.0) · "The Precipice of Victory", "The Fallen" by Jonathan Shaw, jshaw.co.uk (CC BY 3.0) · "Battle Theme A" by cynicmusic (CC0). <b>Sound:</b> Kenney, starninjas, William Hector and other OpenGameArt artists (CC0). All tracks trimmed. Full list: audio/CREDITS.md.</p>
       <button id="help-close" class="primary">Got it</button>
@@ -149,6 +162,6 @@
   </div>
 
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=43"></script>
+  <script type="module" src="js/main.js?v=44"></script>
 </body>
 </html>

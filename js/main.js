@@ -1,13 +1,13 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=43';
-import { generateMap, rng } from './mapgen.js?v=43';
-import { Battle } from './battle.js?v=43';
-import { personalities } from './ai.js?v=43';
-import { Campaign } from './campaign.js?v=43';
-import { Expedition, stages, perks } from './expedition.js?v=43';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=43';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=43';
-import { previewBuildings } from './structures.js?v=43';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=44';
+import { generateMap, rng } from './mapgen.js?v=44';
+import { Battle } from './battle.js?v=44';
+import { personalities } from './ai.js?v=44';
+import { Campaign } from './campaign.js?v=44';
+import { Expedition, stages, perks } from './expedition.js?v=44';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=44';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=44';
+import { previewBuildings } from './structures.js?v=44';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -713,7 +713,7 @@ function endStage(won) {
     if (won) expedition.collapse(battle);
     const reached = won ? stages.length : expedition.stage + 1;
     const record = expedition.saveBest(reached);
-    $('end-title').textContent = won ? 'The world is yours!' : 'Expedition over';
+    $('end-title').textContent = won ? 'The world is yours!' : 'Conquest over';
     $('end-stats').innerHTML = `<p class="next-up">Reached stage ${reached} · total time ${fmtTime(expedition.time + (won ? 0 : battle.time))}${record ? ' · 🏆 new best' : ''}</p>` + statsHtml(battle);
     $('end-retry').textContent = '▶ New expedition';
     $('end-retry').classList.remove('hidden');
@@ -915,9 +915,20 @@ $('test-fill').onclick = () => {
   for (const s of battle.segs) if (s.owner === 0) s.troops = s.cap;
   flash('🧪 Your tiles are full');
 };
+// leave: a finished battle goes straight back; a running one asks first (and pauses meanwhile)
+let pausedBeforeLeave = false;
+const leaveBattle = () => { $('leave').classList.add('hidden'); show(mode === 'campaign' ? 'campaign' : 'menu'); };
 $('battle-quit').onclick = () => {
-  if (battle.state !== 'running' || confirm('Leave this battle?')) show(mode === 'campaign' ? 'campaign' : 'menu');
+  if (battle.state !== 'running') { leaveBattle(); return; }
+  $('leave-text').textContent = mode === 'expedition'
+    ? 'Are you sure you want to withdraw? Your conquest will end and its progress will not be saved.'
+    : 'Are you sure you want to withdraw? Your progress in this battle will not be saved.';
+  pausedBeforeLeave = paused;
+  setSpeed(0);
+  $('leave').classList.remove('hidden');
 };
+$('leave-go').onclick = leaveBattle;
+$('leave-stay').onclick = () => { $('leave').classList.add('hidden'); if (!pausedBeforeLeave) setSpeed(speed); };
 $('help-buildings').innerHTML = Object.values(buildings).map((b) => `<li>${b.icon} <b>${b.name}</b> (cost ${b.cost}): ${b.desc}</li>`).join('');
 
 addEventListener('keydown', (e) => {
