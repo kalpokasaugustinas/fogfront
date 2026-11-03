@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=67';
-import * as structures from './structures.js?v=67';
+import { themes } from './config.js?v=68';
+import * as structures from './structures.js?v=68';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -466,6 +466,10 @@ export class MapView {
       x.fill(this.islandP, 'evenodd');
       x.restore();
     }
+    // ground-only copy (shadow, lakes, cliffs, no fog): the conquest zoom-out shrinks just the land
+    this.cliffs = document.createElement('canvas');
+    this.cliffs.width = c.width; this.cliffs.height = c.height;
+    this.cliffs.getContext('2d').drawImage(c, 0, 0);
     // cloud banks around the island: puffs with a blue-grey underside, a soft body and a bright
     // top-left rim (light from above), like the cloud texture behind them
     // (puffs go on a scratch layer without blur, which is then blurred once: a blur filter per
@@ -981,7 +985,7 @@ export class MapView {
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    ctx.drawImage(this.under, 0, 0);
+    ctx.drawImage(this.groundOnly && this.cliffs ? this.cliffs : this.under, 0, 0);   // groundOnly: no fog
     if (this.st) {
       if (!this.layerGround) this.buildGroundLayer();
       if (!this.layerOwner) this.buildOwnerLayer();

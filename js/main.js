@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=67';
-import { generateMap, rng } from './mapgen.js?v=67';
-import { initAnalytics, track } from './analytics.js?v=67';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=67';
-import { Battle } from './battle.js?v=67';
-import { personalities } from './ai.js?v=67';
-import { Campaign } from './campaign.js?v=67';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=67';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=67';
-import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=67';
-import { previewBuildings } from './structures.js?v=67';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=68';
+import { generateMap, rng } from './mapgen.js?v=68';
+import { initAnalytics, track } from './analytics.js?v=68';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=68';
+import { Battle } from './battle.js?v=68';
+import { personalities } from './ai.js?v=68';
+import { Campaign } from './campaign.js?v=68';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=68';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=68';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=68';
+import { previewBuildings } from './structures.js?v=68';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -918,8 +918,11 @@ function zoomOut() {
   }
   const oc = { x: bv.sx((x0 + x1 + 1) / 2), y: bv.sy((y0 + y1 + 1) / 2), w: (x1 - x0 + 1) * bv.scale };
   // redraw the old map clean (no selection, drag arrow or banner) and keep a snapshot of it
+  // (ground only: no cloud banks, so a frozen picture of the fog doesn't shrink along with it)
   selected = -1; drag = null; goFlash = 0; wheelOn = false;
+  bv.groundOnly = true;
   drawBattle();
+  bv.groundOnly = false;
   const snap = document.createElement('canvas');
   snap.width = old.width; snap.height = old.height;
   snap.getContext('2d').drawImage(old, 0, 0);
@@ -948,6 +951,11 @@ function zoomOut() {
       const k = ease(phase(t, hold, shrink)), s = ratio ** k;
       const px = from.x + (to.x - from.x) * k, py = from.y + (to.y - from.y) * k;
       snap.style.transform = `translate(${px - so.x - s * oc.x}px, ${py - so.y - s * oc.y}px) scale(${s})`;
+      // the fog behind recedes too, slower than the island (parallax: we pull back through the
+      // clouds), drifting a little, and settles at its normal size as the shrink ends
+      const fs = 720 * (s / ratio) ** 0.35, drift = 40 * Math.sin(Math.PI * Math.min(1, t / total));   // back to 0 at the end
+      wrap.style.backgroundSize = `${fs}px ${fs}px, auto`;
+      wrap.style.backgroundPosition = `calc(50% + ${drift}px) calc(50% + ${drift * 0.6}px), 0 0`;
       // 2. glow: a gold pulse around the little island
       const gk = phase(t, hold + shrink, glow), pulse = Math.sin(gk * Math.PI);
       snap.style.filter = pulse > 0.01 ? `drop-shadow(0 0 ${2 + 10 * pulse}px rgba(255, 210, 90, ${0.9 * pulse}))` : '';
@@ -960,6 +968,8 @@ function zoomOut() {
       if (t < total) { requestAnimationFrame(tick); return; }
       snap.remove();
       old.style.opacity = old.style.webkitMaskImage = old.style.maskImage = '';
+      wrap.style.backgroundSize = '720px 720px, auto';   // as MapView.setMap sets them
+      wrap.style.backgroundPosition = 'center, 0 0';
       paused = false;
       setSpeed(speed);
       focusHome(1 / mapScale(battle.map));
