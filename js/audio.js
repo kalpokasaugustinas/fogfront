@@ -78,7 +78,8 @@ function loadSamples() {
 }
 
 // play a random variant of a clip; rate = pitch/speed, jitter = random rate spread
-function play(name, { vol = 0.5, rate = 1, jitter = 0.08, when = 0 } = {}) {
+// offset = start this far into the clip; returns the source (so it can be stopped)
+function play(name, { vol = 0.5, rate = 1, jitter = 0.08, when = 0, offset = 0 } = {}) {
   const list = buffers[name];
   if (!ctx || !list?.length) return;
   const src = ctx.createBufferSource(), g = ctx.createGain();
@@ -86,7 +87,8 @@ function play(name, { vol = 0.5, rate = 1, jitter = 0.08, when = 0 } = {}) {
   src.playbackRate.value = rate * (1 + (Math.random() * 2 - 1) * jitter);
   g.gain.value = vol;
   src.connect(g).connect(sfxBus);
-  src.start(ctx.currentTime + when);
+  src.start(ctx.currentTime + when, offset);
+  return src;
 }
 
 // ---------- synth building blocks (for the cues without a recording) ----------
@@ -125,6 +127,7 @@ function note({ when = 0, freq = 440, dur = 0.3, type = 'sine', vol = 0.2, attac
 
 // ---------- effects ----------
 
+let drumSrc = null;   // the countdown drum while it plays
 export const sfx = {
   // one marching step on grass; size 0..1 (how many troops are on the move)
   march(size) { play('step', { vol: 0.1 + 0.3 * size, rate: 0.85, jitter: 0.12 }); },
@@ -144,10 +147,32 @@ export const sfx = {
     noise({ type: 'lowpass', freq: 130, vol: 0.09, dur: 0.22 });
     note({ freq: 147, type: 'sawtooth', vol: 0.03, dur: 0.35, attack: 0.04, cutoff: 700, when: 0.05 });
   },
+  // alarm when one of your tiles is attacked: two quick bell strikes, high then lower
+  alarm() {
+    [988, 784].forEach((f, i) => {
+      note({ freq: f, type: 'triangle', vol: 0.17, dur: 0.35, attack: 0.004, when: i * 0.14 });
+      note({ freq: f * 2.76, type: 'sine', vol: 0.04, dur: 0.18, attack: 0.004, when: i * 0.14 });   // metallic overtone
+    });
+  },
+  // capture celebration after the horn: a bright rising arpeggio with a sparkle on top
+  cheer() {
+    [523, 659, 784, 1047].forEach((f, i) => note({ freq: f, type: 'triangle', vol: 0.09, dur: 0.32, attack: 0.005, when: 0.32 + i * 0.07 }));
+    noise({ type: 'highpass', freq: 6000, vol: 0.05, dur: 0.45, attack: 0.02, when: 0.32 });
+  },
   // three hammer knocks on wood
   build() { for (let i = 0; i < 3; i++) play('build', { vol: 0.45, when: i * 0.13 }); },
   // countdown: the war drum recording runs under all three counts, so only count 0 starts it
-  drum(i) { if (i === 0) play('drums', { vol: 0.7, jitter: 0 }); },
+  drum(i) { if (i === 0) drumSrc = play('drums', { vol: 0.7, jitter: 0 }); },
+  // pause during the countdown: the drum stops; resume picks it up where the count is
+  drumStop() { try { drumSrc?.stop(); } catch { /* already over */ } drumSrc = null; },
+  drumFrom(sec) { this.drumStop(); drumSrc = play('drums', { vol: 0.7, jitter: 0, offset: sec }); },
+  // perk picked: soft thump, a rising run of bells and a long sparkle
+  perk() {
+    noise({ type: 'lowpass', freq: 180, vol: 0.14, dur: 0.25 });
+    [523, 659, 784, 1047, 1319].forEach((f, i) => note({ freq: f, type: 'triangle', vol: 0.1, dur: 0.45, attack: 0.005, when: 0.05 + i * 0.06 }));
+    note({ freq: 2093, type: 'sine', vol: 0.05, dur: 0.8, attack: 0.01, when: 0.36 });
+    noise({ type: 'highpass', freq: 7000, vol: 0.05, dur: 0.7, attack: 0.03, when: 0.3 });
+  },
   click() { play('click', { vol: 0.5, jitter: 0.05 }); },
 };
 

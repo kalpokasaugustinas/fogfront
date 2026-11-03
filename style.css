@@ -185,6 +185,26 @@ html.compact .stars span { font-size: 30px; } html.compact .stars span:nth-child
 .perk .ico { font-size: 30px; width: 50px; height: 50px; display: grid; place-items: center; background: rgba(255,255,255,0.22); border-radius: 50%; }
 .perk b { font-size: 16px; text-shadow: 0 2px 0 rgba(0,0,0,0.2); }
 .perk small { color: rgba(255,255,255,0.92); font-size: 12px; line-height: 1.25; }
+/* perk picked: the card jumps, glows gold and throws sparks; the others drop away */
+.perk { position: relative; }
+#end-perks.chosen .perk { pointer-events: none; }
+.perk.picked { z-index: 2; animation: perk-pick 1.1s both cubic-bezier(0.2, 1.4, 0.4, 1); }
+.perk.picked::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.75) 50%, transparent 70%) -150% 0 / 250% 100% no-repeat; animation: perk-shine 0.7s 0.1s both; }
+.perk.picked .ico { animation: perk-ico 0.7s both; }
+.perk.dropped { animation: perk-drop 0.4s both ease-in; }
+@keyframes perk-pick {
+  0% { transform: scale(1); }
+  25% { transform: translateY(-10px) scale(1.18); background: linear-gradient(180deg, #ffd76a, #f0a92a); box-shadow: 0 0 0 4px #fff6, 0 0 30px 8px rgba(255,215,106,0.9); }
+  75% { transform: translateY(-6px) scale(1.12); background: linear-gradient(180deg, #ffd76a, #f0a92a); box-shadow: 0 0 0 3px #fff4, 0 0 24px 6px rgba(255,215,106,0.7); }
+  100% { transform: translateY(-40px) scale(0.6); opacity: 0; background: linear-gradient(180deg, #ffd76a, #f0a92a); }
+}
+@keyframes perk-shine { to { background-position: 150% 0; } }
+@keyframes perk-ico { 40% { transform: scale(1.35) rotate(-12deg); } 70% { transform: scale(1.1) rotate(6deg); } }
+@keyframes perk-drop { to { transform: translateY(14px) scale(0.85); opacity: 0; } }
+.perk-spark { position: absolute; left: 50%; top: 40%; width: 8px; height: 8px; margin: -4px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, #fff 0 30%, #ffd76a 60%, transparent 70%); animation: perk-spark 0.75s 0.08s both ease-out; }
+@keyframes perk-spark { from { transform: rotate(var(--a)) translateX(0) scale(1.4); opacity: 1; } to { transform: rotate(var(--a)) translateX(var(--d)) scale(0.2); opacity: 0; } }
 .zooming { transition: transform 1.7s cubic-bezier(0.45, 0, 0.2, 1), opacity 1.7s ease; }
 .zoom-snap { pointer-events: none; z-index: 2; }
 
@@ -197,6 +217,23 @@ html.compact .stars span { font-size: 30px; } html.compact .stars span:nth-child
   background: #000c; padding: 8px 14px; border-radius: 10px; pointer-events: none; transition: 0.2s; z-index: 20;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* tutorial coach card: top centre, the map stays playable around it */
+#tutor { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); z-index: 6; width: min(420px, calc(100% - 32px));
+  background: #fffdf4; border: 3px solid #a3650a; border-radius: 14px; padding: 10px 14px; text-align: center;
+  box-shadow: 0 6px 0 rgba(90,45,6,0.35), 0 10px 24px rgba(0,0,0,0.25); animation: tutor-in 0.35s ease-out; }
+#tutor.hidden { display: none; }
+#tutor p { margin: 4px 0 8px; font-weight: 700; font-size: 15px; color: #33474c; }
+.tutor-step { font-size: 12px; font-weight: 800; color: #a3650a; letter-spacing: 1px; }
+.tutor-btns { display: flex; justify-content: center; gap: 8px; }
+.tutor-btns button { margin: 0; }
+.tutor-skip { background: none; border: none; color: #6b7d80; text-decoration: underline; cursor: pointer; }
+@keyframes tutor-in { from { opacity: 0; transform: translate(-50%, -10px); } }
+/* the button a tutorial step talks about pulses */
+.tutor-pulse { animation: tutor-pulse 0.9s ease-in-out infinite; }
+@keyframes tutor-pulse { 50% { box-shadow: 0 0 0 6px rgba(255, 201, 77, 0.85); transform: scale(1.06); } }
+html.compact #tutor { top: 46px; padding: 6px 10px; }
+html.compact #tutor p { font-size: 13px; margin: 2px 0 6px; }
 
 /* ---------- battle hud: full-screen map, chunky freemium-style controls in the corners ---------- */
 #battle-wrap { position: absolute; inset: 0; padding: 0; }

@@ -1,10 +1,10 @@
 // battle simulation: segments, troops, buildings, armies. no drawing here,
 // so the same code runs in the browser and in headless tests.
-import { rules, buildings, effects, traits, relicGarrison } from './config.js?v=45';
-import { perks, combineMods } from './expedition.js?v=45';
-import { hops } from './mapgen.js?v=45';
-import { rng, spreadStarts, equalizeStarts } from './mapgen.js?v=45';
-import { think } from './ai.js?v=45';
+import { rules, buildings, effects, traits, relicGarrison } from './config.js?v=46';
+import { perks, combineMods } from './expedition.js?v=46';
+import { hops } from './mapgen.js?v=46';
+import { rng, spreadStarts, equalizeStarts } from './mapgen.js?v=46';
+import { think } from './ai.js?v=46';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 
@@ -199,7 +199,7 @@ export class Battle {
     const A = a.n * a.atk, D = t.troops * this.fightDef(t, a.owner);
     const dur = Math.min(rules.fightMax, rules.fightMin + (rules.fightMax - rules.fightMin) * Math.min(1, Math.min(A, D) / rules.fightScale));
     a.fight = { k: Math.max(1, Math.min(A, D) / dur), k0: A, time: 0 };
-    this.events.push({ type: 'fight', owner: a.owner, prev: t.owner, size: Math.min(A, D) });
+    this.events.push({ type: 'fight', owner: a.owner, prev: t.owner, size: Math.min(A, D), id: a.to });
   }
 
   // enemy armies on the same road in opposite directions meet halfway and fight there
@@ -263,7 +263,7 @@ export class Battle {
       t.troops = Math.max(0, a.n);
       // perk: plunder adds part of an enemy segment's cap when it's taken
       if (prev >= 0) t.troops += t.cap * (this.mods(a.owner).loot ?? 0);
-      this.events.push({ type: 'capture', owner: a.owner, prev, size: t.cap });
+      this.events.push({ type: 'capture', owner: a.owner, prev, size: t.cap, id: a.to });
       this.version++;
       this.updateGrowth();
       if (a.owner === 0) {

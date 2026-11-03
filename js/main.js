@@ -1,13 +1,13 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=45';
-import { generateMap, rng } from './mapgen.js?v=45';
-import { Battle } from './battle.js?v=45';
-import { personalities } from './ai.js?v=45';
-import { Campaign } from './campaign.js?v=45';
-import { Expedition, stages, perks } from './expedition.js?v=45';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=45';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=45';
-import { previewBuildings } from './structures.js?v=45';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=46';
+import { generateMap, rng } from './mapgen.js?v=46';
+import { Battle } from './battle.js?v=46';
+import { personalities } from './ai.js?v=46';
+import { Campaign } from './campaign.js?v=46';
+import { Expedition, stages, perks } from './expedition.js?v=46';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=46';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=46';
+import { previewBuildings } from './structures.js?v=46';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -102,6 +102,7 @@ $('campaign-canvas').addEventListener('pointerdown', (e) => {
 let battle = null, bv = null, mode = 'skirmish', regionId = -1;
 let countdown = 0, goFlash = 0;   // 3-2-1 before a battle starts (s left), 'Conquer!' banner after
 let auto = true, selected = -1, pct = 0.5, drag = null, hover = -1, speed = 1, paused = false, key = '';
+let userPaused = false;   // paused by the player (pause button, space, leave dialog), not by a transition
 
 // ---------- commander profile: your colour, troop style and building style ----------
 const profileKey = 'frontlines.profile';
@@ -135,7 +136,9 @@ function startBattle(setup, m, rid = -1) {
   if (autoplay) setup.factions[0] = { ai: true, color: 0, think: 1.5, personality: personalities.aggressive };
   dress(setup.factions, setup.seed);
   battle = new Battle(map, setup);
-  mode = m; regionId = rid; selected = -1; drag = null; paused = false; key = '';
+  mode = m; regionId = rid; selected = -1; drag = null; paused = false; userPaused = false; key = '';
+  endTutor(false);
+  tutorWanted = !autoplay && !tutorSeen() && (m === 'skirmish' || (m === 'expedition' && expedition.stage === 0));
   countdown = autoplay ? 0 : 3; goFlash = 0;
   const theme = setup.theme ?? themeNames[setup.seed % themeNames.length];
   if (!bv) bv = new MapView($('battle-canvas'), map, theme); else bv.setMap(map, theme);
@@ -180,8 +183,11 @@ function paintBattle() {
 
 // troop figures in tiles, tile numbers, sea routes and armies (marching / fighting) for battle b
 // drawn on view v; ac = not-yet-simulated time (smooth motion); numbers = draw the number badges
+// big conquest maps (continent, world) are drawn as a larger map: badges and labels shrink by
+// mapScale and the camera starts zoomed in by 1 / mapScale, so tiles look big next to their numbers
+const mapScale = (m) => ((m.detail ?? 1) < 0.5 ? m.detail / 0.65 : 1);
 function drawUnits(ctx, v, b, ac, numbers) {
-  const fs = Math.max(11, Math.min(18, v.size / 30));
+  const fs = Math.max(11, Math.min(18, v.size / 30)) * mapScale(b.map);
   // troop figures: one soldier per troopsPerDot troops (battalions of x5 on zoomed-out maps)
   const z = Math.max(1, Math.min(1.9, v.size / 480)), dpr = v.dpr;   // figure scale: small but visible
   const kind = (b.map.detail ?? 1) < 0.7 ? 'battalion' : 'soldier';
@@ -282,8 +288,10 @@ function drawBattle() {
   // highlight: the tile you're dragging from (with its neighbours), else the selected tile
   const hl = drag ? drag.from : selected;
   if (hl >= 0) bv.highlight(ctx, hl, colors[battle.factions[0].color], battle.segs[hl].adj, performance.now() / 1000);
-  const fs = Math.max(11, Math.min(18, bv.size / 30));
+  const fs = Math.max(11, Math.min(18, bv.size / 30)) * mapScale(battle.map);
   drawUnits(ctx, bv, battle, acc, true);
+  drawFx(ctx, fs);
+  drawTutor(ctx, fs);
   updateWheel();   // follows zoom / pan
   // player routes: dashed arrows with a moving dash
   ctx.save();
@@ -316,7 +324,7 @@ function drawBattle() {
     ctx.stroke(); ctx.setLineDash([]);
     if (ok) label(ctx, '→ ' + Math.floor(battle.segs[drag.from].troops * pct), (fx + tx) / 2, (fy + ty) / 2 - fs, fs * 0.8, '#ffd76a');
   }
-  if ((countdown > 0 && !paused) || goFlash > 0) drawCountdown(ctx);
+  if ((countdown > 0 && (!paused || userPaused)) || goFlash > 0) drawCountdown(ctx);
 }
 
 // 3-2-1 countdown: a gold-rimmed shield medallion with a big number that pops in and settles,
@@ -335,8 +343,9 @@ function drawCountdown(ctx) {
   ctx.textBaseline = 'middle';
   if (countdown > 0) {
     const n = Math.ceil(countdown), f = n - countdown;   // f: 0 -> 1 within each second
-    const pop = 1 + 0.35 * Math.max(0, 1 - f * 5) ** 2 - 0.06 * Math.max(0, f - 0.8) * 5;
-    const alpha = f > 0.85 ? (1 - f) / 0.15 : 1;
+    // paused: the number holds still at full size
+    const pop = userPaused ? 1 : 1 + 0.35 * Math.max(0, 1 - f * 5) ** 2 - 0.06 * Math.max(0, f - 0.8) * 5;
+    const alpha = f > 0.85 && !userPaused ? (1 - f) / 0.15 : 1;
     ctx.globalAlpha = alpha;
     ctx.translate(cx, cy);
     ctx.scale(pop, pop);
@@ -415,6 +424,21 @@ function setCam(z, x, y) {
     const boost = cam.z >= 1.9 ? 2 : cam.z >= 1.4 ? 1.5 : 1;
     if (bv && bv.boost !== boost) { bv.boost = boost; bv.resize(); }
   }, 300);
+}
+// glide the camera to zoom z centred on your capital (big conquest maps start zoomed in)
+function focusHome(z) {
+  if (z <= 1.01) return;
+  const s = battle.segs[battle.factions[0].capitalSeg] ?? battle.segs.find((q) => q.owner === 0);
+  if (!s) return;
+  const c = bv.canvas, w = $('battle-wrap').clientWidth, h = $('battle-wrap').clientHeight;
+  const px = c.offsetLeft + bv.sx(s.x), py = c.offsetTop + bv.sy(s.y), t0 = performance.now(), z0 = cam.z, x0 = cam.x, y0 = cam.y;
+  const tick = (now) => {
+    const k = Math.min(1, (now - t0) / 700), e = 1 - (1 - k) ** 3, zz = z0 + (z - z0) * e;
+    // target: capital in the middle of the screen (setCam clamps at the map edges)
+    setCam(zz, x0 + (w / 2 - px * z - x0) * e, y0 + (h / 2 - py * z - y0) * e);
+    if (k < 1 && screen === 'battle') requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 // zoom to nz keeping the screen point (px, py) (relative to the map area) fixed
 function zoomAt(px, py, nz) {
@@ -505,6 +529,7 @@ function tapAt(sid) {
 function sendFrom(from, to) {
   const n = Math.floor(battle.segs[from].troops * pct);
   const sent = battle.send(0, from, to, n);
+  if (sent && !isMine(to)) tutorEvent('attack', to);
   // auto on + own target: also set a standing route that keeps (1 - pct) of the cap
   if (auto && isMine(to) && battle.setRoute(0, from, to, 1 - pct)) {
     flash(`🔁 Route set: keeps ${Math.round((1 - pct) * 100)}% of cap, forwards the rest`);
@@ -566,7 +591,7 @@ function renderWheel() {
   for (const g of box.querySelectorAll('.sector')) {
     g.addEventListener('pointerdown', (e) => e.stopPropagation());
     g.addEventListener('click', () => {
-      if (battle.build(0, selected, g.dataset.type)) sfx.build();
+      if (battle.build(0, selected, g.dataset.type)) { sfx.build(); tutorEvent('build'); }
       else flash(`${buildings[g.dataset.type].name} needs ${battle.costOf(0, g.dataset.type)} troops in this tile`);
     });
   }
@@ -629,7 +654,10 @@ function setPct(p) {
 
 for (const b of document.querySelectorAll('#speed button')) b.onclick = () => setSpeed(+b.dataset.speed);
 function setSpeed(s) {
+  // during the 3-2-1 the drum stops on pause and picks up where the count is on resume
+  if (screen === 'battle' && countdown > 0 && countdown < 3 && (s === 0) !== paused) { if (s === 0) sfx.drumStop(); else sfx.drumFrom(3 - countdown); }
   paused = s === 0;
+  userPaused = paused;
   if (s > 0) speed = s;
   for (const b of document.querySelectorAll('#speed button')) b.classList.toggle('on', +b.dataset.speed === (paused ? 0 : speed));
 }
@@ -650,15 +678,15 @@ function statsHtml(b) {
     + (blds.length ? `<p class="blds">Standing buildings: ${blds.map(([i, c]) => `${i} ${c}`).join(' · ')}</p>` : '');
 }
 
-// end card chrome: win/lose look, stars (1 for the win, +1 no tile lost, +1 under 5 minutes),
+// end card chrome: win/lose look, stars (1 for the win, +1 no tile lost, +1 under 6 minutes),
 // then count the stat numbers up
 function showEnd(won, starsFor) {
   $('end').classList.toggle('win', won);
   $('end').classList.toggle('lose', !won);
   if (won && starsFor) {
-    const s = starsFor.stats, got = [true, s.lost === 0, starsFor.time < 300];
+    const s = starsFor.stats, got = [true, s.lost === 0, starsFor.time / rules.timeScale < 360];
     $('end-stars').innerHTML = got.map((on) => `<span class="${on ? 'on' : ''}">★</span>`).join('');
-    $('end-why').textContent = '★ victory · ★ no tile lost · ★ under 5:00';
+    $('end-why').textContent = '★ victory · ★ no tile lost · ★ under 6:00';
   } else $('end-stars').innerHTML = $('end-why').textContent = '';
   $('end').classList.remove('hidden');
   const nums = [...$('end').querySelectorAll('[data-n]')], t0 = performance.now();
@@ -736,7 +764,22 @@ function endStage(won) {
     const btn = document.createElement('button');
     btn.className = 'perk';
     btn.innerHTML = `<span class="ico">${p.icon}</span><span><b>${p.name}</b><br><small>${p.desc}</small></span>`;
-    btn.onclick = () => { expedition.perks.push(p.id); $('end').classList.add('hidden'); zoomOut(); };
+    btn.onclick = () => {
+      if ($('end-perks').classList.contains('chosen')) return;   // one pick only
+      expedition.perks.push(p.id);
+      sfx.perk();
+      $('end-perks').classList.add('chosen');
+      for (const b of $('end-perks').children) b.classList.add(b === btn ? 'picked' : 'dropped');
+      // sparks fly out of the picked card in a ring
+      for (let i = 0; i < 16; i++) {
+        const sp = document.createElement('i');
+        sp.className = 'perk-spark';
+        sp.style.setProperty('--a', `${(i / 16) * 360 + Math.random() * 12}deg`);
+        sp.style.setProperty('--d', `${70 + Math.random() * 50}px`);
+        btn.appendChild(sp);
+      }
+      setTimeout(() => { $('end').classList.add('hidden'); $('end-perks').classList.remove('chosen'); zoomOut(); }, 1100);
+    };
     $('end-perks').appendChild(btn);
   }
   $('end-retry').classList.add('hidden');
@@ -815,6 +858,7 @@ function zoomOut() {
       old.style.opacity = old.style.webkitMaskImage = old.style.maskImage = '';
       paused = false;
       setSpeed(speed);
+      focusHome(1 / mapScale(battle.map));
     };
     requestAnimationFrame(tick);
   });
@@ -828,7 +872,8 @@ function flash(msg) {
   flashTimer = setTimeout(() => $('toast').classList.remove('show'), 1200);
 }
 
-const fmtTime = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+// game time shown as real minutes:seconds at speed x1 (the sim runs at rules.timeScale)
+const fmtTime = (g) => { const t = g / rules.timeScale; return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`; };
 
 // ---------- menu: live demo battle in the background ----------
 // four bots fight on a decorative island behind the menu (attract mode); a new island when it ends
@@ -849,7 +894,7 @@ function newDemo() {
 }
 function drawMenu(dt) {
   if (!demo || demo.state !== 'running' || demo.time > 240) newDemo();
-  demoAcc += dt;
+  demoAcc += dt * rules.timeScale;
   while (demoAcc >= rules.step) { demo.step(rules.step); demoAcc -= rules.step; }
   demo.events.length = 0;   // demo is silent
   mv.paint((id) => {
@@ -940,23 +985,175 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('resize', () => { if (screen === 'battle' && bv) { bv.resize(); key = ''; } if (screen === 'campaign') cv.resize(), paintCampaign(); });
 
+// ---------- battle effects: alert rings on attacked tiles, capture confetti ----------
+// effects live in map coordinates (they follow pan / zoom) and are animated from their birth
+// time, so they need no per-frame update
+let fxs = [];
+function celebrate(id) {
+  const now = performance.now(), c = colors[battle.factions[0].color];
+  const palette = [`rgb(${c})`, '#ffd76a', '#ffffff', `rgb(${c.map((v) => Math.min(255, v + 70))})`];
+  fxs.push({ kind: 'ring', id, born: now }, { kind: 'text', id, born: now });
+  for (let i = 0; i < 26; i++) {
+    const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, sp = 70 + Math.random() * 110;
+    fxs.push({ kind: 'bit', id, born: now + Math.random() * 60, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+      spin: (Math.random() - 0.5) * 14, color: palette[i % palette.length], life: 0.9 + Math.random() * 0.5 });
+  }
+}
+function drawFx(ctx, fs) {
+  const now = performance.now();
+  fxs = fxs.filter((f) => now - f.born < (f.life ?? 1.2) * 1000 + 100);
+  if (!fxs.length) return;
+  ctx.save();
+  for (const f of fxs) {
+    const age = (now - f.born) / 1000;
+    if (age < 0) continue;
+    const s = battle.segs[f.id], x = bv.sx(s.x), y = bv.sy(s.y);
+    if (f.kind === 'alert') {
+      // two red rings shrinking onto the tile
+      for (const d of [0, 0.35]) {
+        const k = (age - d) / 0.7;
+        if (k < 0 || k > 1) continue;
+        ctx.globalAlpha = 0.9 * (1 - k);
+        ctx.lineWidth = 3.5; ctx.strokeStyle = '#ff3b30';
+        ctx.beginPath(); ctx.arc(x, y, fs * (2.8 - 1.4 * k), 0, Math.PI * 2); ctx.stroke();
+      }
+    } else if (f.kind === 'ring') {
+      // gold shock ring
+      const k = Math.min(1, age / 0.6);
+      ctx.globalAlpha = 1 - k;
+      ctx.lineWidth = 5 * (1 - k) + 1; ctx.strokeStyle = '#ffd76a';
+      ctx.beginPath(); ctx.arc(x, y, fs * (0.8 + 2.6 * k), 0, Math.PI * 2); ctx.stroke();
+    } else if (f.kind === 'text') {
+      // 'Captured!' floats up and fades
+      ctx.globalAlpha = Math.min(1, 3 * (1.2 - age));
+      label(ctx, 'Captured!', x, y - fs * (1.6 + age * 1.6), fs * 0.95 * (1 + 0.25 * Math.max(0, 0.15 - age) / 0.15), '#ffd76a');
+    } else {
+      // confetti: thrown up and out, falls back with gravity, spinning
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, 2.5 * (f.life - age));
+      ctx.translate(x + f.vx * age, y + f.vy * age + 170 * age * age);
+      ctx.rotate(f.spin * age);
+      ctx.fillStyle = f.color;
+      ctx.fillRect(-3.5, -2, 7, 4);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+// ---------- first-game tutorial ----------
+// a coach card walks a new player through attack, capture, build, auto and the goal. it runs once
+// (first skirmish or conquest stage 1), can be skipped, and can be replayed from the help.
+// hold steps freeze the sim (the map stays touchable) until the player does the step.
+const tutorKey = 'frontlines.tutorial';
+const tutorSteps = [
+  { id: 'attack', hold: true, text: '👆 Drag from your castle to the glowing tile to attack it.' },
+  { id: 'capture', text: 'Your troops march to the border and fight. The bigger number wins.' },
+  { id: 'build', text: '🔨 Tap a tile you own (not the castle) and pick a building. It costs that tile\'s troops.' },
+  { id: 'auto', hold: true, ok: true, text: '🔁 Auto is on: drag to your own tile to set a route that pipes spare troops to the front.' },
+  { id: 'goal', hold: true, ok: true, text: '🏆 Wipe out every rival to win. Bots gang up on whoever grows fastest. Good luck!' },
+];
+let tutor = null, tutorWanted = false;   // tutor = { step, t, from, to } while it runs
+function tutorSeen() { try { return localStorage.getItem(tutorKey) === '1'; } catch { return false; } }
+function startTutor() { tutor = { step: -1, t: 0 }; nextTutor(); }
+function tutorHold() { return !!tutor && !!tutorSteps[tutor.step].hold; }
+function nextTutor() {
+  tutor.step++; tutor.t = 0;
+  if (tutor.step >= tutorSteps.length) { endTutor(true); return; }
+  const st = tutorSteps[tutor.step];
+  if (st.id === 'attack') {
+    // point at the weakest non-own neighbour of your capital (neutral first)
+    const home = battle.segs.find((s) => s.owner === 0 && s.capital) ?? battle.segs.find((s) => s.owner === 0);
+    const opts = home ? home.adj.map((i) => battle.segs[i]).filter((s) => s.owner !== 0) : [];
+    opts.sort((a, b) => (a.owner < 0 ? 0 : 1e6) + a.troops - ((b.owner < 0 ? 0 : 1e6) + b.troops));
+    tutor.from = home?.id ?? -1; tutor.to = opts[0]?.id ?? -1;
+  }
+  $('tutor-step').textContent = `TUTORIAL ${tutor.step + 1}/${tutorSteps.length}`;
+  $('tutor-text').textContent = st.text;
+  $('tutor-ok').classList.toggle('hidden', !st.ok);
+  $('tutor-ok').textContent = tutor.step === tutorSteps.length - 1 ? "Let's go" : 'Got it';
+  $('auto').classList.toggle('tutor-pulse', st.id === 'auto');
+  $('tutor').classList.remove('hidden');
+}
+function endTutor(done) {
+  if (done) { try { localStorage.setItem(tutorKey, '1'); } catch { /* not saved */ } }
+  tutor = null;
+  $('tutor').classList.add('hidden');
+  $('auto').classList.remove('tutor-pulse');
+}
+// player actions that finish a step: 'attack' (sent troops at a tile), 'capture', 'build'
+function tutorEvent(type, id) {
+  if (!tutor) return;
+  const st = tutorSteps[tutor.step];
+  if (st.id !== type) return;
+  if (type === 'attack') tutor.to = id;
+  if (type === 'capture') tutor.built = id;
+  nextTutor();
+}
+// steps without a button get one after a while (a lost attack, no troops to build ...)
+function tutorTick(dt) {
+  if (screen !== 'battle' || battle.state !== 'running') { endTutor(false); return; }
+  tutor.t += dt;
+  if (tutor.t > 12 && $('tutor-ok').classList.contains('hidden')) { $('tutor-ok').textContent = 'Next'; $('tutor-ok').classList.remove('hidden'); }
+}
+$('tutor-ok').onclick = () => { if (tutor) nextTutor(); };
+$('tutor-skip').onclick = () => endTutor(true);
+$('help-tutor').onclick = () => {
+  try { localStorage.removeItem(tutorKey); } catch { /* storage blocked: it shows anyway this time */ }
+  $('help').classList.add('hidden');
+  withLoading(startSkirmish);
+};
+// on-map hints: a finger sliding from your castle to the target, rings on the tile to watch
+function drawTutor(ctx, fs) {
+  if (!tutor) return;
+  const id = tutorSteps[tutor.step].id, now = performance.now() / 1000;
+  const ring = (sid, col) => {
+    if (sid < 0) return;
+    const s = battle.segs[sid], x = bv.sx(s.x), y = bv.sy(s.y), p = (now * 1.4) % 1;
+    ctx.globalAlpha = 1 - p; ctx.lineWidth = 3; ctx.strokeStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, fs * (1.3 + 1.4 * p), 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  ctx.save();
+  if (id === 'attack' && tutor.from >= 0 && tutor.to >= 0) {
+    ring(tutor.to, '#ffd76a');
+    const a = battle.segs[tutor.from], b = battle.segs[tutor.to];
+    const x1 = bv.sx(a.x), y1 = bv.sy(a.y), x2 = bv.sx(b.x), y2 = bv.sy(b.y);
+    const k = Math.min(1, ((now * 0.8) % 1) / 0.75), e = k * k * (3 - 2 * k);
+    ctx.setLineDash([7, 6]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,215,106,0.8)';
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + (x2 - x1) * e, y1 + (y2 - y1) * e); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = `${Math.round(fs * 1.8)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('👆', x1 + (x2 - x1) * e + fs * 0.3, y1 + (y2 - y1) * e + fs * 0.9);
+  } else if (id === 'capture') ring(tutor.to, '#ffd76a');
+  else if (id === 'build' && tutor.built >= 0 && battle.segs[tutor.built].owner === 0 && !battle.segs[tutor.built].building) ring(tutor.built, '#ffffff');
+  ctx.restore();
+}
+
 // ---------- frame loop: fixed-step simulation, draw every frame ----------
 let last = performance.now(), acc = 0, uiTimer = 0;
 // battle sounds: war cry when a fight starts, horns on captures that involve you, a marching beat
 // while armies walk (louder for bigger armies), random sword clashes while fights last
-let marchTimer = 0, clashTimer = 0, shoutCool = 0;
+let marchTimer = 0, clashTimer = 0, shoutCool = 0, alarmCool = 0;
 function playBattleSounds(dt) {
-  shoutCool -= dt;
+  shoutCool -= dt; alarmCool -= dt;
   for (const e of battle.events.splice(0)) {
     if (e.type === 'fight' && shoutCool <= 0) { sfx.shout(Math.min(1, e.size / 150)); shoutCool = 0.35; }
     if (e.type === 'capture') { if (e.owner === 0 || e.prev === 0) sfx.capture(e.owner === 0); else sfx.captureFar(); }
+    // one of your tiles is attacked: alarm bell + red rings on it
+    if (e.type === 'fight' && e.prev === 0 && e.owner !== 0 && e.id !== undefined) {
+      fxs.push({ kind: 'alert', id: e.id, born: performance.now() });
+      if (alarmCool <= 0) { sfx.alarm(); alarmCool = 1.5; }
+    }
+    // you took a tile: cheer + confetti
+    if (e.type === 'capture' && e.owner === 0 && e.id !== undefined) { sfx.cheer(); celebrate(e.id); tutorEvent('capture', e.id); }
   }
   if (paused || battle.state !== 'running') return;
   const marching = battle.armies.filter((a) => !a.fight && !a.clash), fights = battle.armies.filter((a) => a.fight || a.clash).length;
   marchTimer -= dt;
   if (marching.length && marchTimer <= 0) {
     sfx.march(Math.min(1, marching.reduce((v, a) => v + a.n, 0) / 200));
-    marchTimer = 0.42 / Math.sqrt(speed);
+    marchTimer = 0.42 / Math.sqrt(speed * rules.timeScale);
   }
   clashTimer -= dt;
   if (fights && clashTimer <= 0) { sfx.clash(); clashTimer = (0.09 + Math.random() * 0.25) / Math.min(3, fights); }
@@ -1010,13 +1207,15 @@ function frame(now) {
           else goFlash = 1;
         }
       }
-    } else if (!paused && battle.state === 'running') {
+    } else if (!paused && battle.state === 'running' && !tutorHold()) {
       goFlash = Math.max(0, goFlash - dt * 1.1);
-      acc += dt * speed;
+      acc += dt * speed * rules.timeScale;
       while (acc >= rules.step) { battle.step(rules.step); acc -= rules.step; }
     }
     // show the result card once, however the battle ended
     if (battle.state !== 'running' && !battle.endShown) { battle.endShown = true; endBattle(); }
+    if (tutorWanted && countdown <= 0 && !loading) { tutorWanted = false; startTutor(); }
+    if (tutor) tutorTick(dt);
     playBattleSounds(dt);
     drawBattle();
     uiTimer -= dt;
@@ -1066,4 +1265,4 @@ syncAudioButtons();
 renderMenuStats();
 
 // hooks for headless tests
-window.__fl = { skipCountdown: () => { countdown = 0; goFlash = 0; }, setCam, campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv, audioState, audioFiles };
+window.__fl = { skipCountdown: () => { countdown = 0; goFlash = 0; }, setCam, get tutor() { return tutor; }, endTutor, nextTutor, campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv, audioState, audioFiles };

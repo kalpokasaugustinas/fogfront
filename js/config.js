@@ -3,6 +3,7 @@
 export const rules = {
   grid: 480,          // battle map raster size (cells per side)
   step: 0.1,          // fixed simulation step in seconds
+  timeScale: 0.8,     // game seconds per real second at speed x1 (all rates below are per game second)
   armySpeed: 90,      // army travel speed in grid cells per second (scale with grid)
   startTroops: 10,    // troops in each faction's starting segment
   overCapDecay: 1,    // troops/s lost while a segment is above its cap

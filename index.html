@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=45">
+  <link rel="stylesheet" href="style.css?v=46">
   <!-- phones held upright: turn the page to landscape before the first paint (main.js keeps it in
        sync on resize, but only runs once every module has loaded) -->
   <script>
@@ -109,7 +109,7 @@
       <button id="btn-expedition" class="mode gold"><span class="m-ico">🧭</span><span class="m-txt"><b>Conquest</b><small id="m-expedition">Valley → World roguelite</small></span><span class="play">GO</span></button>
       <button id="btn-skirmish" class="mode green"><span class="m-ico">⚔️</span><span class="m-txt"><b>Quick battle</b><small>Random island · 3 rivals</small></span><span class="play">FIGHT</span></button>
     </div>
-    <span id="version">build 45 · 2026-11-03 10:25</span>
+    <span id="version">build 46 · 2026-11-03 12:46</span>
   </section>
 
   <!-- campaign world map -->
@@ -155,6 +155,12 @@
         </span>
         <button id="auto" class="chunky" title="Auto-send (A): sending to your own segment also sets a standing route">🔁<small>Auto</small></button>
       </div>
+    </div>
+    <!-- tutorial coach card (first game, or replayed from the help) -->
+    <div id="tutor" class="hidden">
+      <span id="tutor-step" class="tutor-step"></span>
+      <p id="tutor-text"></p>
+      <div class="tutor-btns"><button id="tutor-skip" class="tutor-skip">Skip tutorial</button><button id="tutor-ok" class="primary">Got it</button></div>
     </div>
     <!-- end screen: sunburst (victory), ribbon title, stars, stat tiles, chunky buttons -->
     <div id="end" class="overlay hidden">
@@ -217,13 +223,15 @@
       </ul>
       <ul id="help-buildings"></ul>
       <p><b>🧭 Conquest</b> (roguelite): 5 stages from a valley to the whole world. Win a stage and everything you hold collapses into one capital on a bigger map: all your people come along (the capital fills up, the rest waits in a 🏕️ reserve), and each building type becomes a capital bonus = its effect × the share of your segments that had it (4 farms of 10 segments → +60% × 40% = +24% growth). Nothing can be built in a capital. Bots start with part of your strength and their own capitals. Pick a perk at every zoom-out. Lose once and the run ends.</p>
+      <p>Game time runs at 80% of real time (all per-second numbers are game seconds).</p>
       <p>Win: wipe out every enemy faction. Keys: space = pause, 1–4 = send %, A = auto toggle, Esc = deselect.</p>
       <p class="credits"><b>Music:</b> "Aphelion", "Song Of The Forge" by Scott Buckley (CC BY 4.0) · "Five Armies" by Kevin MacLeod, incompetech.com (CC BY 4.0) · "Heroic Demise" by Matthew Pablo, matthewpablo.com (CC BY 3.0) · "The Precipice of Victory", "The Fallen" by Jonathan Shaw, jshaw.co.uk (CC BY 3.0) · "Battle Theme A" by cynicmusic (CC0). <b>Sound:</b> Kenney, starninjas, William Hector and other OpenGameArt artists (CC0). All tracks trimmed. Full list: audio/CREDITS.md.</p>
+      <button id="help-tutor">▶ Play tutorial</button>
       <button id="help-close" class="primary">Got it</button>
     </div>
   </div>
 
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=45"></script>
+  <script type="module" src="js/main.js?v=46"></script>
 </body>
 </html>
