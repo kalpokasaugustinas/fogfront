@@ -15,7 +15,7 @@ Prototype stage.
   - the zoom-out tells it without words (~5 s): the won island shrinks over the fog to the size and place of the new capital tile (same outline), pulses gold, then the new map grows outward from it in a widening circle while the island fades into the capital
   - pick 1 of 3 perks at every zoom-out (12 in the pool: faster armies, cheaper buildings, stronger farms, plunder, ...); the picked card jumps, glows gold and throws sparks while the others drop away
   - your perks sit in a column of gold chips on the left, under the clock (relic perks from tiles you hold get a sparkle); tap one to see what it does
-  - Continent and World (stages 4–5) are drawn as a bigger map: troop badges and labels are smaller (×0.74 / ×0.58) and after the zoom-out the camera glides in on your capital (×1.35 / ×1.7), so tiles stay distinct and readable; pan or pinch out for the overview
+  - Continent and World (stages 4–5) are drawn as a bigger map: troop badges and labels are smaller (×0.74 / ×0.58), and neutral tiles show a single battalion figure however big their garrison and after the zoom-out the camera glides in on your capital (×1.35 / ×1.7), so tiles stay distinct and readable; pan or pinch out for the overview
   - bots scale with you: each starts with 10 + 70% of your carried people and its own capital with a shuffled bonus mix
   - neutrals scale with you too (stage 2 on): garrisons × √(carried people / 150), at most ×4; the biggest 30% of open neutral tiles are fortified camps (×1.5 more, drawn as 2–4 houses behind a palisade); building prices rise by the same factor as the garrisons (farm 30 → up to 120)
   - lose a stage and the run is over; best run (stage reached, time) is saved

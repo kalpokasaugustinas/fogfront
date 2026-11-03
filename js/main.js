@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=64';
-import { generateMap, rng } from './mapgen.js?v=64';
-import { initAnalytics, track } from './analytics.js?v=64';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=64';
-import { Battle } from './battle.js?v=64';
-import { personalities } from './ai.js?v=64';
-import { Campaign } from './campaign.js?v=64';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=64';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=64';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=64';
-import { previewBuildings } from './structures.js?v=64';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=65';
+import { generateMap, rng } from './mapgen.js?v=65';
+import { initAnalytics, track } from './analytics.js?v=65';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=65';
+import { Battle } from './battle.js?v=65';
+import { personalities } from './ai.js?v=65';
+import { Campaign } from './campaign.js?v=65';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=65';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=65';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=65';
+import { previewBuildings } from './structures.js?v=65';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -238,7 +238,9 @@ function drawUnits(ctx, v, b, ac, numbers) {
   ctx.restore();
   for (const s of b.segs) {
     const spots = v.troopSpots(s.id, sp);
-    const n = Math.min(spots.length, Math.ceil(s.troops / per - 0.01));
+    // neutral tiles on battalion maps (later conquest stages) show one battalion at most: their big
+    // garrisons filled the map with grey figures; the number badge still tells the real count
+    const n = Math.min(spots.length, s.owner < 0 && kind === 'battalion' ? 1 : Infinity, Math.ceil(s.troops / per - 0.01));
     const u = unitSprite(kind, s.owner < 0 ? '#8a8f86' : factionColors[b.factions[s.owner].color], z, dpr, s.owner < 0 ? 'soldier' : b.factions[s.owner].skin?.troops);
     for (let i = 0; i < n; i++) ctx.drawImage(u.c, spots[i][0] - u.w / 2, spots[i][1] - u.h, u.w, u.h);
   }
