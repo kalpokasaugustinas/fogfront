@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=56';
-import * as structures from './structures.js?v=56';
+import { themes } from './config.js?v=57';
+import * as structures from './structures.js?v=57';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -1013,6 +1013,33 @@ export class MapView {
 const unitCache = new Map();
 // style: soldier (bare head), knight (steel helmet + shield), viking (horned helmet + round
 // shield), archer (hood + bow)
+// one foglet (the troop figure): body, shaded side, head and its kit (soldier / knight / viking /
+// archer), feet at (mx, my), sc = size (1 = the 5 x 8 map figure). also drawn big on the menu
+export function drawFoglet(x, mx, my, sc, col, style = 'soldier') {
+  const body = css(col), side = css(shade(col, -0.3)), skin = 'rgb(236,206,176)';
+  x.fillStyle = body; x.fillRect(mx - 1.3 * sc, my - 4 * sc, 2.6 * sc, 4 * sc);
+  x.fillStyle = side; x.fillRect(mx + 0.2 * sc, my - 4 * sc, 1.1 * sc, 4 * sc);
+  x.fillStyle = skin; x.beginPath(); x.arc(mx, my - 5 * sc, 1.15 * sc, 0, Math.PI * 2); x.fill();
+  if (style === 'knight') {
+    x.fillStyle = '#b8c0c8'; x.beginPath(); x.arc(mx, my - 5.1 * sc, 1.25 * sc, Math.PI, 0); x.fill();
+    x.fillRect(mx - 1.25 * sc, my - 5.1 * sc, 2.5 * sc, 0.5 * sc);
+    x.fillStyle = side; x.fillRect(mx - 2.1 * sc, my - 3.6 * sc, 1.2 * sc, 2.2 * sc);   // shield
+    x.fillStyle = '#f2f2f2'; x.fillRect(mx - 1.65 * sc, my - 3.3 * sc, 0.3 * sc, 1.6 * sc);
+  } else if (style === 'viking') {
+    x.fillStyle = '#8a9096'; x.beginPath(); x.arc(mx, my - 5.2 * sc, 1.2 * sc, Math.PI, 0); x.fill();
+    x.strokeStyle = '#f4ead2'; x.lineWidth = 0.45 * sc;
+    x.beginPath(); x.moveTo(mx - 1.1 * sc, my - 5.4 * sc); x.lineTo(mx - 1.7 * sc, my - 6.6 * sc); x.moveTo(mx + 1.1 * sc, my - 5.4 * sc); x.lineTo(mx + 1.7 * sc, my - 6.6 * sc); x.stroke();
+    x.fillStyle = '#8a5a34'; x.beginPath(); x.arc(mx - 1.4 * sc, my - 2.4 * sc, 1.15 * sc, 0, Math.PI * 2); x.fill();
+    x.fillStyle = body; x.beginPath(); x.arc(mx - 1.4 * sc, my - 2.4 * sc, 0.7 * sc, 0, Math.PI * 2); x.fill();
+  } else if (style === 'archer') {
+    x.fillStyle = side; x.beginPath(); x.arc(mx, my - 5.1 * sc, 1.3 * sc, Math.PI * 0.9, Math.PI * 2.1); x.fill();
+    x.strokeStyle = '#7a5230'; x.lineWidth = 0.4 * sc;
+    x.beginPath(); x.arc(mx + 1.2 * sc, my - 3.2 * sc, 2 * sc, -Math.PI * 0.45, Math.PI * 0.45); x.stroke();
+    x.strokeStyle = 'rgba(240,235,220,0.9)'; x.lineWidth = 0.2 * sc;
+    x.beginPath(); x.moveTo(mx + 1.6 * sc, my - 5.1 * sc); x.lineTo(mx + 1.6 * sc, my - 1.3 * sc); x.stroke();
+  }
+}
+
 export function unitSprite(kind, color, z, dpr, style = 'soldier') {
   const key = `${kind}|${color}|${z.toFixed(2)}|${dpr}|${style}`;
   let s = unitCache.get(key);
@@ -1023,30 +1050,8 @@ export function unitSprite(kind, color, z, dpr, style = 'soldier') {
   c.height = Math.ceil(h * dpr);
   const x = c.getContext('2d');
   x.scale(dpr * z, dpr * z);
-  const col = hexToRgb(color), body = css(col), side = css(shade(col, -0.3)), skin = 'rgb(236,206,176)';
-  const man = (mx, my, sc) => {
-    x.fillStyle = body; x.fillRect(mx - 1.3 * sc, my - 4 * sc, 2.6 * sc, 4 * sc);
-    x.fillStyle = side; x.fillRect(mx + 0.2 * sc, my - 4 * sc, 1.1 * sc, 4 * sc);
-    x.fillStyle = skin; x.beginPath(); x.arc(mx, my - 5 * sc, 1.15 * sc, 0, Math.PI * 2); x.fill();
-    if (style === 'knight') {
-      x.fillStyle = '#b8c0c8'; x.beginPath(); x.arc(mx, my - 5.1 * sc, 1.25 * sc, Math.PI, 0); x.fill();
-      x.fillRect(mx - 1.25 * sc, my - 5.1 * sc, 2.5 * sc, 0.5 * sc);
-      x.fillStyle = side; x.fillRect(mx - 2.1 * sc, my - 3.6 * sc, 1.2 * sc, 2.2 * sc);   // shield
-      x.fillStyle = '#f2f2f2'; x.fillRect(mx - 1.65 * sc, my - 3.3 * sc, 0.3 * sc, 1.6 * sc);
-    } else if (style === 'viking') {
-      x.fillStyle = '#8a9096'; x.beginPath(); x.arc(mx, my - 5.2 * sc, 1.2 * sc, Math.PI, 0); x.fill();
-      x.strokeStyle = '#f4ead2'; x.lineWidth = 0.45 * sc;
-      x.beginPath(); x.moveTo(mx - 1.1 * sc, my - 5.4 * sc); x.lineTo(mx - 1.7 * sc, my - 6.6 * sc); x.moveTo(mx + 1.1 * sc, my - 5.4 * sc); x.lineTo(mx + 1.7 * sc, my - 6.6 * sc); x.stroke();
-      x.fillStyle = '#8a5a34'; x.beginPath(); x.arc(mx - 1.4 * sc, my - 2.4 * sc, 1.15 * sc, 0, Math.PI * 2); x.fill();
-      x.fillStyle = body; x.beginPath(); x.arc(mx - 1.4 * sc, my - 2.4 * sc, 0.7 * sc, 0, Math.PI * 2); x.fill();
-    } else if (style === 'archer') {
-      x.fillStyle = side; x.beginPath(); x.arc(mx, my - 5.1 * sc, 1.3 * sc, Math.PI * 0.9, Math.PI * 2.1); x.fill();
-      x.strokeStyle = '#7a5230'; x.lineWidth = 0.4 * sc;
-      x.beginPath(); x.arc(mx + 1.2 * sc, my - 3.2 * sc, 2 * sc, -Math.PI * 0.45, Math.PI * 0.45); x.stroke();
-      x.strokeStyle = 'rgba(240,235,220,0.9)'; x.lineWidth = 0.2 * sc;
-      x.beginPath(); x.moveTo(mx + 1.6 * sc, my - 5.1 * sc); x.lineTo(mx + 1.6 * sc, my - 1.3 * sc); x.stroke();
-    }
-  };
+  const col = hexToRgb(color), body = css(col);   // body colour: the battalion flag
+  const man = (mx, my, sc) => drawFoglet(x, mx, my, sc, col, style);
   x.fillStyle = 'rgba(20,30,30,0.25)';
   if (kind === 'battalion') {
     x.beginPath(); x.ellipse(6.5, 10, 6, 1.2, 0, 0, Math.PI * 2); x.fill();

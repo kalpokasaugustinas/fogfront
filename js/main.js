@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=56';
-import { generateMap, rng } from './mapgen.js?v=56';
-import { initAnalytics, track } from './analytics.js?v=56';
-import { makeBand, drawBand } from './foglets.js?v=56';
-import { Battle } from './battle.js?v=56';
-import { personalities } from './ai.js?v=56';
-import { Campaign } from './campaign.js?v=56';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=56';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=56';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=56';
-import { previewBuildings } from './structures.js?v=56';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=57';
+import { generateMap, rng } from './mapgen.js?v=57';
+import { initAnalytics, track } from './analytics.js?v=57';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=57';
+import { Battle } from './battle.js?v=57';
+import { personalities } from './ai.js?v=57';
+import { Campaign } from './campaign.js?v=57';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=57';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=57';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=57';
+import { previewBuildings } from './structures.js?v=57';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -110,7 +110,7 @@ let userPaused = false;   // paused by the player (pause button, space, leave di
 const profileKey = 'frontlines.profile';
 let profile = { color: 0, troops: 'soldier', buildings: 'classic' };
 try { profile = { ...profile, ...JSON.parse(localStorage.getItem(profileKey) || '{}') }; } catch { /* private mode: defaults */ }
-function saveProfile() { try { localStorage.setItem(profileKey, JSON.stringify(profile)); } catch { /* not saved */ } }
+function saveProfile() { try { localStorage.setItem(profileKey, JSON.stringify(profile)); } catch { /* not saved */ } syncBands(); }
 
 // give every side its look: the player gets the profile (and swaps colours with the bot that had
 // it), bots get a random troop / building style, different from each other where possible
@@ -969,8 +969,15 @@ function newDemo() {
   if (!mv) mv = new MapView($('menu-canvas'), map, theme); else mv.setMap(map, theme);
   demoN++;
 }
-// menu mascots: blue band left, red band right, each foglet in a different kit
-const bands = [makeBand($('foglets-l'), factionColors[0], ['knight', 'archer', 'soldier'], 1, 0), makeBand($('foglets-r'), factionColors[1], ['viking', 'soldier', 'archer'], -1, 1)];
+// menu mascots: your band on the left (commander profile colour + troop kit), a rival band on the
+// right (red, or blue if you are red) in the three other kits
+const bands = [makeBand($('foglets-l'), factionColors[0], ['soldier', 'soldier', 'soldier'], 1, 0), makeBand($('foglets-r'), factionColors[1], ['viking', 'knight', 'archer'], -1, 1)];
+function syncBands() {
+  const mine = profile.troops, others = Object.keys(troopStyles).filter((k) => k !== mine);
+  dressBand(bands[0], factionColors[profile.color], [mine, mine, mine]);
+  dressBand(bands[1], factionColors[profile.color === 1 ? 0 : 1], others.slice(0, 3));
+}
+syncBands();
 function drawMenu(dt) {
   for (const b of bands) drawBand(b, performance.now() / 1000);
   if (!demo || demo.state !== 'running' || demo.time > 240) newDemo();
