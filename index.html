@@ -26,7 +26,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=68">
+  <link rel="stylesheet" href="style.css?v=69">
   <!-- phones held upright: turn the page to landscape before the first paint (main.js keeps it in
        sync on resize, but only runs once every module has loaded) -->
   <script>
@@ -90,7 +90,7 @@
       'Drag from your tile to a neighbour to attack.',
       'Tap your own tile to open the build wheel.',
       'Full tiles stop growing: spend the surplus.',
-      'Turn on Auto to pipe foglets to the front.',
+      'Drag to your own tile to pipe foglets to the front.',
       'Forts make defenders count x1.75.',
       'Barracks: attacks from here hit x1.5.',
       'Farms add +60% growth to their tile.',
@@ -128,7 +128,7 @@
       <button id="btn-expedition" class="mode purple"><span class="m-ico">🧭</span><span class="m-txt"><b>Conquest</b><small id="m-expedition">Valley → World roguelite</small></span><span class="play">GO</span></button>
       <button id="btn-skirmish" class="mode green"><span class="m-ico">⚔️</span><span class="m-txt"><b>Quick battle</b><small>Random island · 3 rivals</small></span><span class="play">FIGHT</span></button>
     </div>
-    <span id="version">build 68 · 2026-11-03 19:45</span>
+    <span id="version">build 69 · 2026-11-03 19:55</span>
   </section>
 
   <!-- campaign world map -->
@@ -175,7 +175,6 @@
         <span id="pct" class="chunky-group">
           <button data-pct="0.25">25%</button><button data-pct="0.5">50%</button><button data-pct="0.75">75%</button><button data-pct="1">100%</button>
         </span>
-        <button id="auto" class="chunky" title="Auto-send (A): sending to your own segment also sets a standing route">🔁<small>Auto</small></button>
       </div>
     </div>
     <!-- tutorial coach card (first game, or replayed from the help) -->
@@ -245,7 +244,7 @@
         <li><b>Drag</b> from your tile to a neighbour to send the chosen % of its foglets: an attack on enemy/neutral, a move to your own.</li>
         <li><b>Build:</b> <b>tap</b> your tile to open its <b>build wheel</b> (tiles without a structure). Tap a building to build it with that tile's foglets.</li>
         <li><b>Zoom:</b> pinch (or mouse wheel) to zoom in, drag empty ground to pan.</li>
-        <li><b>🔁 Auto</b> (on by default): sending to your own neighbour also sets a <b>route</b>. Every second the source tile forwards all foglets above its reserve (100% − send %, of its cap) to the target. Chain routes to pipe troops from the back to the front. Tap a tile and press ✕ to end its route.</li>
+        <li><b>🔁 Routes</b>: sending to your own neighbour also sets a <b>route</b>. Every second the source tile forwards all foglets above its reserve (100% − send %, of its cap) to the target. Chain routes to pipe troops from the back to the front. Tap a tile and press ✕ to end its route.</li>
         <li>Fight: attackers stop at the border and fight for 1–3 seconds. Attack = foglets × attack bonus, defense = defenders × defense bonus. Higher number wins; the winner keeps the difference.</li>
         <li>Lakes and mountains can't be occupied or crossed.</li>
         <li>Terrain: 🏔️ Highland (next to mountains) defenders +30% · 🌲 Forest defenders +15% · 🌊 River +25% growth · 💧 Lakeside +15% growth.</li>
@@ -265,6 +264,6 @@
   </div>
 
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=68"></script>
+  <script type="module" src="js/main.js?v=69"></script>
 </body>
 </html>

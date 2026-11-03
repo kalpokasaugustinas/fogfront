@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=68';
-import * as structures from './structures.js?v=68';
+import { themes } from './config.js?v=69';
+import * as structures from './structures.js?v=69';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -216,6 +216,8 @@ function chaikin(p) {
 // them (buildings, trees, foglets, badges) shrinks by this, and the camera starts zoomed in by its
 // inverse, so things look the same size as on stage 3 while the map holds more tiles
 export const mapScale = (m) => Math.min(1, (m?.detail ?? 1) / 0.62);
+// tile border thickness (owner band + glow, terrain dashes, plain lines), times mapScale on big maps
+const borderW = 0.6;
 
 export class MapView {
   // segThemes (optional): theme name per segment, e.g. campaign regions with their own climate
@@ -546,8 +548,8 @@ export class MapView {
   // owner overlay: light fill, blurred inner glow, strong colour band at the edge
   overlaySprite(id, color, fill) {
     return this.cached(`o${id}|${color}|${fill}`, () => this.sprite(id, 2, (x) => {
-      const p = this.segP[id], px = 1 / this.scale;
-      const band = Math.max(2.2, this.size * 0.007) * px, fade = 16 * this.k;
+      const p = this.segP[id], px = 1 / this.scale, bw = borderW * mapScale(this.map);
+      const band = Math.max(2.2, this.size * 0.007) * px * bw, fade = 16 * this.k * bw;
       x.clip(p);
       x.fillStyle = css(color, fill);
       x.fill(p);
@@ -633,7 +635,7 @@ export class MapView {
     x.imageSmoothingEnabled = true;
     x.drawImage(this.groundC, 0, 0, g, g);
     x.lineJoin = 'round';
-    x.lineWidth = Math.max(1, this.size * 0.0022) * px;
+    x.lineWidth = Math.max(1, this.size * 0.0022) * px * borderW * mapScale(this.map);
     x.strokeStyle = css(t.lineNeutral, 0.45);
     for (const p of this.segP) x.stroke(p);
     x.lineWidth = Math.max(2, this.size * 0.006) * px;
@@ -690,7 +692,8 @@ export class MapView {
     x.clip(this.islandP, 'evenodd');
     this.drawRivers(x, px);
     x.restore();
-    const band = Math.max(2.2, this.size * 0.007) * px, inner = Math.max(2, this.size * 0.0055) * px;
+    const bw = borderW * mapScale(this.map);
+    const band = Math.max(2.2, this.size * 0.007) * px * bw, inner = Math.max(2, this.size * 0.0055) * px * bw;
     const traitCol = { forest: [46, 104, 58], highland: [118, 114, 108], river: [58, 140, 200], lakeside: [226, 196, 120] };
     x.lineJoin = 'round';
     this.map.segs.forEach((s, id) => {
@@ -700,7 +703,7 @@ export class MapView {
       x.clip(this.segP[id]);
       // dashed, so it never reads as an owner's (solid) border
       x.lineWidth = (band + inner) * 2;
-      x.setLineDash([7 * px, 4 * px]);
+      x.setLineDash([7 * px * bw, 4 * px * bw]);
       x.strokeStyle = css(col, 0.85);
       x.stroke(this.segP[id]);
       x.restore();

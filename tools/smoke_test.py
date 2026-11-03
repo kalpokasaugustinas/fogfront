@@ -211,12 +211,11 @@ try:
             drag((b["x"], b["y"]), (mv["x"], mv["y"]))
             moved = page.evaluate("__fl.battle.armies.some(a => a.owner === 0 && a.to === %d)" % mv["id"])
             print(f"{name}: drag to own neighbour moves troops -> {moved}")
-            # auto is on by default, so that move also set a standing route
-            auto_on = page.evaluate("document.getElementById('auto').classList.contains('on')")
+            # that move also set a standing route (routes are always on)
             r = page.evaluate("""(() => { const b = __fl.battle, me = b.segs[%d];
                 me.troops = me.cap; for (let i = 0; i < 25; i++) b.step(0.1);
                 return { routes: b.routes.size, keep: b.routes.get(%d)?.keep, troops: Math.round(me.troops), cap: me.cap }; })()""" % (b["me"], b["me"]))
-            print(f"{name}: auto on by default {auto_on}, route -> {r}")
+            print(f"{name}: route -> {r}")
             page.wait_for_timeout(200)
             page.screenshot(path=str(out / f"{name}-route.png"))
             # frame times: 3 s of real play at 3x speed (bots fighting, captures -> layer rebuilds)

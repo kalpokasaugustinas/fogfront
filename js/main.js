@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=68';
-import { generateMap, rng } from './mapgen.js?v=68';
-import { initAnalytics, track } from './analytics.js?v=68';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=68';
-import { Battle } from './battle.js?v=68';
-import { personalities } from './ai.js?v=68';
-import { Campaign } from './campaign.js?v=68';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=68';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=68';
-import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=68';
-import { previewBuildings } from './structures.js?v=68';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=69';
+import { generateMap, rng } from './mapgen.js?v=69';
+import { initAnalytics, track } from './analytics.js?v=69';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=69';
+import { Battle } from './battle.js?v=69';
+import { personalities } from './ai.js?v=69';
+import { Campaign } from './campaign.js?v=69';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=69';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=69';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=69';
+import { previewBuildings } from './structures.js?v=69';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -103,7 +103,7 @@ $('campaign-canvas').addEventListener('pointerdown', (e) => {
 // ---------- battle screen ----------
 let battle = null, bv = null, mode = 'skirmish', regionId = -1;
 let countdown = 0, goFlash = 0;   // 3-2-1 before a battle starts (s left), 'Conquer!' banner after
-let auto = true, selected = -1, pct = 0.5, drag = null, hover = -1, speed = 1, paused = false, key = '';
+let selected = -1, pct = 0.5, drag = null, hover = -1, speed = 1, paused = false, key = '';
 let userPaused = false;   // paused by the player (pause button, space, leave dialog), not by a transition
 
 // ---------- commander profile: your colour, troop style and building style ----------
@@ -487,7 +487,7 @@ const pinchInfo = () => {
 };
 // one finger = a gesture, decided when it moves or ends:
 // - drag from your tile to a neighbour = send troops there (attack, or move to your own tile;
-//   with auto on, a move also sets a standing route). released anywhere else = nothing sent
+//   a move also sets a standing route). released anywhere else = nothing sent
 // - drag starting anywhere else = pan the map
 // - tap your tile = select it and open its build wheel; tap anything else = close / deselect
 // two fingers = pinch zoom
@@ -562,18 +562,13 @@ function sendFrom(from, to) {
   if (!tutorAllows(from, to)) { flash('👆 Follow the tutorial: drag along the glowing path'); return; }
   const sent = battle.send(0, from, to, n);
   if (sent && !isMine(to)) tutorEvent('attack');
-  // auto on + own target: also set a standing route that keeps (1 - pct) of the cap
-  if (auto && isMine(to) && battle.setRoute(0, from, to, 1 - pct)) {
+  // own target: also set a standing route that keeps (1 - pct) of the cap (always on)
+  if (isMine(to) && battle.setRoute(0, from, to, 1 - pct)) {
     flash(`🔁 Route set: keeps ${Math.round((1 - pct) * 100)}% of cap, forwards the rest`);
     tutorEvent('route');
   } else if (!sent) flash('Not enough foglets');
 }
 
-function setAuto(on) {
-  auto = on;
-  $('auto').classList.toggle('on', on);
-}
-$('auto').onclick = () => setAuto(!auto);
 $('route-stop').onclick = () => { if (selected >= 0) battle.clearRoute(selected); };
 
 // build wheel: tapping your tile that has no structure opens a ring of the 5 buildings around it.
@@ -1118,7 +1113,6 @@ addEventListener('keydown', (e) => {
   if (e.key === ' ') { setSpeed(paused ? speed : 0); e.preventDefault(); }
   if (['1', '2', '3', '4'].includes(e.key)) setPct(+e.key * 0.25);
   if (e.key === 'Escape') selected = -1;
-  if (e.key === 'a' || e.key === 'A') setAuto(!auto);
 });
 addEventListener('resize', () => { if (screen === 'battle' && bv) { bv.resize(); key = ''; } if (screen === 'campaign') cv.resize(), paintCampaign(); });
 
@@ -1235,9 +1229,9 @@ const tutorSteps = [
     text: () => `🌾 Your new tile has ${battle.costOf(0, 'farm')} foglets. A Farm costs ${battle.costOf(0, 'farm')} and adds +60% growth. Tap the tile, then the glowing farm.` },
   { id: 'time', ok: 'Got it', okAfter: 3, pulse: ['speed', 'clock'],
     text: () => '⏱️ Time runs now: every tile grows foglets each second (watch the numbers). ❚❚ pauses, ▶▶ speeds up.' },
-  { id: 'route', hold: true, finger: () => [tutor.home, tutor.target], allow: () => pair(tutor.home, tutor.target), pulse: ['auto'],
-    enter() { setAuto(true); tseg(tutor.home).troops = Math.max(tseg(tutor.home).troops, 20); },
-    text: () => '🔁 Drag from your castle to your farm tile. With Auto on, this sets a route: spare foglets keep flowing there.' },
+  { id: 'route', hold: true, finger: () => [tutor.home, tutor.target], allow: () => pair(tutor.home, tutor.target),
+    enter() { tseg(tutor.home).troops = Math.max(tseg(tutor.home).troops, 20); },
+    text: () => '🔁 Drag from your castle to your farm tile. This sets a route: spare foglets keep flowing there.' },
   { id: 'goal', hold: true, ok: "Let's go", ring: () => [tutor.rival],
     text: () => '🏆 Take every enemy tile to win. Your rival wakes up now. Good luck!' },
 ];
@@ -1266,7 +1260,7 @@ function nextTutor() {
   $('tutor-text').textContent = st.text();
   $('tutor-ok').textContent = st.ok ?? 'Next';
   $('tutor-ok').classList.toggle('hidden', !st.ok || !!st.okAfter);
-  for (const id of ['auto', 'speed', 'clock']) $(id).classList.toggle('tutor-pulse', !!st.pulse?.includes(id));
+  for (const id of ['speed', 'clock']) $(id).classList.toggle('tutor-pulse', !!st.pulse?.includes(id));
   $('tutor').classList.remove('hidden');
   wheelFor = -2;   // re-render the build wheel (farm hint on / off)
   renderWheel();
@@ -1276,7 +1270,7 @@ function endTutor(done) {
   if (tutor && battle?.factions[1]) { battle.factions[1].think = 3; battle.factions[1].timer = 2; }   // the rival wakes up
   tutor = null;
   $('tutor').classList.add('hidden');
-  for (const id of ['auto', 'speed', 'clock']) $(id).classList.remove('tutor-pulse');
+  for (const id of ['speed', 'clock']) $(id).classList.remove('tutor-pulse');
 }
 // player actions that finish a step: 'attack' (sent troops at the target), 'capture', 'build', 'route'
 function tutorEvent(type) {
@@ -1435,7 +1429,6 @@ function frame(now) {
 requestAnimationFrame(frame);
 setPct(0.5);
 setSpeed(1);
-setAuto(true);   // auto-send routes on by default
 
 // audio: start on the first gesture, toggles remembered
 addEventListener('pointerdown', initAudio, { capture: true });

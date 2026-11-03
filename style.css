@@ -127,8 +127,6 @@ canvas { touch-action: none; display: block; }
 .panel p { margin: 6px 0; }
 .panel .big { font-size: 20px; font-weight: 800; }
 .hint { color: var(--muted); font-size: 13px; }
-#auto { margin-left: auto; }
-#auto.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 #route-info { font-size: 13px; margin-top: 6px; }
 #route-info button { padding: 3px 8px; font-size: 12px; }
 #seg-info { min-height: 20px; margin: 8px 0 6px; font-size: 13px; }
@@ -344,8 +342,6 @@ html.compact .perk-chip { width: 34px; height: 34px; font-size: 16px; }
 .sendbox .lbl { font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
 .chunky { border-radius: 14px; height: 46px; min-width: 52px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; font-size: 18px; }
 .chunky small { font-size: 10px; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
-#auto { margin: 0; }
-#auto.on { color: #fff; background: linear-gradient(180deg, #4fd394, #23966a); box-shadow: 0 3px 0 #166647, inset 0 1px 0 rgba(255,255,255,0.5); }
 #route-info { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 4px 4px 4px 12px; border-radius: 999px;
   background: rgba(255,255,255,0.85); box-shadow: 0 2px 0 rgba(30,50,55,0.18); }
 #route-info button { width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; color: #fff; font-weight: 900;
