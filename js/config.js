@@ -63,8 +63,8 @@ export const factionNames = ['You', 'Crimson', 'Amber', 'Violet', 'Jade', 'Rose'
 export const colorNames = ['Azure', 'Crimson', 'Amber', 'Violet', 'Jade', 'Rose', 'Teal', 'Lime'];
 
 // looks a side can pick (commander panel for the player, random and distinct for bots)
-export const troopStyles = { soldier: 'Soldiers', knight: 'Knights', viking: 'Vikings', archer: 'Archers' };
-export const buildingStyles = { classic: 'Classic', nordic: 'Nordic', desert: 'Desert', eastern: 'Eastern' };
+export const troopStyles = { soldier: 'Soldiers', knight: 'Knights', viking: 'Vikings', archer: 'Archers', wizard: 'Wizards', pirate: 'Pirates', barbarian: 'Barbarians' };
+export const buildingStyles = { classic: 'Classic', nordic: 'Nordic', desert: 'Desert', eastern: 'Eastern', tudor: 'Tudor', gothic: 'Gothic', tropical: 'Tropical' };
 export const neutralColor = '#7d8580';
 
 // island climates (picked per battle). colours are [r, g, b] except sea (css)

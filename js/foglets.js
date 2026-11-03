@@ -2,13 +2,13 @@
 // shouting at each other across the menu. each one is the in-game troop figure (drawFoglet, the
 // same drawing as on the map) drawn big, with a tiny angry face added and more movement: slow
 // hops, leaning in at the foe, shaking with rage. drawn on two small canvases every menu frame
-import { drawFoglet, hexToRgb } from './render.js?v=58';
+import { drawFoglet, hexToRgb } from './render.js?v=59';
 
 const shouts = ['Grr!', 'Hey!', '!!', 'Ours!', 'Back off!', 'Charge!', 'Mine!'];
 
 // band = { canvas, color, styles, face: 1 (looks right) | -1 (looks left), seed }
 export function makeBand(canvas, color, styles, face, seed) {
-  return { canvas, col: hexToRgb(color), styles, face, seed, bubbles: styles.map((_, i) => ({ text: '', until: 0, next: 1 + seed * 0.7 + i * 0.9 })) };
+  return { canvas, col: hexToRgb(color), styles, face, seed, hops: styles.map((_, i) => (seed * 1.7 + i * 2.1) % 1), last: 0, bubbles: styles.map((_, i) => ({ text: '', until: 0, next: 1 + seed * 0.7 + i * 0.9 })) };
 }
 
 // change a band's colour / kits (the player's band follows the commander profile)
@@ -23,16 +23,19 @@ export function drawBand(b, t) {
   const x = c.getContext('2d');
   x.setTransform(dpr, 0, 0, dpr, 0, 0);
   x.clearRect(0, 0, w, h);
-  const n = b.styles.length, s = Math.min(h / 11.5, w / (n * 4.4));   // figure scale: a foglet is ~3 x 8 units
+  // figure scale: a foglet is ~4 x 8 units; the canvas keeps headroom for hops, the hat and a bubble
+  const n = b.styles.length, s = Math.min(h / 13.5, w / (n * 5.4));   // side room for leaning + lunging
+  const dt = Math.min(0.1, Math.max(0, t - (b.last || t))); b.last = t;
   const talk = [];   // speech bubbles drawn last, over everyone
   // back row (odd) first, front row on top
   for (const i of [...b.styles.keys()].sort((p, q) => (q % 2) - (p % 2))) {
     const back = i % 2 === 1, k = n === 1 ? 0.5 : i / (n - 1);
     const sc = s * (back ? 0.85 : 1);
-    const gx = b.face > 0 ? w * (0.2 + 0.6 * k) : w * (0.8 - 0.6 * k), gy = h * (back ? 0.8 : 0.95);
+    const gx = b.face > 0 ? w * (0.15 + 0.52 * k) : w * (0.85 - 0.52 * k), gy = h * (back ? 0.84 : 0.97);
     // rage comes and goes; furious foglets hop higher, lean in further and shake
     const ph = b.seed * 1.7 + i * 2.1, rage = 0.5 + 0.5 * Math.max(0, Math.sin(t * 0.6 + ph));
-    const cyc = (t * (1.05 + 0.45 * rage) + ph) % 1, air = cyc < 0.65 ? Math.sin(Math.PI * cyc / 0.65) : 0;
+    b.hops[i] = (b.hops[i] + dt * (1.05 + 0.45 * rage)) % 1;   // 1-1.5 hops a second, steady
+    const cyc = b.hops[i], air = cyc < 0.65 ? Math.sin(Math.PI * cyc / 0.65) : 0;
     const hop = air * (1.6 + 1.6 * rage) * sc;
     const squash = cyc >= 0.65 ? 1 - 0.16 * Math.sin(Math.PI * (cyc - 0.65) / 0.35) : 1 + 0.05 * air;
     const lunge = Math.max(0, Math.sin(t * 1.3 + ph * 2)) ** 3;   // now and then a step toward the foe

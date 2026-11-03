@@ -5,8 +5,8 @@
 // map grid with marching squares + chaikin smoothing, so nothing looks pixelated at any size.
 // layers (display resolution, cached): under (fog, cliff) -> top (ground, building scenes, owner
 // overlays, borders, rocks, trees; repainted when owners, buildings or the selection change)
-import { themes } from './config.js?v=58';
-import * as structures from './structures.js?v=58';
+import { themes } from './config.js?v=59';
+import * as structures from './structures.js?v=59';
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -1037,6 +1037,33 @@ export function drawFoglet(x, mx, my, sc, col, style = 'soldier') {
     x.beginPath(); x.arc(mx + 1.2 * sc, my - 3.2 * sc, 2 * sc, -Math.PI * 0.45, Math.PI * 0.45); x.stroke();
     x.strokeStyle = 'rgba(240,235,220,0.9)'; x.lineWidth = 0.2 * sc;
     x.beginPath(); x.moveTo(mx + 1.6 * sc, my - 5.1 * sc); x.lineTo(mx + 1.6 * sc, my - 1.3 * sc); x.stroke();
+  } else if (style === 'soldier') {
+    // kettle helmet with a wide brim, spear
+    x.strokeStyle = '#7a5230'; x.lineWidth = 0.35 * sc;
+    x.beginPath(); x.moveTo(mx + 1.75 * sc, my - 0.4 * sc); x.lineTo(mx + 1.75 * sc, my - 6.4 * sc); x.stroke();
+    x.fillStyle = '#c4ccd4'; x.beginPath(); x.moveTo(mx + 1.75 * sc, my - 7.1 * sc); x.lineTo(mx + 1.35 * sc, my - 6.2 * sc); x.lineTo(mx + 2.15 * sc, my - 6.2 * sc); x.fill();
+    x.fillStyle = '#9aa4ae'; x.beginPath(); x.ellipse(mx, my - 5.55 * sc, 1.7 * sc, 0.35 * sc, 0, 0, Math.PI * 2); x.fill();
+    x.beginPath(); x.arc(mx, my - 5.6 * sc, 0.95 * sc, Math.PI, 0); x.fill();
+  } else if (style === 'wizard') {
+    // tall pointed hat with a gold star, staff with a glowing orb
+    x.strokeStyle = '#7a5230'; x.lineWidth = 0.3 * sc;
+    x.beginPath(); x.moveTo(mx - 1.9 * sc, my - 0.3 * sc); x.lineTo(mx - 1.9 * sc, my - 5.6 * sc); x.stroke();
+    x.fillStyle = '#9fe6ff'; x.beginPath(); x.arc(mx - 1.9 * sc, my - 5.9 * sc, 0.45 * sc, 0, Math.PI * 2); x.fill();
+    x.fillStyle = side; x.beginPath(); x.moveTo(mx - 1.6 * sc, my - 5.45 * sc); x.lineTo(mx + 1.6 * sc, my - 5.45 * sc); x.lineTo(mx + 0.5 * sc, my - 7.2 * sc); x.fill();
+    x.fillStyle = '#ffd76a'; x.beginPath(); x.arc(mx + 0.25 * sc, my - 6.05 * sc, 0.25 * sc, 0, Math.PI * 2); x.fill();
+  } else if (style === 'pirate') {
+    // black tricorne with a white skull dot, red sash, curved cutlass
+    x.fillStyle = '#b8332c'; x.fillRect(mx - 1.3 * sc, my - 2.4 * sc, 2.6 * sc, 0.5 * sc);
+    x.fillStyle = '#2a2a30'; x.beginPath(); x.moveTo(mx - 1.7 * sc, my - 5.4 * sc); x.quadraticCurveTo(mx, my - 7.3 * sc, mx + 1.7 * sc, my - 5.4 * sc); x.quadraticCurveTo(mx, my - 6 * sc, mx - 1.7 * sc, my - 5.4 * sc); x.fill();
+    x.fillStyle = '#f2f2f2'; x.beginPath(); x.arc(mx, my - 6.1 * sc, 0.22 * sc, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = '#d4dbe2'; x.lineWidth = 0.35 * sc;
+    x.beginPath(); x.moveTo(mx + 1.3 * sc, my - 2.2 * sc); x.quadraticCurveTo(mx + 2.4 * sc, my - 3.6 * sc, mx + 2 * sc, my - 5.4 * sc); x.stroke();
+  } else if (style === 'barbarian') {
+    // fur hood with little ears, big wooden club
+    x.fillStyle = '#8a6a48'; x.beginPath(); x.arc(mx, my - 5.2 * sc, 1.35 * sc, Math.PI * 1.05, Math.PI * 1.95); x.fill();
+    x.beginPath(); x.arc(mx - 1 * sc, my - 6.1 * sc, 0.4 * sc, 0, Math.PI * 2); x.arc(mx + 1 * sc, my - 6.1 * sc, 0.4 * sc, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#6e4a2c'; x.beginPath(); x.moveTo(mx + 1.5 * sc, my - 1.5 * sc); x.lineTo(mx + 1.9 * sc, my - 1.6 * sc); x.lineTo(mx + 2.4 * sc, my - 5.4 * sc); x.lineTo(mx + 1.4 * sc, my - 5.3 * sc); x.fill();
+    x.beginPath(); x.arc(mx + 1.9 * sc, my - 5.5 * sc, 0.6 * sc, 0, Math.PI * 2); x.fill();
   }
 }
 

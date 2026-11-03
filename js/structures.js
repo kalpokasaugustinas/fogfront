@@ -15,17 +15,24 @@ function rnd(i, j, s) {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-// building styles: wall / roof / stone colours (the scenes read these, set per sprite by usePalette)
+// building styles: wall / roof / stone colours plus the house shape (kind), set per sprite by usePalette:
+//   gable: plain pitched roof · steep: tall turf roof, plank walls · flat: flat roof, parapet, small
+//   windows · pagoda: curved two-tier roof with upturned eaves · tudor: white walls with dark timber
+//   beams · gothic: tall pointed slate roof, lit window · tropical: bamboo walls, round straw roof
 export const palettes = {
-  classic: { wall: [244, 240, 230], roof: [178, 92, 70], stone: [196, 192, 182], stoneDark: [140, 136, 128] },
-  nordic: { wall: [156, 116, 82], roof: [96, 126, 86], stone: [150, 156, 160], stoneDark: [94, 100, 108] },
-  desert: { wall: [236, 210, 164], roof: [200, 156, 100], stone: [224, 198, 152], stoneDark: [172, 142, 100] },
-  eastern: { wall: [238, 228, 216], roof: [58, 82, 122], stone: [206, 192, 172], stoneDark: [128, 74, 62] },
+  classic: { wall: [244, 240, 230], roof: [178, 92, 70], stone: [196, 192, 182], stoneDark: [140, 136, 128], kind: 'gable' },
+  nordic: { wall: [156, 116, 82], roof: [96, 126, 86], stone: [150, 156, 160], stoneDark: [94, 100, 108], kind: 'steep' },
+  desert: { wall: [236, 210, 164], roof: [200, 156, 100], stone: [224, 198, 152], stoneDark: [172, 142, 100], kind: 'flat' },
+  eastern: { wall: [238, 228, 216], roof: [58, 82, 122], stone: [206, 192, 172], stoneDark: [128, 74, 62], kind: 'pagoda' },
+  tudor: { wall: [246, 242, 228], roof: [128, 84, 56], stone: [188, 180, 168], stoneDark: [120, 110, 98], kind: 'tudor' },
+  gothic: { wall: [150, 150, 158], roof: [62, 58, 78], stone: [132, 132, 142], stoneDark: [84, 82, 96], kind: 'gothic' },
+  tropical: { wall: [214, 182, 120], roof: [226, 194, 112], stone: [196, 176, 140], stoneDark: [140, 118, 86], kind: 'tropical' },
 };
-let stone, stoneDark, roofRed, wallWhite;
+let stone, stoneDark, roofRed, wallWhite, houseKind = 'gable';
 function usePalette(name) {
   const p = palettes[name] ?? palettes.classic;
   ({ stone, stoneDark, roof: roofRed, wall: wallWhite } = p);
+  houseKind = p.kind ?? 'gable';
 }
 usePalette('classic');
 
@@ -44,7 +51,7 @@ function shadow(x, cx, cy, rx, ry) {
 // gabled house seen from the front-top: wall, door, two-tone roof
 function house(x, cx, cy, u, wall = wallWhite, roof = roofRed, w = 2.4, h = 1.3) {
   w *= u; h *= u;
-  const rh = u * 1.2;
+  const rh = u * 1.2, kind = houseKind;
   shadow(x, cx + u * 0.5, cy + u * 0.15, w * 0.7, u * 0.5);
   x.fillStyle = css(wall);
   x.fillRect(cx - w / 2, cy - h, w, h);
@@ -52,10 +59,80 @@ function house(x, cx, cy, u, wall = wallWhite, roof = roofRed, w = 2.4, h = 1.3)
   x.fillRect(cx + w * 0.2, cy - h, w * 0.3, h);
   x.fillStyle = css(dk(roof, 0.35));
   x.fillRect(cx - u * 0.25, cy - h * 0.6, u * 0.5, h * 0.6);   // door
+  if (kind !== 'gable') { houseShape(x, cx, cy, u, w, h, rh, wall, roof, kind); return; }
   x.fillStyle = css(roof);
   x.beginPath(); x.moveTo(cx - w / 2 - u * 0.2, cy - h); x.lineTo(cx - w * 0.15, cy - h - rh); x.lineTo(cx + w * 0.35, cy - h - rh); x.lineTo(cx + w / 2 + u * 0.2, cy - h); x.fill();
   x.fillStyle = css(dk(roof, 0.2));
   x.beginPath(); x.moveTo(cx + w * 0.35, cy - h - rh); x.lineTo(cx + w / 2 + u * 0.2, cy - h); x.lineTo(cx + w * 0.1, cy - h); x.lineTo(cx - w * 0.05, cy - h - rh * 0.4); x.closePath(); x.fill();
+}
+
+// the non-classic house shapes (walls and door are already drawn; w, h in css px)
+function houseShape(x, cx, cy, u, w, h, rh, wall, roof, kind) {
+  const l = cx - w / 2, r = cx + w / 2, top = cy - h;
+  x.lineWidth = Math.max(0.5, u * 0.16);
+  if (kind === 'steep') {
+    // plank walls, tall turf roof with a grass fringe
+    x.strokeStyle = css(dk(wall, 0.3), 0.6);
+    for (let i = 1; i < 4; i++) { x.beginPath(); x.moveTo(l, top + (h * i) / 4); x.lineTo(r, top + (h * i) / 4); x.stroke(); }
+    x.fillStyle = css(roof);
+    x.beginPath(); x.moveTo(l - u * 0.3, top + u * 0.1); x.lineTo(cx, top - rh * 1.8); x.lineTo(r + u * 0.3, top + u * 0.1); x.fill();
+    x.fillStyle = css(dk(roof, 0.22));
+    x.beginPath(); x.moveTo(cx, top - rh * 1.8); x.lineTo(r + u * 0.3, top + u * 0.1); x.lineTo(cx + u * 0.2, top + u * 0.1); x.fill();
+    x.fillStyle = css(lt(roof, 0.25));
+    for (let i = 0; i < 5; i++) x.fillRect(l - u * 0.2 + (i * (w + u * 0.4)) / 5, top - u * 0.05, u * 0.3, u * 0.3);
+  } else if (kind === 'flat') {
+    // flat roof with a darker parapet, two small dark windows, a little dome on wide houses
+    x.fillStyle = css(dk(wall, 0.12));
+    x.fillRect(l - u * 0.15, top - u * 0.45, w + u * 0.3, u * 0.45);
+    x.fillStyle = css(lt(wall, 0.15));
+    x.fillRect(l - u * 0.15, top - u * 0.45, w + u * 0.3, u * 0.12);
+    x.fillStyle = css(dk(roof, 0.45));
+    x.fillRect(l + w * 0.12, top + h * 0.22, u * 0.35, u * 0.35);
+    x.fillRect(r - w * 0.12 - u * 0.35, top + h * 0.22, u * 0.35, u * 0.35);
+    if (w > u * 2.2) { x.fillStyle = css(roof); x.beginPath(); x.arc(cx - w * 0.15, top - u * 0.45, u * 0.55, Math.PI, 0); x.fill(); }
+  } else if (kind === 'pagoda') {
+    // two curved roof tiers with upturned eaves
+    const tier = (y, half, hh) => {
+      x.fillStyle = css(roof);
+      x.beginPath(); x.moveTo(cx - half - u * 0.5, y - u * 0.25);
+      x.quadraticCurveTo(cx - half * 0.5, y - u * 0.05, cx - half * 0.35, y - hh);
+      x.lineTo(cx + half * 0.35, y - hh);
+      x.quadraticCurveTo(cx + half * 0.5, y - u * 0.05, cx + half + u * 0.5, y - u * 0.25);
+      x.quadraticCurveTo(cx, y + u * 0.2, cx - half - u * 0.5, y - u * 0.25); x.fill();
+      x.fillStyle = css(dk(roof, 0.25)); x.fillRect(cx - half * 0.35, y - hh - u * 0.12, half * 0.7, u * 0.12);
+    };
+    tier(top + u * 0.1, w / 2, rh * 0.75);
+    x.fillStyle = css(dk(wall, 0.1)); x.fillRect(cx - w * 0.2, top - rh * 0.75 - u * 0.5, w * 0.4, u * 0.55);
+    tier(top - rh * 0.75 - u * 0.4, w * 0.32, rh * 0.55);
+  } else if (kind === 'tudor') {
+    // dark timber frame on white walls, brown gable roof
+    x.strokeStyle = css([86, 58, 40]); x.lineWidth = Math.max(0.6, u * 0.2);
+    x.strokeRect(l, top, w, h);
+    x.beginPath(); x.moveTo(l, top + h * 0.45); x.lineTo(r, top + h * 0.45);
+    x.moveTo(l + w * 0.18, top); x.lineTo(l + w * 0.38, top + h * 0.45); x.moveTo(r - w * 0.18, top); x.lineTo(r - w * 0.38, top + h * 0.45); x.stroke();
+    x.fillStyle = css(roof);
+    x.beginPath(); x.moveTo(l - u * 0.3, top); x.lineTo(cx, top - rh * 1.25); x.lineTo(r + u * 0.3, top); x.fill();
+    x.fillStyle = css(dk(roof, 0.22));
+    x.beginPath(); x.moveTo(cx, top - rh * 1.25); x.lineTo(r + u * 0.3, top); x.lineTo(cx + u * 0.15, top); x.fill();
+  } else if (kind === 'gothic') {
+    // tall pointed slate roof with a little spire, narrow lit window
+    x.fillStyle = css(roof);
+    x.beginPath(); x.moveTo(l - u * 0.15, top); x.lineTo(cx, top - rh * 2.3); x.lineTo(r + u * 0.15, top); x.fill();
+    x.fillStyle = css(lt(roof, 0.18));
+    x.beginPath(); x.moveTo(l - u * 0.15, top); x.lineTo(cx, top - rh * 2.3); x.lineTo(cx - u * 0.1, top); x.fill();
+    x.strokeStyle = css(dk(roof, 0.3)); x.beginPath(); x.moveTo(cx, top - rh * 2.3); x.lineTo(cx, top - rh * 2.3 - u * 0.6); x.stroke();
+    x.fillStyle = 'rgb(255, 214, 120)';
+    x.beginPath(); x.moveTo(l + w * 0.18, top + h * 0.7); x.lineTo(l + w * 0.18, top + h * 0.32); x.lineTo(l + w * 0.24, top + h * 0.2); x.lineTo(l + w * 0.3, top + h * 0.32); x.lineTo(l + w * 0.3, top + h * 0.7); x.fill();
+  } else if (kind === 'tropical') {
+    // bamboo walls (vertical canes), round straw roof
+    x.strokeStyle = css(dk(wall, 0.25), 0.7);
+    for (let i = 1; i < 6; i++) { x.beginPath(); x.moveTo(l + (w * i) / 6, top); x.lineTo(l + (w * i) / 6, cy); x.stroke(); }
+    x.fillStyle = css(roof);
+    x.beginPath(); x.ellipse(cx, top + u * 0.05, w / 2 + u * 0.45, rh * 1.15, 0, Math.PI, 0); x.fill();
+    x.strokeStyle = css(dk(roof, 0.25), 0.8);
+    for (let i = -2; i <= 2; i++) { x.beginPath(); x.moveTo(cx + i * w * 0.12, top - rh * 1.05 * Math.cos(i * 0.45)); x.lineTo(cx + i * w * 0.27, top + u * 0.05); x.stroke(); }
+    x.fillStyle = css(dk(roof, 0.15)); x.fillRect(l - u * 0.45, top - u * 0.05, w + u * 0.9, u * 0.2);
+  }
 }
 
 // square stone tower with battlements; returns its top y

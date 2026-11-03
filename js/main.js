@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=58';
-import { generateMap, rng } from './mapgen.js?v=58';
-import { initAnalytics, track } from './analytics.js?v=58';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=58';
-import { Battle } from './battle.js?v=58';
-import { personalities } from './ai.js?v=58';
-import { Campaign } from './campaign.js?v=58';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=58';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=58';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=58';
-import { previewBuildings } from './structures.js?v=58';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=59';
+import { generateMap, rng } from './mapgen.js?v=59';
+import { initAnalytics, track } from './analytics.js?v=59';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=59';
+import { Battle } from './battle.js?v=59';
+import { personalities } from './ai.js?v=59';
+import { Campaign } from './campaign.js?v=59';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=59';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=59';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=59';
+import { previewBuildings } from './structures.js?v=59';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -972,6 +972,7 @@ function newDemo() {
 // menu mascots: your band on the left (commander profile colour + troop kit), a rival band on the
 // right (red, or blue if you are red) in the three other kits
 const bands = [makeBand($('foglets-l'), factionColors[0], ['soldier', 'soldier', 'soldier'], 1, 0), makeBand($('foglets-r'), factionColors[1], ['viking', 'knight', 'archer'], -1, 1)];
+window.__bands = bands;   // tests read the hop state
 function syncBands() {
   const mine = profile.troops, others = Object.keys(troopStyles).filter((k) => k !== mine);
   dressBand(bands[0], factionColors[profile.color], [mine, mine, mine]);
