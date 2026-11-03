@@ -550,8 +550,8 @@ export function generateMap({ seed, cells: n, grid: g, shape = 'blob', obstacles
         riverTile[id] = 1;
       }
       used += tiles.length;
-      const pts = cells.filter((_, i) => i % 2 === 0 || i === cells.length - 1).map((c) => [(c % g) + 0.5, Math.floor(c / g) + 0.5]);
-      if (pts.length > 4) { rivers.push(pts); r++; }
+      const pts = smoothCourse(cells, g);
+      if (pts.length > 8) { rivers.push(pts); r++; }
     }
   }
   // 11. terrain traits per segment (one each at most): highland > river > lakeside > forest
@@ -782,4 +782,43 @@ function recount(map) {
   map.edge = edge;
   map.bdist = dist;
   map.avgArea = segs.reduce((a, s) => a + s.area, 0) / segs.length;
+}
+
+// river course from grid cells to a smooth, gently meandering line (grid units). bfs paths are
+// straight runs with 45 degree kinks, so: resample evenly, average away the kinks (rounded turns),
+// add a sine meander across the flow that fades out at the spring and the mouth, smooth again.
+// the ends stay pinned, so the river still starts at its spring and ends in the water
+function smoothCourse(cells, g) {
+  let p = cells.map((c) => [(c % g) + 0.5, Math.floor(c / g) + 0.5]);
+  // even spacing along the line
+  const resample = (pts, step) => {
+    const out = [pts[0]];
+    let carry = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const [ax, ay] = pts[i - 1], [bx, by] = pts[i], d = Math.hypot(bx - ax, by - ay);
+      for (let s = step - carry; s < d; s += step) out.push([ax + ((bx - ax) * s) / d, ay + ((by - ay) * s) / d]);
+      carry = (carry + d) % step;
+    }
+    out.push(pts[pts.length - 1]);
+    return out;
+  };
+  // moving average; the window shrinks near the ends so they stay put
+  const average = (pts, r) => pts.map((q, i) => {
+    const w = Math.min(r, i, pts.length - 1 - i);
+    let x = 0, y = 0;
+    for (let j = i - w; j <= i + w; j++) { x += pts[j][0]; y += pts[j][1]; }
+    return [x / (2 * w + 1), y / (2 * w + 1)];
+  });
+  p = resample(p, 0.5);
+  p = average(average(p, 6), 6);
+  // meander: amplitude 1.1 cells, wavelength 11 cells, phase from the spring cell (no rng draw,
+  // so the rest of the map stays the same for a seed)
+  const amp = 1.1, wave = 11, phase = (cells[0] * 0.618) % (2 * Math.PI), len = (p.length - 1) * 0.5;
+  p = p.map((q, i) => {
+    const a = p[Math.max(0, i - 1)], b = p[Math.min(p.length - 1, i + 1)];
+    const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy) || 1, s = i * 0.5;
+    const off = amp * Math.sin((2 * Math.PI * s) / wave + phase) * Math.min(1, s / 4, (len - s) / 4);
+    return [q[0] - (dy / d) * off, q[1] + (dx / d) * off];
+  });
+  return resample(average(p, 2), 0.75);
 }
