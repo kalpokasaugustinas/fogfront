@@ -2,7 +2,7 @@
 // other across the menu. each foglet is a round little fighter in its team colour with an angry face,
 // a shaking weapon and its own kit (soldier, knight, viking, archer). drawn on two small canvases
 // every menu frame; nothing here touches the game
-import { hexToRgb, shade } from './render.js?v=55';
+import { hexToRgb, shade } from './render.js?v=56';
 
 const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 const shouts = ['Grr!', 'Hey!', '!!', 'Ours!', 'Back off!', 'Charge!', 'Mine!'];

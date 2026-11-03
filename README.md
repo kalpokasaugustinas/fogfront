@@ -2,6 +2,8 @@
 
 A territory strategy game (formerly Frontlines) for the browser; on phones the first tap goes fullscreen. Conquer a world map region by region. Each region is a battle against computer opponents on a map split into segments. Grow troops, build, and do the math on which fights to pick. In the game the troops are called **foglets**.
 
+Play: https://kalpokasaugustinas.github.io/fogfront/
+
 Prototype stage.
 
 ## How it plays
@@ -107,5 +109,5 @@ The menu shows `build N · date time`. A git pre-commit hook (`tools/pre-commit`
 
 ## Install, analytics, licence
 - Phones: "Add to Home screen" installs it as an app (fullscreen, landscape) via `manifest.webmanifest`; shared links show a preview card (`img/og.png`).
-- Analytics: `js/analytics.js` loads GoatCounter (no cookies, no personal data) once its site `code` is set, and counts page views plus game events (`play-*`, `tutorial-done`, `*-won/lost`, `conquest-stage-N-won/lost`). Never on localhost.
+- Analytics: `js/analytics.js` loads GoatCounter (no cookies, no personal data; dashboard: fogfront.goatcounter.com), and counts page views plus game events (`play-*`, `tutorial-done`, `*-won/lost`, `conquest-stage-N-won/lost`). Never on localhost.
 - Licence: all rights reserved (see [LICENSE](LICENSE)); the music and sound effects keep their own licences (audio/CREDITS.md).

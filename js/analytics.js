@@ -1,7 +1,7 @@
 // anonymous play counter: GoatCounter (no cookies, no personal data, no consent banner needed).
 // counts page views plus a few game events (modes started, tutorial, wins, conquest stages).
 // off while code is empty, and never on localhost (tests)
-const code = '';   // goatcounter site code: https://<code>.goatcounter.com
+const code = 'fogfront';   // goatcounter site code: https://fogfront.goatcounter.com
 
 const on = () => !!code && !/^(localhost|127\.)/.test(location.hostname);
 
