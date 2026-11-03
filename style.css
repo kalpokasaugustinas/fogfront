@@ -207,6 +207,17 @@ html.compact .stars span { font-size: 30px; } html.compact .stars span:nth-child
 .perk-spark { position: absolute; left: 50%; top: 40%; width: 8px; height: 8px; margin: -4px; border-radius: 50%; pointer-events: none;
   background: radial-gradient(circle, #fff 0 30%, #ffd76a 60%, transparent 70%); animation: perk-spark 0.75s 0.08s both ease-out; }
 @keyframes perk-spark { from { transform: rotate(var(--a)) translateX(0) scale(1.4); opacity: 1; } to { transform: rotate(var(--a)) translateX(var(--d)) scale(0.2); opacity: 0; } }
+/* conquest score box + leaderboard table */
+.score-box { background: rgba(224,164,58,0.14); border-radius: 14px; padding: 8px 10px; margin: 8px 0; }
+.score-total { font-size: 18px; font-weight: 700; }
+.score-total b { color: #a3650a; }
+.score-parts { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; font-size: 13px; margin-top: 2px; }
+.board { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+.board th { font-weight: 600; color: #6b7d80; text-align: left; padding: 2px 4px; }
+.board td { padding: 3px 4px; border-top: 1px solid rgba(0,0,0,0.06); text-align: left; }
+.board tr.me td { background: rgba(255,215,106,0.45); }
+.board tr.me td:first-child { border-radius: 8px 0 0 8px; } .board tr.me td:last-child { border-radius: 0 8px 8px 0; }
+#board .card { text-align: center; }
 .zooming { transition: transform 1.7s cubic-bezier(0.45, 0, 0.2, 1), opacity 1.7s ease; }
 .zoom-snap { pointer-events: none; z-index: 2; }
 

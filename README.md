@@ -16,6 +16,7 @@ Prototype stage.
   - bots scale with you: each starts with 10 + 70% of your carried people and its own capital with a shuffled bonus mix
   - neutrals scale with you too (stage 2 on): garrisons × √(carried people / 150), at most ×4; the biggest 30% of open neutral tiles are fortified camps (×1.5 more, drawn as 2–4 houses behind a palisade); building prices rise by the same factor as the garrisons (farm 30 → up to 120)
   - lose a stage and the run is over; best run (stage reached, time) is saved
+  - score per stage (w = stage 1–5): clear 500·w · 150·w per ★ (win, no tile lost, under 6:00) · speed 400·w·(1 − real seconds / 600), 0 after 10 min · plus 15·√troops killed; a lost stage scores only its kills. A perfect fast world run is ~20–25k. Every stage card shows its points; a finished run is ranked in the 🏅 leaderboard (top 10 runs on this device, menu button 🏅; the menu badge shows the best score)
   - each stage looks further away: lakes, mountain ridges and trees get smaller and more numerous
 - **Game speed:** the sim runs at 0.8 game seconds per real second at ×1 (`rules.timeScale`); all rates below are per game second, clocks show real time.
 - **Tutorial:** the first Quick battle or Conquest starts with a scripted tutorial battle on a fixed 9-tile map (you vs one sleeping red bot); its end card then starts the mode you picked. A coach card (right side) shows one move at a time; on ⏸ steps time is stopped and only that move works:

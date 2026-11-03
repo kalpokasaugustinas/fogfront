@@ -1,13 +1,13 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=51';
-import { generateMap, rng } from './mapgen.js?v=51';
-import { Battle } from './battle.js?v=51';
-import { personalities } from './ai.js?v=51';
-import { Campaign } from './campaign.js?v=51';
-import { Expedition, stages, perks } from './expedition.js?v=51';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=51';
-import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=51';
-import { previewBuildings } from './structures.js?v=51';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=52';
+import { generateMap, rng } from './mapgen.js?v=52';
+import { Battle } from './battle.js?v=52';
+import { personalities } from './ai.js?v=52';
+import { Campaign } from './campaign.js?v=52';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=52';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=52';
+import { MapView, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=52';
+import { previewBuildings } from './structures.js?v=52';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -674,6 +674,24 @@ function setSpeed(s) {
 }
 
 // stats grid for end screens: fights, economy, territory, buildings by type
+// conquest score box: this stage's points by part, the run total; at the end of a run (saved =
+// saveRun result) the rank and the top 5 runs with this one highlighted
+function scoreHtml(gain, saved = null) {
+  const part = (label, v) => (v ? `<span>${label} <b>+${v.toLocaleString()}</b></span>` : '');
+  let h = `<div class="score-box"><div class="score-total">🏅 <b data-n="${expedition.points}">0</b> points`
+    + (saved?.rank ? ` · <b>#${saved.rank}</b> of your runs` : '') + `</div><div class="score-parts">`
+    + part('clear', gain.clear) + part('★ stars', gain.stars) + part('⏱️ speed', gain.speed) + part('🗡️ kills', gain.kills) + '</div>';
+  if (saved) h += boardHtml(saved.runs.slice(0, 5), saved.run.id);
+  return h + '</div>';
+}
+// table of runs (rank, points, stage reached, time, date); mark = id of the row to highlight
+function boardHtml(runs, mark = null) {
+  if (!runs.length) return '<p class="hint">No runs yet: play a conquest to get on the board.</p>';
+  const rows = runs.map((r, i) => `<tr class="${r.id === mark ? 'me' : ''}"><td>#${i + 1}</td><td><b>${r.points.toLocaleString()}</b></td>`
+    + `<td>${r.won ? '🌍 World' : `stage ${r.reached}`}</td><td>${fmtTime(r.secs * rules.timeScale)}</td><td>${r.date}</td></tr>`).join('');
+  return `<table class="board"><tr><th></th><th>Points</th><th>Reached</th><th>Time</th><th>Date</th></tr>${rows}</table>`;
+}
+
 function statsHtml(b) {
   const st = b.stats, n = (v) => Math.round(v).toLocaleString();
   const mine = b.segs.filter((s) => s.owner === 0);
@@ -691,11 +709,14 @@ function statsHtml(b) {
 
 // end card chrome: win/lose look, stars (1 for the win, +1 no tile lost, +1 under 6 minutes),
 // then count the stat numbers up
+// stars of a won battle: the win, no tile lost, under 6:00 (real time)
+function starsOf(b) { return [true, b.stats.lost === 0, b.time / rules.timeScale < 360]; }
+
 function showEnd(won, starsFor) {
   $('end').classList.toggle('win', won);
   $('end').classList.toggle('lose', !won);
   if (won && starsFor) {
-    const s = starsFor.stats, got = [true, s.lost === 0, starsFor.time / rules.timeScale < 360];
+    const got = starsOf(starsFor);
     $('end-stars').innerHTML = got.map((on) => `<span class="${on ? 'on' : ''}">★</span>`).join('');
     $('end-why').textContent = '★ victory · ★ no tile lost · ★ under 6:00';
   } else $('end-stars').innerHTML = $('end-why').textContent = '';
@@ -763,12 +784,15 @@ function startExpedition() {
 function endStage(won) {
   $('end-perks').innerHTML = '';
   const last = expedition.stage === stages.length - 1;
+  const gain = expedition.record({ won, stars: won ? starsOf(battle).filter(Boolean).length : 0, secs: battle.time / rules.timeScale, killed: battle.stats.killed });
   if (!won || last) {
     if (won) expedition.collapse(battle);
     const reached = won ? stages.length : expedition.stage + 1;
     const record = expedition.saveBest(reached);
     $('end-title').textContent = won ? 'The world is yours!' : 'Conquest over';
-    $('end-stats').innerHTML = `<p class="next-up">Reached stage ${reached} · total time ${fmtTime(expedition.time + (won ? 0 : battle.time))}${record ? ' · 🏆 new best' : ''}</p>` + statsHtml(battle);
+    const total = expedition.time + (won ? 0 : battle.time), saved = expedition.saveRun(reached, won, total / rules.timeScale);
+    $('end-stats').innerHTML = `<p class="next-up">Reached stage ${reached} · total time ${fmtTime(total)}${record ? ' · 🏆 new best' : ''}</p>`
+      + scoreHtml(gain, saved) + statsHtml(battle);
     $('end-retry').textContent = '▶ New conquest';
     $('end-retry').classList.remove('hidden');
     $('end-continue').textContent = 'Withdraw';
@@ -786,7 +810,7 @@ function endStage(won) {
       ${share(sum.farms, '🌾 Farms', pc(b.growth) + ' growth')}${share(sum.hosp, '➕ Hospitals', pc(b.hosp) + ' neighbour growth')}
       ${share(sum.labs, '🔬 Labs', pc(b.lab) + ' growth everywhere')}${share(sum.forts, '🛡️ Forts', pc(b.def) + ' defense')}
       ${share(sum.barracks, '⚔️ Barracks', pc(b.atk) + ' attack')}
-    </ul></div><p class="next-up">Next: ${expedition.current.name} · pick a perk</p>`;
+    </ul></div>${scoreHtml(gain)}<p class="next-up">Next: ${expedition.current.name} · pick a perk</p>`;
   for (const p of expedition.choices()) {
     const btn = document.createElement('button');
     btn.className = 'perk';
@@ -936,7 +960,8 @@ function drawMenu(dt) {
 function renderMenuStats() {
   const best = Expedition.best();
   $('m-regions').textContent = `🏳️ ${campaign.owned.size}/${campaign.regions.length}`;
-  $('m-best').textContent = best ? `🧭 Stage ${best.stage}` : '🧭 —';
+  const top = Expedition.runs()[0];
+  $('m-best').textContent = top ? `🏅 ${top.points.toLocaleString()}` : best ? `🧭 Stage ${best.stage}` : '🏅 —';
   $('m-wins').textContent = `🏆 ${quickWins()}`;
   $('m-campaign').textContent = `${campaign.owned.size}/${campaign.regions.length} regions conquered`;
   $('m-expedition').textContent = best ? `Best: stage ${best.stage}/5` : 'Valley → World roguelite';
@@ -977,6 +1002,9 @@ function renderProfile() {
 $('btn-profile').onclick = () => { renderProfile(); $('profile').classList.remove('hidden'); };
 $('pf-done').onclick = () => $('profile').classList.add('hidden');
 $('help-close').onclick = () => $('help').classList.add('hidden');
+// leaderboard: your best conquest runs
+$('btn-board').onclick = () => { $('board-list').innerHTML = boardHtml(Expedition.runs()); $('board').classList.remove('hidden'); };
+$('board-close').onclick = () => $('board').classList.add('hidden');
 $('campaign-back').onclick = () => show('menu');
 $('campaign-reset').onclick = () => {
   if (confirm('Reset campaign progress?')) { campaign.reset(); pickedRegion = -1; paintCampaign(); }

@@ -7,9 +7,9 @@
 //   - pick 1 of 3 perks
 // bots scale with you: base troops + 70% of your carried people, and capitals with the same
 // total bonus strength in a random mix. losing a stage ends the run.
-import { effects } from './config.js?v=51';
-import { personalities } from './ai.js?v=51';
-import { rng } from './mapgen.js?v=51';
+import { effects } from './config.js?v=52';
+import { personalities } from './ai.js?v=52';
+import { rng } from './mapgen.js?v=52';
 
 export const stages = [
   { name: 'Valley', detail: 1, cells: 12, bots: 1, shape: 'random', neutral: [0.12, 0.3] },
@@ -54,6 +54,27 @@ export function combineMods(list) {
 }
 
 const best_key = 'frontlines.expedition.best';
+const runs_key = 'frontlines.conquest.runs';
+
+// conquest score, per stage; w = stage number (1-5), so later, harder stages count more:
+//   clear   500 x w                       (stage won)
+//   stars   150 x w per star              (win, no tile lost, under 6:00 -> up to 450 x w)
+//   speed   400 x w x (1 - t / 600)       (t = real seconds of the stage; 0 after 10 min)
+//   kills   15 x sqrt(troops killed)      (kill counts already grow stage by stage, sqrt keeps
+//                                          them from swamping the rest)
+// a lost stage scores only its kills. a perfect fast world run is ~20-25k points: roughly
+// a third each from clears and stars, a quarter from speed, the rest from kills
+export const scoring = { clear: 500, star: 150, speed: 400, speedSpan: 600, kill: 15, keep: 10 };
+export function stageScore(stage, { won, stars, secs, killed }) {
+  const w = stage + 1, s = scoring;
+  const part = {
+    clear: won ? s.clear * w : 0,
+    stars: won ? s.star * w * stars : 0,
+    speed: won ? Math.round(s.speed * w * Math.max(0, 1 - secs / s.speedSpan)) : 0,
+    kills: Math.round(s.kill * Math.sqrt(Math.max(0, killed))),
+  };
+  return { ...part, total: part.clear + part.stars + part.speed + part.kills };
+}
 
 export class Expedition {
   constructor(seed) {
@@ -63,7 +84,13 @@ export class Expedition {
     this.perks = [];
     this.capital = null;   // { troops, bonus } carried into the next stage
     this.time = 0;         // total battle time
+    this.scores = [];      // stageScore() of every stage played
   }
+
+  get points() { return this.scores.reduce((v, s) => v + s.total, 0); }
+
+  // score the stage just played (before collapse); returns its stageScore
+  record(result) { const s = stageScore(this.stage, result); this.scores.push(s); return s; }
 
   get current() { return stages[this.stage]; }
   done() { return this.stage >= stages.length; }
@@ -138,6 +165,19 @@ export class Expedition {
   // best run so far (stage reached, then total time)
   static best() {
     try { return JSON.parse(localStorage.getItem(best_key)); } catch { return null; }
+  }
+
+  // leaderboard: your best runs on this device, by points (top scoring.keep)
+  static runs() {
+    try { return JSON.parse(localStorage.getItem(runs_key)) ?? []; } catch { return []; }
+  }
+
+  // add this run; returns { rank (1-based, 0 = not in the top list), runs }
+  saveRun(reached, won, secs) {
+    const run = { points: this.points, reached, won, secs: Math.floor(secs), date: new Date().toISOString().slice(0, 10), id: Date.now() };
+    const runs = [...Expedition.runs(), run].sort((a, b) => b.points - a.points || a.secs - b.secs).slice(0, scoring.keep);
+    try { localStorage.setItem(runs_key, JSON.stringify(runs)); } catch { /* storage blocked */ }
+    return { rank: runs.indexOf(run) + 1, runs, run };
   }
 
   saveBest(reached) {

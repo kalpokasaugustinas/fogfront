@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="style.css?v=51">
+  <link rel="stylesheet" href="style.css?v=52">
   <!-- phones held upright: turn the page to landscape before the first paint (main.js keeps it in
        sync on resize, but only runs once every module has loaded) -->
   <script>
@@ -98,6 +98,7 @@
       <button id="btn-profile" class="round" title="Commander: your colour, troops and buildings">👤</button>
       <button id="btn-sfx" class="round toggle" title="Sound">🔊</button>
       <button id="btn-music" class="round toggle" title="Music">🎵</button>
+      <button id="btn-board" class="round" title="Conquest leaderboard">🏅</button>
       <button id="btn-help" class="round" title="How to play">❔</button>
     </header>
     <div class="logo">
@@ -109,7 +110,7 @@
       <button id="btn-expedition" class="mode gold"><span class="m-ico">🧭</span><span class="m-txt"><b>Conquest</b><small id="m-expedition">Valley → World roguelite</small></span><span class="play">GO</span></button>
       <button id="btn-skirmish" class="mode green"><span class="m-ico">⚔️</span><span class="m-txt"><b>Quick battle</b><small>Random island · 3 rivals</small></span><span class="play">FIGHT</span></button>
     </div>
-    <span id="version">build 51 · 2026-11-03 14:49</span>
+    <span id="version">build 52 · 2026-11-03 14:54</span>
   </section>
 
   <!-- campaign world map -->
@@ -204,6 +205,16 @@
     </div>
   </div>
 
+  <!-- conquest leaderboard: your best runs on this device -->
+  <div id="board" class="overlay hidden">
+    <div class="card scroll">
+      <h2>🏅 Conquest leaderboard</h2>
+      <div id="board-list"></div>
+      <p class="hint">Per stage (×1 Valley … ×5 World): clear 500 · each ★ 150 · speed up to 400 (less the slower; 0 after 10 min) · plus 15 × √troops killed.</p>
+      <button id="board-close" class="primary">Close</button>
+    </div>
+  </div>
+
   <!-- rules -->
   <div id="help" class="overlay hidden">
     <div class="card scroll">
@@ -232,6 +243,6 @@
   </div>
 
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=51"></script>
+  <script type="module" src="js/main.js?v=52"></script>
 </body>
 </html>
