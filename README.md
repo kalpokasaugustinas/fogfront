@@ -90,6 +90,7 @@ Vanilla JS modules plus canvas 2D. No build step, no dependencies.
 | `tools/build_audio.py` | turns the downloaded tracks/clips into the files in `audio/` |
 | `js/structures.js` | building scenes that fill a segment: farmland, fort walls and towers, castle with soldiers, hospital, lab |
 | `js/main.js` | screens, input, HUD, frame loop |
+| `sw.js` | service worker: offline play (one cache per build) |
 | `js/mapworker.js` | runs map generation in a background worker (the next conquest map is built while the perk card is up) |
 | `js/analytics.js` | anonymous GoatCounter visit + event counter (off until a site code is set) |
 | `manifest.webmanifest`, `img/` | install-as-app manifest (fullscreen, landscape), icons, link-preview image |
@@ -122,6 +123,7 @@ The menu shows `build N · date time`. A git pre-commit hook (`tools/pre-commit`
 
 ## Install, analytics, licence
 - Phones: "Add to Home screen" installs it as an app (fullscreen, landscape) via `manifest.webmanifest`; shared links show a preview card (`img/og.png`).
+- Offline + install: `sw.js` (service worker, registered as `sw.js?v=N`, one cache per build) keeps the game on the device after the first online visit: the page network-first, our js/css/images/sound effects and Google Fonts cache-first (the page sends the list of files it loaded, plus the map worker and all sound effects); music streams online only. Off on localhost unless the URL has `?sw`. 📲 in the menu installs the game as an app (Chrome/Android install prompt; on iPhone it explains Share → Add to Home Screen); hidden once installed.
 - Feedback: ❔ help → 💬 Send feedback opens `feedbackUrl` (main.js) in a new tab (counted as the `feedback-open` event).
 - Analytics: `js/analytics.js` loads GoatCounter (no cookies, no personal data; dashboard: fogfront.goatcounter.com), and counts page views plus game events (`play-*`, `tutorial-done`, `*-won/lost`, `conquest-stage-N-won/lost`) and JS errors players hit (`error-<file>:<line> <message>`, each once per visit, at most 5). Events before the script loads are queued. Never on localhost.
 - Licence: all rights reserved (see [LICENSE](LICENSE)); the music and sound effects keep their own licences (audio/CREDITS.md).

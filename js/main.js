@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=74';
-import { generateMap, rng } from './mapgen.js?v=74';
-import { initAnalytics, track } from './analytics.js?v=74';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=74';
-import { Battle } from './battle.js?v=74';
-import { personalities } from './ai.js?v=74';
-import { Campaign } from './campaign.js?v=74';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=74';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=74';
-import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=74';
-import { previewBuildings } from './structures.js?v=74';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=75';
+import { generateMap, rng } from './mapgen.js?v=75';
+import { initAnalytics, track } from './analytics.js?v=75';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=75';
+import { Battle } from './battle.js?v=75';
+import { personalities } from './ai.js?v=75';
+import { Campaign } from './campaign.js?v=75';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=75';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=75';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=75';
+import { previewBuildings } from './structures.js?v=75';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -1073,6 +1073,40 @@ const wins_key = 'frontlines.quickwins';
 function quickWins() { try { return +localStorage.getItem(wins_key) || 0; } catch { return 0; } }
 function addQuickWin() { try { localStorage.setItem(wins_key, quickWins() + 1); } catch { /* storage blocked */ } }
 
+// ---------- offline play + install ----------
+// service worker (sw.js, one cache per build): the game starts without internet once it has been
+// opened online. off on localhost (development would get stale files) unless the url has ?sw
+function initOffline() {
+  const local = /^(localhost|127\.)/.test(location.hostname);
+  if (!('serviceWorker' in navigator) || (local && !/[?&]sw(=|&|$)/.test(location.search))) return;
+  const v = new URL(import.meta.url).search;   // same ?v=N build stamp as this module
+  navigator.serviceWorker.register('sw.js' + v).then(() => navigator.serviceWorker.ready).then((reg) => {
+    // everything this page loaded (modules, css, fonts, icons), the map worker and the sound
+    // effects: cached now, so a first visit is enough for offline play
+    const own = (u) => u.startsWith(location.origin) || /\/\/fonts\.(googleapis|gstatic)\.com\//.test(u);
+    const urls = performance.getEntriesByType('resource').map((e) => e.name).filter(own);
+    urls.push(new URL('./mapworker.js' + v, import.meta.url).href, ...audioFiles().sfx);
+    reg.active?.postMessage({ cache: [...new Set(urls)] });
+  }).catch(() => { /* no offline play */ });
+}
+
+// install button (menu): chrome / android offer an install prompt, saved here until tapped;
+// iphone safari has none, so the button explains share -> add to home screen. hidden when the
+// game already runs as an installed app
+let installEvt = null;
+const installed = () => matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone === true;
+const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; $('btn-install').classList.remove('hidden'); });
+addEventListener('appinstalled', () => { installEvt = null; $('btn-install').classList.add('hidden'); track('app-installed'); });
+if (ios && !installed()) $('btn-install').classList.remove('hidden');
+$('btn-install').onclick = () => {
+  if (installEvt) {
+    track('install-prompt');
+    installEvt.prompt();
+    installEvt.userChoice.finally(() => { installEvt = null; $('btn-install').classList.add('hidden'); });
+  } else if (ios) flash('📲 Tap Share ⬆️, then "Add to Home Screen"', 4000);
+};
+
 // ---------- menu, help, keyboard ----------
 $('btn-campaign').onclick = () => show('campaign');
 $('btn-skirmish').onclick = viaTutor(startSkirmish);
@@ -1556,3 +1590,4 @@ renderMenuStats();
 // hooks for headless tests
 window.__fl = { skipCountdown: () => { countdown = 0; goFlash = 0; }, setCam, get nextMap() { return nextMap; }, get tutor() { return tutor; }, endTutor, nextTutor, campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv, audioState, audioFiles };
 initAnalytics();
+initOffline();
