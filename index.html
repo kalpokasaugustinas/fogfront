@@ -26,7 +26,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Luckiest+Guy&display=swap">
-  <link rel="stylesheet" href="style.css?v=72">
+  <link rel="stylesheet" href="style.css?v=73">
   <!-- phones held upright: turn the page to landscape before the first paint (main.js keeps it in
        sync on resize, but only runs once every module has loaded) -->
   <script>
@@ -128,7 +128,7 @@
       <button id="btn-expedition" class="mode sky"><span class="m-ico">🧭</span><span class="m-txt"><b>Conquest</b><small id="m-expedition">Valley → World roguelite</small></span><span class="play">GO</span></button>
       <button id="btn-skirmish" class="mode pink"><span class="m-ico">⚔️</span><span class="m-txt"><b>Quick battle</b><small>Random island · 3 rivals</small></span><span class="play">FIGHT</span></button>
     </div>
-    <span id="version">build 72 · 2026-11-04 21:06</span>
+    <span id="version">build 73 · 2026-11-04 21:14</span>
   </section>
 
   <!-- campaign world map -->
@@ -200,6 +200,19 @@
     </div>
   </section>
 
+  <!-- conquest run saved on this device: continue it or start over -->
+  <div id="resume" class="overlay hidden">
+    <div class="card end-card leave-card">
+      <div class="end-ribbon"><h2>Continue conquest?</h2></div>
+      <p class="leave-icon">🧭</p>
+      <p id="resume-text"></p>
+      <div class="end-btns">
+        <button id="resume-new" class="mode red big-btn">New conquest</button>
+        <button id="resume-go" class="mode green big-btn">▶ Continue</button>
+      </div>
+    </div>
+  </div>
+
   <!-- leave confirmation: pauses the battle; nothing of the running battle / run is saved -->
   <div id="leave" class="overlay hidden">
     <div class="card end-card leave-card">
@@ -259,11 +272,12 @@
       <p>Win: wipe out every enemy faction. Keys: space = pause, 1–4 = send %, A = auto toggle, Esc = deselect.</p>
       <p class="credits"><b>Music:</b> "Aphelion", "Song Of The Forge" by Scott Buckley (CC BY 4.0) · "Five Armies" by Kevin MacLeod, incompetech.com (CC BY 4.0) · "Heroic Demise" by Matthew Pablo, matthewpablo.com (CC BY 3.0) · "The Precipice of Victory", "The Fallen" by Jonathan Shaw, jshaw.co.uk (CC BY 3.0) · "Battle Theme A" by cynicmusic (CC0). <b>Sound:</b> Kenney, starninjas, William Hector and other OpenGameArt artists (CC0). All tracks trimmed. Full list: audio/CREDITS.md.</p>
       <button id="help-tutor">▶ Play tutorial</button>
+      <button id="help-feedback">💬 Send feedback</button>
       <button id="help-close" class="primary">Got it</button>
     </div>
   </div>
 
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=72"></script>
+  <script type="module" src="js/main.js?v=73"></script>
 </body>
 </html>

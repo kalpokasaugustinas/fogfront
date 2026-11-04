@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=72';
-import { generateMap, rng } from './mapgen.js?v=72';
-import { initAnalytics, track } from './analytics.js?v=72';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=72';
-import { Battle } from './battle.js?v=72';
-import { personalities } from './ai.js?v=72';
-import { Campaign } from './campaign.js?v=72';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=72';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=72';
-import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=72';
-import { previewBuildings } from './structures.js?v=72';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=73';
+import { generateMap, rng } from './mapgen.js?v=73';
+import { initAnalytics, track } from './analytics.js?v=73';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=73';
+import { Battle } from './battle.js?v=73';
+import { personalities } from './ai.js?v=73';
+import { Campaign } from './campaign.js?v=73';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=73';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=73';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=73';
+import { previewBuildings } from './structures.js?v=73';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -825,8 +825,27 @@ let expedition = null;
 function startExpedition() {
   track('play-conquest');
   expedition = new Expedition(Math.floor(Math.random() * 1e9));
+  expedition.save();
   startBattle(expedition.setup(), 'expedition');
   flash(`🧭 Stage 1: ${expedition.current.name}`);
+}
+// a saved run (closed tab, reload, left during the perk card): its current stage starts over
+function resumeExpedition(run) {
+  track('conquest-resume');
+  expedition = Expedition.load(run);
+  startBattle(expedition.setup(), 'expedition');
+  flash(`🧭 Stage ${expedition.stage + 1}: ${expedition.current.name}`);
+}
+// menu: conquest asks first when a run is saved on this device
+function conquestEntry() {
+  const run = Expedition.saved();
+  if (!run || run.stage >= stages.length) { viaTutor(startExpedition)(); return; }
+  const pts = (run.scores ?? []).reduce((v, s) => v + s.total, 0);
+  $('resume-text').textContent = `Your run is saved at stage ${run.stage + 1}/${stages.length} (${stages[run.stage].name})`
+    + ` with ${run.perks?.length ?? 0} perk${run.perks?.length === 1 ? '' : 's'} and ${pts.toLocaleString()} points. That stage starts over.`;
+  $('resume').classList.remove('hidden');
+  $('resume-go').onclick = () => { $('resume').classList.add('hidden'); withLoading(() => resumeExpedition(run)); };
+  $('resume-new').onclick = () => { $('resume').classList.add('hidden'); Expedition.clearSave(); viaTutor(startExpedition)(); };
 }
 
 // stage over: run lost / world won / collapse into the next capital and pick a perk
@@ -836,6 +855,7 @@ function endStage(won) {
   const last = expedition.stage === stages.length - 1;
   const gain = expedition.record({ won, stars: won ? starsOf(battle).filter(Boolean).length : 0, secs: battle.time / rules.timeScale, killed: battle.stats.killed });
   if (!won || last) {
+    Expedition.clearSave();   // run over
     if (won) expedition.collapse(battle);
     const reached = won ? stages.length : expedition.stage + 1;
     const record = expedition.saveBest(reached);
@@ -936,6 +956,7 @@ function zoomOut() {
   // the snapshot goes on screen first; the heavy part (new battle, map view, first draw of every
   // layer, ~0.5-1 s on big maps) runs behind it and counts as the hold, instead of adding to it
   requestAnimationFrame(() => setTimeout(() => {
+    expedition.save();   // the new stage is where a reload picks up
     const setup = expedition.setup();
     // the new map renders straight away at the resolution of the zoom its camera glides to, so its
     // layers are built once (not again when the glide ends)
@@ -1045,7 +1066,8 @@ function renderMenuStats() {
   const best = Expedition.best();
   $('m-regions').textContent = `🏳️ ${campaign.owned.size}/${campaign.regions.length}`;
   $('m-campaign').textContent = `${campaign.owned.size}/${campaign.regions.length} regions conquered`;
-  $('m-expedition').textContent = best ? `Best: stage ${best.stage}/5` : 'Valley → World roguelite';
+  const run = Expedition.saved();
+  $('m-expedition').textContent = run ? `Continue: stage ${run.stage + 1}/5` : best ? `Best: stage ${best.stage}/5` : 'Valley → World roguelite';
 }
 const wins_key = 'frontlines.quickwins';
 function quickWins() { try { return +localStorage.getItem(wins_key) || 0; } catch { return 0; } }
@@ -1054,7 +1076,7 @@ function addQuickWin() { try { localStorage.setItem(wins_key, quickWins() + 1); 
 // ---------- menu, help, keyboard ----------
 $('btn-campaign').onclick = () => show('campaign');
 $('btn-skirmish').onclick = viaTutor(startSkirmish);
-$('btn-expedition').onclick = viaTutor(startExpedition);
+$('btn-expedition').onclick = conquestEntry;
 $('btn-help').onclick = () => $('help').classList.remove('hidden');
 
 // commander panel: colour swatches, troop and building style cards with live previews
@@ -1112,6 +1134,8 @@ $('test-win').onclick = () => {
 // leave: a finished battle goes straight back; a running one asks first (and pauses meanwhile)
 let pausedBeforeLeave = false;
 const leaveBattle = () => { $('leave').classList.add('hidden'); show(mode === 'campaign' ? 'campaign' : 'menu'); };
+// withdrawing from a running conquest battle ends the run (as the dialog says)
+const withdraw = () => { if (mode === 'expedition' && battle.state === 'running') Expedition.clearSave(); leaveBattle(); };
 $('battle-quit').onclick = () => {
   if (battle.state !== 'running') { leaveBattle(); return; }
   $('leave-text').textContent = mode === 'expedition'
@@ -1121,7 +1145,7 @@ $('battle-quit').onclick = () => {
   setSpeed(0);
   $('leave').classList.remove('hidden');
 };
-$('leave-go').onclick = leaveBattle;
+$('leave-go').onclick = withdraw;
 $('leave-stay').onclick = () => { $('leave').classList.add('hidden'); if (!pausedBeforeLeave) setSpeed(speed); };
 $('help-buildings').innerHTML = Object.values(buildings).map((b) => `<li>${b.icon} <b>${b.name}</b> (cost ${b.cost}): ${b.desc}</li>`).join('');
 
@@ -1314,6 +1338,9 @@ function tutorTick(dt) {
 }
 $('tutor-ok').onclick = () => { if (tutor) nextTutor(); };
 $('tutor-skip').onclick = () => endTutor(true);
+// feedback: opens the feedback form in a new tab
+const feedbackUrl = 'https://github.com/kalpokasaugustinas/fogfront/issues/new';
+$('help-feedback').onclick = () => { track('feedback-open'); window.open(feedbackUrl, '_blank', 'noopener'); };
 $('help-tutor').onclick = () => { $('help').classList.add('hidden'); withLoading(() => startTutorial(null)); };
 
 // on-map hints: a finger sliding along the move to make, pulsing rings on the tiles to watch

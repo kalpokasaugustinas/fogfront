@@ -7,9 +7,9 @@
 //   - pick 1 of 3 perks
 // bots scale with you: base troops + 70% of your carried people, and capitals with the same
 // total bonus strength in a random mix. losing a stage ends the run.
-import { effects } from './config.js?v=72';
-import { personalities } from './ai.js?v=72';
-import { rng } from './mapgen.js?v=72';
+import { effects } from './config.js?v=73';
+import { personalities } from './ai.js?v=73';
+import { rng } from './mapgen.js?v=73';
 
 export const stages = [
   { name: 'Valley', detail: 1, cells: 12, bots: 1, shape: 'random', neutral: [0.12, 0.3] },
@@ -55,6 +55,7 @@ export function combineMods(list) {
 
 const best_key = 'frontlines.expedition.best';
 const runs_key = 'frontlines.conquest.runs';
+const save_key = 'frontlines.conquest.save';   // the run in progress (start of its current stage)
 
 // conquest score, per stage; w = stage number (1-5), so later, harder stages count more:
 //   clear   500 x w                       (stage won)
@@ -179,6 +180,29 @@ export class Expedition {
     const runs = [...Expedition.runs(), run].sort((a, b) => b.points - a.points || a.secs - b.secs).slice(0, scoring.keep);
     try { localStorage.setItem(runs_key, JSON.stringify(runs)); } catch { /* storage blocked */ }
     return { rank: runs.indexOf(run) + 1, runs, run };
+  }
+
+  // run in progress, saved at the start of every stage so a reload or a closed tab can pick it up
+  // again (that stage restarts from its beginning, on the same map: setup() is seeded)
+  save() {
+    const run = { seed: this.seed, stage: this.stage, perks: this.perks, capital: this.capital, time: this.time, scores: this.scores,
+      shape: this.shape ? { n: this.shape.n, data: Array.from(this.shape.data) } : null };
+    try { localStorage.setItem(save_key, JSON.stringify(run)); } catch { /* storage blocked */ }
+  }
+
+  static saved() {
+    try { return JSON.parse(localStorage.getItem(save_key)); } catch { return null; }
+  }
+
+  static clearSave() { try { localStorage.removeItem(save_key); } catch { /* storage blocked */ } }
+
+  // rebuild a saved run (perk choices use a fresh generator, seeded by run and stage)
+  static load(run) {
+    const e = new Expedition(run.seed);
+    Object.assign(e, { stage: run.stage, perks: run.perks ?? [], capital: run.capital, time: run.time ?? 0, scores: run.scores ?? [] });
+    if (run.shape) e.shape = { n: run.shape.n, data: Uint8Array.from(run.shape.data) };
+    e.rand = rng(run.seed + run.stage * 104729);
+    return e;
   }
 
   saveBest(reached) {
