@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=71';
-import { generateMap, rng } from './mapgen.js?v=71';
-import { initAnalytics, track } from './analytics.js?v=71';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=71';
-import { Battle } from './battle.js?v=71';
-import { personalities } from './ai.js?v=71';
-import { Campaign } from './campaign.js?v=71';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=71';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=71';
-import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=71';
-import { previewBuildings } from './structures.js?v=71';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=72';
+import { generateMap, rng } from './mapgen.js?v=72';
+import { initAnalytics, track } from './analytics.js?v=72';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=72';
+import { Battle } from './battle.js?v=72';
+import { personalities } from './ai.js?v=72';
+import { Campaign } from './campaign.js?v=72';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=72';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=72';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=72';
+import { previewBuildings } from './structures.js?v=72';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -1246,6 +1246,12 @@ const tutorSteps = [
     text: () => `🌾 Your new tile has ${battle.costOf(0, 'farm')} foglets. A Farm costs ${battle.costOf(0, 'farm')} and adds +60% growth. Tap the tile, then the glowing farm.` },
   { id: 'time', ok: 'Got it', okAfter: 3, pulse: ['speed', 'clock'],
     text: () => '⏱️ Time runs now: every tile grows foglets each second (watch the numbers). ❚❚ pauses, ▶▶ speeds up.' },
+  // zoom lesson: a pinch hint over the castle; the step ends when the camera actually zooms
+  // (Next shows after 8 s, for anyone whose device can't pinch)
+  { id: 'zoomin', hold: true, ok: 'Next', okAfter: 8, pinch: 1,
+    text: () => '🔍 Zoom in: spread two fingers on the map (mouse: scroll up). Drag empty ground to look around.' },
+  { id: 'zoomout', hold: true, ok: 'Next', okAfter: 8, pinch: -1,
+    text: () => '🔭 Now zoom back out: pinch two fingers together (mouse: scroll down) to see the whole island.' },
   { id: 'route', hold: true, finger: () => [tutor.home, tutor.target], allow: () => pair(tutor.home, tutor.target),
     enter() { tseg(tutor.home).troops = Math.max(tseg(tutor.home).troops, 20); },
     text: () => '🔁 Drag from your castle to your farm tile. This sets a route: spare foglets keep flowing there.' },
@@ -1301,6 +1307,8 @@ function tutorTick(dt) {
   tutor.t += dt;
   if (tutor.advanceAt && tutor.t >= tutor.advanceAt) { nextTutor(); return; }
   if (st.okAfter && tutor.t > st.okAfter) $('tutor-ok').classList.remove('hidden');
+  // zoom steps: done once the camera is in (x1.8) / back out (x1.15)
+  if (!tutor.advanceAt && ((st.id === 'zoomin' && cam.z >= 1.8) || (st.id === 'zoomout' && cam.z <= 1.15))) tutor.advanceAt = tutor.t + 0.4;
   // a step that waits for something that may not happen (lost fight ...) gets a way on
   if (!st.ok && !st.hold && tutor.t > 12) $('tutor-ok').classList.remove('hidden');
 }
@@ -1310,6 +1318,7 @@ $('help-tutor').onclick = () => { $('help').classList.add('hidden'); withLoading
 
 // on-map hints: a finger sliding along the move to make, pulsing rings on the tiles to watch
 function drawTutor(ctx, fs) {
+  const fs0 = fs;
   if (!tutor) return;
   const st = tutorSteps[tutor.step], now = performance.now() / 1000;
   const ring = (sid, col) => {
@@ -1320,6 +1329,38 @@ function drawTutor(ctx, fs) {
     ctx.globalAlpha = 1;
   };
   ctx.save();
+  if (st.pinch) {
+    // two fingertips spreading apart (zoom in) or closing (zoom out) in the middle of the screen,
+    // on a loop, with arrowheads showing the direction. the canvas sits under the camera transform,
+    // so the screen centre is mapped back into canvas px and sizes divided by the zoom
+    const c = bv.canvas, wrap = $('battle-wrap'), fs = fs0 / cam.z;
+    const x = (wrap.clientWidth / 2 - cam.x) / cam.z - c.offsetLeft, y = (wrap.clientHeight / 2 - cam.y) / cam.z - c.offsetTop;
+    const ang = -0.55, ca = Math.cos(ang), sa = Math.sin(ang);
+    const k = ((now * 0.6) % 1) / 0.75, e = Math.min(1, k) ** 2 * (3 - 2 * Math.min(1, k));
+    const near = fs * 1.4, far = fs * 6, d = st.pinch > 0 ? near + (far - near) * e : far - (far - near) * e;
+    ctx.globalAlpha = k > 1 ? Math.max(0, 1 - (k - 1) * 3) : 1;
+    // guide: dashed track with arrowheads at the ends it moves toward
+    ctx.setLineDash([8 / cam.z, 6 / cam.z]); ctx.lineWidth = 3 / cam.z; ctx.strokeStyle = 'rgba(255,215,106,0.85)';
+    ctx.beginPath(); ctx.moveTo(x - ca * far, y - sa * far); ctx.lineTo(x + ca * far, y + sa * far); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffd76a';
+    for (const sgn of [-1, 1]) {
+      const r = st.pinch > 0 ? far + fs * 0.9 : near - fs * 0.2, dir = st.pinch > 0 ? sgn : -sgn;
+      const tx = x + ca * r * sgn, ty = y + sa * r * sgn, hx = ca * dir, hy = sa * dir, w = fs * 0.7;
+      ctx.beginPath(); ctx.moveTo(tx + hx * w, ty + hy * w); ctx.lineTo(tx - hy * w * 0.8, ty + hx * w * 0.8); ctx.lineTo(tx + hy * w * 0.8, ty - hx * w * 0.8); ctx.fill();
+    }
+    // fingertips: glowing pads with a pointing finger
+    ctx.font = `${Math.round(fs * 2)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const sgn of [-1, 1]) {
+      const fx = x + ca * d * sgn, fy = y + sa * d * sgn;
+      ctx.fillStyle = 'rgba(255, 215, 106, 0.45)';
+      ctx.beginPath(); ctx.arc(fx, fy, fs * 1.1, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 3 / cam.z; ctx.strokeStyle = '#fff';
+      ctx.beginPath(); ctx.arc(fx, fy, fs * 1.1, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillText('👆', fx + fs * 0.4, fy + fs * 1.3);
+    }
+    ctx.globalAlpha = 1;
+  }
   for (const id of st.ring?.() ?? []) ring(id, st.id === 'goal' ? `rgb(${colors[battle.factions[1].color]})` : '#ffd76a');
   if (st.finger) {
     const [from, to] = st.finger();
