@@ -2,7 +2,7 @@
 
 A territory strategy game (formerly Frontlines) for the browser; on phones the first tap goes fullscreen. Conquer a world map region by region. Each region is a battle against computer opponents on a map split into segments. Grow troops, build, and do the math on which fights to pick. In the game the troops are called **foglets**.
 
-Play: https://kalpokasaugustinas.github.io/fogfront/
+Play: https://kalpokasaugustinas.github.io/fogtide/
 
 Prototype stage.
 

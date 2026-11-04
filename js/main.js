@@ -1,15 +1,15 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=73';
-import { generateMap, rng } from './mapgen.js?v=73';
-import { initAnalytics, track } from './analytics.js?v=73';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=73';
-import { Battle } from './battle.js?v=73';
-import { personalities } from './ai.js?v=73';
-import { Campaign } from './campaign.js?v=73';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=73';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=73';
-import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=73';
-import { previewBuildings } from './structures.js?v=73';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=74';
+import { generateMap, rng } from './mapgen.js?v=74';
+import { initAnalytics, track } from './analytics.js?v=74';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=74';
+import { Battle } from './battle.js?v=74';
+import { personalities } from './ai.js?v=74';
+import { Campaign } from './campaign.js?v=74';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=74';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=74';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=74';
+import { previewBuildings } from './structures.js?v=74';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -1339,7 +1339,7 @@ function tutorTick(dt) {
 $('tutor-ok').onclick = () => { if (tutor) nextTutor(); };
 $('tutor-skip').onclick = () => endTutor(true);
 // feedback: opens the feedback form in a new tab
-const feedbackUrl = 'https://github.com/kalpokasaugustinas/fogfront/issues/new';
+const feedbackUrl = 'https://github.com/kalpokasaugustinas/fogtide/issues/new';
 $('help-feedback').onclick = () => { track('feedback-open'); window.open(feedbackUrl, '_blank', 'noopener'); };
 $('help-tutor').onclick = () => { $('help').classList.add('hidden'); withLoading(() => startTutorial(null)); };
 
