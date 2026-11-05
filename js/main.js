@@ -1,18 +1,43 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=76';
-import { generateMap, rng } from './mapgen.js?v=76';
-import { initAnalytics, track } from './analytics.js?v=76';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=76';
-import { Battle } from './battle.js?v=76';
-import { personalities } from './ai.js?v=76';
-import { Campaign } from './campaign.js?v=76';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=76';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=76';
-import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=76';
-import { previewBuildings } from './structures.js?v=76';
-import { initTune, tuneChanges } from './tune.js?v=76';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=77';
+import { generateMap, rng } from './mapgen.js?v=77';
+import { initAnalytics, track } from './analytics.js?v=77';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=77';
+import { Battle } from './battle.js?v=77';
+import { personalities } from './ai.js?v=77';
+import { Campaign } from './campaign.js?v=77';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=77';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=77';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=77';
+import { previewBuildings } from './structures.js?v=77';
+import { initTune, tuneChanges } from './tune.js?v=77';
 
 const $ = (id) => document.getElementById(id);
+
+// ---------- sitelock ----------
+// the game only runs where it's published: its own site, itch.io's game hosting, the portals it may
+// go to, and local / home-network addresses for testing. a re-uploaded copy, or the game framed
+// inside someone else's page, shows a link to the original instead (and is counted, so copies show
+// up on the dashboard). stops honest-lazy copies, not a determined one
+const home = 'https://kalpokasaugustinas.github.io/fogtide/';
+const hostOk = (h) => /^(kalpokasaugustinas\.github\.io|localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(h)
+  || /(^|\.)(itch\.zone|itch\.io|hwcdn\.net|crazygames\.com|poki\.com|poki-gdn\.com)$/.test(h);
+function parentHost() {
+  if (window.top === window) return null;
+  const a = location.ancestorOrigins?.[location.ancestorOrigins.length - 1] ?? document.referrer;
+  try { return new URL(a).hostname; } catch { return ''; }
+}
+const framedBy = parentHost();
+if (!hostOk(location.hostname) || (framedBy !== null && !hostOk(framedBy))) {
+  initAnalytics();
+  track(`sitelock-${location.hostname}${framedBy ? '-in-' + framedBy : ''}`);
+  document.documentElement.classList.remove('booting');
+  document.body.innerHTML = `<div class="sitelock"><div class="card end-card"><div class="end-ribbon"><h2>Fogtide</h2></div>
+    <p>This copy of Fogtide isn't the original.</p><p><a class="mode pink big-btn" href="${home}" target="_top" rel="noopener">▶ Play the original</a></p>
+    <p class="credits">${home}</p></div></div>`;
+  throw new Error('sitelock: not an approved host');
+}
+
 const params = new URLSearchParams(location.search);
 const autoplay = params.has('autoplay');   // test mode: the player side is played by a bot too
 
