@@ -123,6 +123,12 @@ Balance pass (build 64): bots used to put a barracks on every front tile and los
 ## Tuning
 Open the game with `?tune=1` (e.g. `http://localhost:8000/?tune=1`) for a collapsible panel with a slider and number box per balance value in `js/config.js` (rules, building costs, effects, terrain traits). Most values apply live; ones marked ↻ (start troops, caps, growth, capital margin) are set when a battle starts, so press "restart round". "copy changes" copies only the changed values as JSON (e.g. `{"rules.growthRate":0.012}`) to paste back into `config.js`; "reset" goes back to the file's values. Tuned values are kept in localStorage but only used while `?tune=1` is on. Building descriptions don't follow the sliders.
 
+## itch.io build
+```
+python tools/make_itch_zip.py
+```
+Zips the committed game files (index.html at the zip root, no tools or docs) into `dist/fogtide-build<N>.zip` for itch.io (Kind: HTML, played in the browser). The sitelock already allows itch.io's hosting domains.
+
 ## Build number
 The menu shows `build N · date time`. A git pre-commit hook (`tools/pre-commit` → `.git/hooks/pre-commit`) runs `tools/stamp_version.py`, which stamps the label and adds `?v=N` to css/js files so browsers load the new version. After a fresh clone, install the hook with `cp tools/pre-commit .git/hooks/pre-commit`.
 
