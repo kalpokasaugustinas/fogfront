@@ -219,7 +219,7 @@ try:
             page.wait_for_timeout(200)
             page.screenshot(path=str(out / f"{name}-route.png"))
             # frame times: 3 s of real play at 3x speed (bots fighting, captures -> layer rebuilds)
-            page.click("#speed button[data-speed='3']")
+            page.evaluate("__fl.setSpeed(3)")   # no x3 button any more; the test hook still fast-forwards
             perf = page.evaluate("""() => new Promise((done) => {
               const v = __fl.view, gaps = [];
               // owner-layer rebuild cost: cold (sprites rebuilt) and warm (sprites cached, the usual capture case)

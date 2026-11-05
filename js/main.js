@@ -1,16 +1,16 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=77';
-import { generateMap, rng } from './mapgen.js?v=77';
-import { initAnalytics, track } from './analytics.js?v=77';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=77';
-import { Battle } from './battle.js?v=77';
-import { personalities } from './ai.js?v=77';
-import { Campaign } from './campaign.js?v=77';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=77';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=77';
-import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=77';
-import { previewBuildings } from './structures.js?v=77';
-import { initTune, tuneChanges } from './tune.js?v=77';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=78';
+import { generateMap, rng } from './mapgen.js?v=78';
+import { initAnalytics, track } from './analytics.js?v=78';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=78';
+import { Battle } from './battle.js?v=78';
+import { personalities } from './ai.js?v=78';
+import { Campaign } from './campaign.js?v=78';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=78';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=78';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=78';
+import { previewBuildings } from './structures.js?v=78';
+import { initTune, tuneChanges } from './tune.js?v=78';
 
 const $ = (id) => document.getElementById(id);
 
@@ -738,14 +738,15 @@ function setPct(p) {
   for (const b of document.querySelectorAll('#pct button')) b.classList.toggle('on', +b.dataset.pct === p);
 }
 
-for (const b of document.querySelectorAll('#speed button')) b.onclick = () => setSpeed(+b.dataset.speed);
+$('speed').onclick = () => setSpeed(paused ? speed : 0);   // one button: pause <-> play
 function setSpeed(s) {
   // during the 3-2-1 the drum stops on pause and picks up where the count is on resume
   if (screen === 'battle' && countdown > 0 && countdown < 3 && (s === 0) !== paused) { if (s === 0) sfx.drumStop(); else sfx.drumFrom(3 - countdown); }
   paused = s === 0;
   userPaused = paused;
   if (s > 0) speed = s;
-  for (const b of document.querySelectorAll('#speed button')) b.classList.toggle('on', +b.dataset.speed === (paused ? 0 : speed));
+  $('speed').textContent = paused ? '▶' : '❚❚';
+  $('speed').classList.toggle('paused', paused);
 }
 
 // stats grid for end screens: fights, economy, territory, buildings by type
@@ -1331,7 +1332,7 @@ const tutorSteps = [
     enter() { tseg(tutor.target).troops = battle.costOf(0, 'farm'); },
     text: () => `🌾 Your new tile has ${battle.costOf(0, 'farm')} foglets. A Farm costs ${battle.costOf(0, 'farm')} and adds +60% growth. Tap the tile, then the glowing farm.` },
   { id: 'time', ok: 'Got it', okAfter: 3, pulse: ['speed', 'clock'],
-    text: () => '⏱️ Time runs now: every tile grows foglets each second (watch the numbers). ❚❚ pauses, ▶▶ speeds up.' },
+    text: () => '⏱️ Time runs now: every tile grows foglets each second (watch the numbers). ❚❚ (top right) pauses, ▶ plays on.' },
   // zoom lesson: a pinch hint over the castle; the step ends when the camera actually zooms
   // (Next shows after 8 s, for anyone whose device can't pinch)
   { id: 'zoomin', hold: true, ok: 'Next', okAfter: 8, pinch: 1,
@@ -1619,6 +1620,6 @@ renderMenuStats();
 // ?tune=1: live balance sliders; restart replays the current battle with the tuned values
 initTune(() => { if (lastStart && screen === 'battle') startBattle(...lastStart); });
 
-window.__fl = { tuneChanges, skipCountdown: () => { countdown = 0; goFlash = 0; }, setCam, get nextMap() { return nextMap; }, get tutor() { return tutor; }, endTutor, nextTutor, campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv, audioState, audioFiles };
+window.__fl = { tuneChanges, setSpeed, skipCountdown: () => { countdown = 0; goFlash = 0; }, setCam, get nextMap() { return nextMap; }, get tutor() { return tutor; }, endTutor, nextTutor, campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv, audioState, audioFiles };
 initAnalytics();
 initOffline();

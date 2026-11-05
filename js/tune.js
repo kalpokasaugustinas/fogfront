@@ -2,7 +2,7 @@
 // changes write straight into the shared config objects, so everything read at runtime updates live;
 // values marked ↻ are baked in when a battle starts (caps, growth, start troops) and need "restart round".
 // tuned values persist in localStorage, but only apply while ?tune=1 is in the url (normal play = config.js).
-import { rules, buildings, effects, traits } from './config.js?v=77';
+import { rules, buildings, effects, traits } from './config.js?v=78';
 
 const store_key = 'fogtide.tune';
 const on = new URLSearchParams(location.search).get('tune') === '1';
@@ -60,11 +60,11 @@ export function initTune(onRestart) {
   if (!on) return;
   const css = document.createElement('style');
   css.textContent = `
-    #tune { position: fixed; left: 8px; top: 8px; z-index: 100; width: min(300px, calc(100vw - 16px)); max-height: calc(100dvh - 16px);
-      display: flex; flex-direction: column; background: #10202aee; color: #e8f0f2; border-radius: 10px;
+    #tune { position: fixed; left: 8px; top: 60px; z-index: 100; width: min(300px, calc(100% - 16px));
+      background: #10202aee; color: #e8f0f2; border-radius: 10px;
       font: 12px system-ui, sans-serif; box-shadow: 0 4px 16px #0006; touch-action: auto; }
     #tune summary { padding: 8px 10px; cursor: pointer; font-weight: 700; user-select: none; }
-    #tune .body { overflow-y: auto; padding: 0 10px 8px; max-height: calc(100dvh - 120px); }
+    #tune .body { overflow-y: auto; padding: 0 10px 8px; max-height: calc(min(100vh, 100vw) - 170px); }
     #tune h4 { margin: 8px 0 4px; color: #ffd36b; font-size: 11px; text-transform: uppercase; }
     #tune .row { display: grid; grid-template-columns: 1fr 60px; gap: 2px 6px; align-items: center; margin-bottom: 6px; }
     #tune .row label { grid-column: 1 / 3; color: #b8c8cc; }

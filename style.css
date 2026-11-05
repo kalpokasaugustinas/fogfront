@@ -147,7 +147,7 @@ canvas { touch-action: none; display: block; }
 /* overlays */
 .overlay { position: fixed; inset: 0; background: rgba(30, 45, 50, 0.45); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
 .card { background: #f6f8f7; border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; max-width: 460px; width: 100%; text-align: center; }
-.card.scroll { text-align: left; max-height: 90vh; overflow-y: auto; }
+.card.scroll { text-align: left; max-height: 100%; overflow-y: auto; }   /* % of the overlay, not vh: upright phones rotate the page, so vh = the long side */
 .card ul { padding-left: 18px; }
 .card li { margin: 5px 0; }
 .card button { margin: 6px 4px 0; }
@@ -335,9 +335,13 @@ html.compact .perk-chip { width: 34px; height: 34px; font-size: 16px; }
 .chunky-group button:active, .chunky:active { transform: translateY(2px); box-shadow: 0 1px 0 #9aaaae, inset 0 1px 0 #fff; }
 .chunky-group button.on { color: #fff; background: linear-gradient(180deg, #5aa2ff, #2f74d6); box-shadow: 0 3px 0 #1c4f9c, inset 0 1px 0 rgba(255,255,255,0.5);
   text-shadow: 0 1px 0 rgba(0,0,0,0.25); }
-#speed button { letter-spacing: -3px; font-size: 11px; }
-#speed button[data-speed="0"] { letter-spacing: -1px; }
-#speed button[data-speed="0"].on { background: linear-gradient(180deg, #ffc94d, #e0961a); box-shadow: 0 3px 0 #a3650a, inset 0 1px 0 rgba(255,255,255,0.5); }
+/* play/pause: big blue button showing ❚❚ while running; yellow ▶ while paused so it's obvious how to resume */
+#speed { min-width: 68px; height: 46px; border-radius: 14px; font-size: 20px; letter-spacing: -1px; color: #fff;
+  background: linear-gradient(180deg, #5aa2ff, #2f74d6); box-shadow: 0 4px 0 #1c4f9c, inset 0 1px 0 rgba(255,255,255,0.5);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+#speed:active { box-shadow: 0 1px 0 #1c4f9c, inset 0 1px 0 rgba(255,255,255,0.5); }
+#speed.paused { background: linear-gradient(180deg, #ffc94d, #e0961a); box-shadow: 0 4px 0 #a3650a, inset 0 1px 0 rgba(255,255,255,0.5); letter-spacing: 0; }
+html.compact #speed { min-width: 56px; height: 38px; font-size: 17px; }
 
 /* send box (bottom-left corner): label, % group, round auto toggle */
 .sendbox { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border-radius: 20px; background: rgba(255,255,255,0.78);

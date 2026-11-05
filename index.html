@@ -26,7 +26,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Luckiest+Guy&display=swap">
-  <link rel="stylesheet" href="style.css?v=77">
+  <link rel="stylesheet" href="style.css?v=78">
   <!-- phones held upright: turn the page to landscape before the first paint (main.js keeps it in
        sync on resize, but only runs once every module has loaded) -->
   <script>
@@ -129,7 +129,7 @@
       <button id="btn-expedition" class="mode sky"><span class="m-ico">🧭</span><span class="m-txt"><b>Conquest</b><small id="m-expedition">Valley → World roguelite</small></span><span class="play">GO</span></button>
       <button id="btn-skirmish" class="mode pink"><span class="m-ico">⚔️</span><span class="m-txt"><b>Quick battle</b><small>Random island · 3 rivals</small></span><span class="play">FIGHT</span></button>
     </div>
-    <span id="version">build 77 · 2026-11-05 10:47</span>
+    <span id="version">build 78 · 2026-11-05 10:51</span>
   </section>
 
   <!-- campaign world map -->
@@ -164,9 +164,8 @@
     <div id="perk-bar" class="hidden"></div>
     <div class="hud tr">
       <button id="bar-music" class="round toggle" title="Music on/off">🎵</button>
-      <span id="speed" class="chunky-group">
-        <button data-speed="0" title="Pause (space)">❚❚</button><button data-speed="1" title="Normal speed">▶</button><button data-speed="2" title="2x speed">▶▶</button><button data-speed="3" title="3x speed">▶▶▶</button>
-      </span>
+      <!-- one big play/pause button (game runs at x1 only) -->
+      <button id="speed" class="chunky" title="Pause / play (space)">❚❚</button>
     </div>
     <div class="hud bl">
       <div id="seg-info"></div>
@@ -279,6 +278,6 @@
   </div>
 
   <div id="toast"></div>
-  <script type="module" src="js/main.js?v=77"></script>
+  <script type="module" src="js/main.js?v=78"></script>
 </body>
 </html>
