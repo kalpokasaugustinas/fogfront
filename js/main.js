@@ -1,16 +1,16 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=78';
-import { generateMap, rng } from './mapgen.js?v=78';
-import { initAnalytics, track } from './analytics.js?v=78';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=78';
-import { Battle } from './battle.js?v=78';
-import { personalities } from './ai.js?v=78';
-import { Campaign } from './campaign.js?v=78';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=78';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=78';
-import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=78';
-import { previewBuildings } from './structures.js?v=78';
-import { initTune, tuneChanges } from './tune.js?v=78';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=79';
+import { generateMap, rng } from './mapgen.js?v=79';
+import { initAnalytics, track } from './analytics.js?v=79';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=79';
+import { Battle } from './battle.js?v=79';
+import { personalities } from './ai.js?v=79';
+import { Campaign } from './campaign.js?v=79';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=79';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=79';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=79';
+import { previewBuildings } from './structures.js?v=79';
+import { initTune, tuneChanges } from './tune.js?v=79';
 
 const $ = (id) => document.getElementById(id);
 
@@ -676,12 +676,23 @@ function capitalInfo(s) {
   return `Bonuses: ${pc(b.growth)} growth here · ${pc(b.hosp)} in neighbours · ${pc(b.lab)} everywhere · defense ${pc(b.def)} · attack ${pc(b.atk)}`;
 }
 
+// what a tile's building does, with its owner's perks (granary, healers, scholars, stonemasons)
+function buildingEffect(s) {
+  const m = battle.mods(s.owner), pc = (v) => `+${Math.round(v * 100)}%`;
+  switch (s.building) {
+    case 'farm': return `${pc(effects.farmGrowth * (m.farm ?? 1))} growth here`;
+    case 'hospital': return `${pc(effects.hospitalGrowth * (m.hospital ?? 1))} growth on the owner's tiles next to it`;
+    case 'lab': return `${pc(effects.labGrowth * (m.lab ?? 1))} growth on all the owner's tiles`;
+    case 'barracks': return `foglets sent from here attack x${effects.barracksAttack}`;
+    case 'fort': return `defenders count x${m.fort ?? effects.fortDefense}`;
+    default: return '';
+  }
+}
 function updatePanel() {
   // segment info line: selected segment, or the hovered one
   const sid = selected >= 0 ? selected : hover;
   if (sid >= 0) {
     const s = battle.segs[sid], who = s.owner < 0 ? 'Neutral' : s.owner === 0 ? 'You' : colorNames[battle.factions[s.owner].color];
-    const mult = [s.building === 'fort' && `🛡️ defense x${effects.fortDefense}`, s.building === 'barracks' && `⚔️ attack x${effects.barracksAttack}`].filter(Boolean).join(' · ');
     const col = s.owner < 0 ? neutralColor : factionColors[battle.factions[s.owner].color];
     // card: owner ribbon (+ tile kind), troops / cap and growth, then chips for terrain, structure, relic
     const relic = s.relic ? perks.find((p) => p.id === s.relic) : null;
@@ -689,8 +700,7 @@ function updatePanel() {
     const rate = s.owner < 0 ? `regrows to ${s.garrison} · +${Math.round(s.baseGrowth * rules.neutralRegrow * 10) / 10}/s` : `+${s.growth}/s`;
     const chips = [
       s.trait && `<span>${traits[s.trait].name}: ${traits[s.trait].desc}</span>`,
-      s.building && !s.capital && `<span>${buildings[s.building].icon} ${buildings[s.building].name}</span>`,
-      mult && `<span>${mult}</span>`,
+      s.building && !s.capital && `<span>${buildings[s.building].icon} ${buildings[s.building].name}: ${buildingEffect(s)}</span>`,
       relic && `<span class="gold">✨ ${relic.name}: ${relic.desc}</span>`,
       s.capital && s.owner === 0 && `<span class="gold">${capitalInfo(s)}</span>`,
     ].filter(Boolean).join('');
@@ -1330,7 +1340,7 @@ const tutorSteps = [
     text: () => 'Your foglets march to the border and fight. The bigger number wins and keeps the difference.' },
   { id: 'build', hold: true, ring: () => [tutor.target],
     enter() { tseg(tutor.target).troops = battle.costOf(0, 'farm'); },
-    text: () => `🌾 Your new tile has ${battle.costOf(0, 'farm')} foglets. A Farm costs ${battle.costOf(0, 'farm')} and adds +60% growth. Tap the tile, then the glowing farm.` },
+    text: () => `🌾 Your new tile has ${battle.costOf(0, 'farm')} foglets. A Farm costs ${battle.costOf(0, 'farm')} and adds +${Math.round(effects.farmGrowth * 100)}% growth to its tile. Tap the tile, then the glowing farm.` },
   { id: 'time', ok: 'Got it', okAfter: 3, pulse: ['speed', 'clock'],
     text: () => '⏱️ Time runs now: every tile grows foglets each second (watch the numbers). ❚❚ (top right) pauses, ▶ plays on.' },
   // zoom lesson: a pinch hint over the castle; the step ends when the camera actually zooms
@@ -1402,7 +1412,7 @@ function tutorTick(dt) {
 $('tutor-ok').onclick = () => { if (tutor) nextTutor(); };
 $('tutor-skip').onclick = () => endTutor(true);
 // feedback: opens the feedback form in a new tab
-const feedbackUrl = 'https://github.com/kalpokasaugustinas/fogtide/issues/new';
+const feedbackUrl = 'https://forms.gle/KGM6LjwJGkVtBx3r5';
 $('help-feedback').onclick = () => { track('feedback-open'); window.open(feedbackUrl, '_blank', 'noopener'); };
 $('help-tutor').onclick = () => { $('help').classList.add('hidden'); withLoading(() => startTutorial(null)); };
 

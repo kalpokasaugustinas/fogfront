@@ -2,7 +2,7 @@
 // changes write straight into the shared config objects, so everything read at runtime updates live;
 // values marked ↻ are baked in when a battle starts (caps, growth, start troops) and need "restart round".
 // tuned values persist in localStorage, but only apply while ?tune=1 is in the url (normal play = config.js).
-import { rules, buildings, effects, traits } from './config.js?v=78';
+import { rules, buildings, effects, traits } from './config.js?v=79';
 
 const store_key = 'fogtide.tune';
 const on = new URLSearchParams(location.search).get('tune') === '1';
@@ -60,7 +60,7 @@ export function initTune(onRestart) {
   if (!on) return;
   const css = document.createElement('style');
   css.textContent = `
-    #tune { position: fixed; left: 8px; top: 60px; z-index: 100; width: min(300px, calc(100% - 16px));
+    #tune { position: fixed; left: 8px; top: 70px; z-index: 100; width: min(300px, calc(100% - 16px));
       background: #10202aee; color: #e8f0f2; border-radius: 10px;
       font: 12px system-ui, sans-serif; box-shadow: 0 4px 16px #0006; touch-action: auto; }
     #tune summary { padding: 8px 10px; cursor: pointer; font-weight: 700; user-select: none; }

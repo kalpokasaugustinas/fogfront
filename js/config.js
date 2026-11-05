@@ -30,11 +30,11 @@ export const rules = {
 // one building per segment; building costs troops taken from that segment.
 // a captured segment keeps its building (the new owner gets it).
 export const buildings = {
-  farm:     { name: 'Farm',     icon: '🌾', cost: 30, desc: '+60% growth in this segment' },
-  barracks: { name: 'Barracks', icon: '⚔️', cost: 25, desc: 'foglets sent from here attack x1.5' },
-  fort:     { name: 'Fort',     icon: '🛡️', cost: 40, desc: 'defenders here count x1.75' },
-  hospital: { name: 'Hospital', icon: '➕', cost: 70, desc: '+50% growth in your adjacent segments' },
-  lab:      { name: 'Lab',      icon: '🔬', cost: 60, desc: '+10% growth in all your segments' },
+  farm:     { name: 'Farm',     icon: '🌾', cost: 30 },
+  barracks: { name: 'Barracks', icon: '⚔️', cost: 25 },
+  fort:     { name: 'Fort',     icon: '🛡️', cost: 40 },
+  hospital: { name: 'Hospital', icon: '➕', cost: 70 },
+  lab:      { name: 'Lab',      icon: '🔬', cost: 60 },
 };
 
 export const effects = {
@@ -44,6 +44,14 @@ export const effects = {
   barracksAttack: 1.5,  // attack multiplier of armies sent from barracks
   fortDefense: 1.75,    // defense multiplier of fort segments
 };
+
+// building descriptions, written from the numbers above (so they always match the rules)
+const pct = (v) => `+${Math.round(v * 100)}%`;
+buildings.farm.desc = `${pct(effects.farmGrowth)} growth in this tile`;
+buildings.barracks.desc = `foglets sent from here attack x${effects.barracksAttack}`;
+buildings.fort.desc = `defenders here count x${effects.fortDefense}`;
+buildings.hospital.desc = `${pct(effects.hospitalGrowth)} growth in your tiles next to it`;
+buildings.lab.desc = `${pct(effects.labGrowth)} growth in all your tiles`;
 
 // terrain traits: each segment gets at most one, from what's on the map around it
 //   highland = next to mountains, river = a river runs through, lakeside = next to a lake,

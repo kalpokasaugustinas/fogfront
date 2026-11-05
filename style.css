@@ -305,7 +305,7 @@ html.compact #tutor p { font-size: 13px; margin: 2px 0 6px; }
 
 /* conquest perk column: round gold-rimmed chips stacked under the top-left hud; relic perks
    (from tiles you hold) get a sparkle and a brighter ring */
-#perk-bar { position: absolute; z-index: 3; left: 10px; top: 62px; display: flex; flex-direction: column; gap: 6px; }
+#perk-bar { position: absolute; z-index: 3; left: 10px; top: 70px; display: flex; flex-direction: column; gap: 6px; }
 #perk-bar.hidden { display: none; }
 .perk-chip { width: 40px; height: 40px; border-radius: 50%; padding: 0; font-size: 19px; line-height: 1; position: relative;
   background: linear-gradient(180deg, #fff8e6, #f3dca6); border: 2px solid #c98a1c;
@@ -315,7 +315,7 @@ html.compact #tutor p { font-size: 13px; margin: 2px 0 6px; }
 .perk-chip.relic { border-color: #ffbf2e; background: linear-gradient(180deg, #fffbe0, #ffe38a); }
 .perk-chip.relic::after { content: '✨'; position: absolute; right: -6px; top: -6px; font-size: 12px; }
 @keyframes perk-pop { 0% { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
-html.compact #perk-bar { left: 6px; top: 46px; gap: 5px; }
+html.compact #perk-bar { left: 6px; top: 56px; gap: 5px; }
 html.compact .perk-chip { width: 34px; height: 34px; font-size: 16px; }
 
 /* stage badge: gold shield-ribbon with the current stage */
@@ -458,3 +458,22 @@ html.compact .ld-scene { width: 120px; }
 .sitelock .card { max-width: 420px; }
 .sitelock a.big-btn { display: inline-block; padding: 12px 24px; text-decoration: none; color: #fff; font-family: 'Luckiest Guy', 'Fredoka', sans-serif; font-size: 20px; letter-spacing: 1px;
   background: linear-gradient(180deg, #ff6fae, #e0306f); border-radius: 14px; box-shadow: 0 4px 0 #a31a4c, 0 8px 14px rgba(0,0,0,0.25); text-shadow: 0 2px 0 #560a26; }
+
+/* battle back button: as big as the menu's round buttons (50px, 44px on small screens) */
+#battle-quit { width: 50px; height: 50px; font-size: 23px; }
+html.compact #battle-quit { width: 44px; height: 44px; font-size: 20px; }
+
+/* play/pause sits at the right end of the send box */
+.sendbox #speed { margin-left: 8px; }
+
+/* help: the tutorial button on top, in the menu's ribbon-button look (sky, gold lettering) */
+.menu-btn { position: relative; isolation: isolate; display: block; width: min(320px, 100%); margin: 4px auto 14px; padding: 12px 26px; border: 0; border-radius: 0; background: none; box-shadow: none;
+  font-family: 'Luckiest Guy', 'Fredoka', sans-serif; font-size: 22px; letter-spacing: 1.5px; color: #ffd96a;
+  text-shadow: 0 2px 0 #4a1240, 1.5px 0 0 #4a1240, -1.5px 0 0 #4a1240, 0 -1.5px 0 #4a1240;
+  filter: drop-shadow(0 5px 0 var(--deep)) drop-shadow(0 10px 12px rgba(0,0,0,0.25)); }
+.menu-btn::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: 6px;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 50%, 100% 100%, 0 100%, 6px 50%);
+  box-shadow: inset 0 3px 0 rgba(255,255,255,0.3), inset 0 -4px 0 var(--edge); }
+.menu-btn.sky { --edge: #1a5fa3; --deep: #0c2f56; }
+.menu-btn.sky::before { background: linear-gradient(180deg, #5cc8ff, #2b8fe0); }
+.menu-btn:active { transform: translateY(4px); filter: drop-shadow(0 1px 0 var(--deep)) drop-shadow(0 4px 6px rgba(0,0,0,0.25)); }

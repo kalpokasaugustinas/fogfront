@@ -4,16 +4,19 @@
 // leaning in at the foe, shaking with rage, and now and then one blasting off like a rocket diagonally
 // across the menu while a new one hops in. each band draws on its own full-screen canvas (so rockets
 // can cross the screen); the band stands in its side strip
-import { drawFoglet, hexToRgb } from './render.js?v=78';
+import { drawFoglet, hexToRgb } from './render.js?v=79';
 
 // taunts: mostly plain war cries; now and then (refShare of the time) a short nod to a game or
 // film, so the jokes stay fresh. launch cries work the same way
 const refShare = 0.29;
 const shouts = ['Grr!', 'Hey!', 'Ours!', 'Back off!', 'Charge!', 'Mine!', 'Come here!', 'Hmph!', 'Bring it!', 'Fight me!',
-  'My hill!', 'Shoo!', 'Nope!', 'Ha!', 'You and what army?', 'Boo!', 'Get lost!', 'Huzzah!'];
+  'My hill!', 'Shoo!', 'Nope!', 'Ha!', 'You and what army?', 'Boo!', 'Get lost!', 'Huzzah!',
+  'Not today!', 'Is that all?', 'Back to the mist!', 'Here comes the tide!', 'Hold the line!', 'Raaagh!', 'Try me!',
+  'Too slow!', 'Who goes there?', 'My turf!', 'Big words!', 'Foglets, ho!', 'Stand firm!', 'Splash!'];
 const refs = ['Out of bubblegum!', 'DONKEY!', "I'll make you cry like an onion!", 'Wololo!', 'Leeeroy!', 'All your base!',
   'Finish him!', 'You shall not pass!', 'Get over here!', 'This is FOGTIDE!', 'Hadouken!', 'The cake is a lie!',
-  'Fus ro dah!', "It's-a me!", 'Ogres have layers!'];
+  'Fus ro dah!', "It's-a me!", 'Ogres have layers!', 'Zug zug!', 'Hold the door!', "It's dangerous to go alone!",
+  'This is SPARTA!', 'Rush B!', 'Need a dispenser!'];
 const launches = ['Wheee!', 'Bye!', 'Up I go!', 'Woooo!', 'See ya!'];
 const launchRefs = ['Do a barrel roll!', 'To infinity!', 'Yippee-ki-yay!', 'Houston, bye!'];
 const pick = (plain, ref) => { const list = Math.random() < refShare ? ref : plain; return list[Math.floor(Math.random() * list.length)]; };
