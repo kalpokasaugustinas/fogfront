@@ -1,16 +1,16 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=79';
-import { generateMap, rng } from './mapgen.js?v=79';
-import { initAnalytics, track } from './analytics.js?v=79';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=79';
-import { Battle } from './battle.js?v=79';
-import { personalities } from './ai.js?v=79';
-import { Campaign } from './campaign.js?v=79';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=79';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=79';
-import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=79';
-import { previewBuildings } from './structures.js?v=79';
-import { initTune, tuneChanges } from './tune.js?v=79';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=80';
+import { generateMap, rng } from './mapgen.js?v=80';
+import { initAnalytics, track } from './analytics.js?v=80';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=80';
+import { Battle } from './battle.js?v=80';
+import { personalities } from './ai.js?v=80';
+import { Campaign } from './campaign.js?v=80';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=80';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=80';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=80';
+import { previewBuildings } from './structures.js?v=80';
+import { initTune, tuneChanges } from './tune.js?v=80';
 
 const $ = (id) => document.getElementById(id);
 
@@ -186,7 +186,7 @@ function startBattle(setup, m, rid = -1) {
   dress(setup.factions, setup.seed);
   battle = new Battle(map, setup);
   zoomMax = 5 / mapScale(map);
-  mode = m; regionId = rid; selected = -1; drag = null; paused = false; userPaused = false; key = '';
+  mode = m; regionId = rid; selected = -1; hover = -1; drag = null; paused = false; userPaused = false; key = '';
   endTutor(false);
   tutorWanted = false;   // startTutorial sets it after this
   countdown = autoplay ? 0 : 3; goFlash = 0;
@@ -690,8 +690,9 @@ function buildingEffect(s) {
 }
 function updatePanel() {
   // segment info line: selected segment, or the hovered one
+  // (a hover / selection from the previous map can point past this map's tiles: no card then)
   const sid = selected >= 0 ? selected : hover;
-  if (sid >= 0) {
+  if (sid >= 0 && battle.segs[sid]) {
     const s = battle.segs[sid], who = s.owner < 0 ? 'Neutral' : s.owner === 0 ? 'You' : colorNames[battle.factions[s.owner].color];
     const col = s.owner < 0 ? neutralColor : factionColors[battle.factions[s.owner].color];
     // card: owner ribbon (+ tile kind), troops / cap and growth, then chips for terrain, structure, relic

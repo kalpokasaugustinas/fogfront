@@ -4,7 +4,11 @@
 // off while code is empty, and never on localhost (tests)
 const code = 'fogfront';   // goatcounter site code (kept from the game's old name): https://fogfront.goatcounter.com
 
-const on = () => !!code && !/^(localhost|127\.)/.test(location.hostname);
+// the developer's own devices: opening the game once with ?test (test buttons) or ?nocount marks
+// this browser as not counted (goatcounter's own 'skipgc' flag), so testing doesn't skew the stats
+try { if (/[?&](test|nocount)(=|&|$)/.test(location.search)) localStorage.setItem('skipgc', 't'); } catch { /* storage blocked */ }
+const skipped = () => { try { return localStorage.getItem('skipgc') === 't'; } catch { return false; } };
+const on = () => !!code && !/^(localhost|127\.)/.test(location.hostname) && !skipped();
 
 export function initAnalytics() {
   if (!on()) return;
