@@ -1,16 +1,16 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=82';
-import { generateMap, rng } from './mapgen.js?v=82';
-import { initAnalytics, track } from './analytics.js?v=82';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=82';
-import { Battle } from './battle.js?v=82';
-import { personalities } from './ai.js?v=82';
-import { Campaign } from './campaign.js?v=82';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=82';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=82';
-import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=82';
-import { previewBuildings } from './structures.js?v=82';
-import { initTune, tuneChanges } from './tune.js?v=82';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=83';
+import { generateMap, rng } from './mapgen.js?v=83';
+import { initAnalytics, track } from './analytics.js?v=83';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=83';
+import { Battle } from './battle.js?v=83';
+import { personalities } from './ai.js?v=83';
+import { Campaign } from './campaign.js?v=83';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=83';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=83';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=83';
+import { previewBuildings } from './structures.js?v=83';
+import { initTune, tuneChanges } from './tune.js?v=83';
 
 const $ = (id) => document.getElementById(id);
 
@@ -1221,6 +1221,11 @@ $('battle-quit').onclick = () => {
 };
 $('leave-go').onclick = withdraw;
 $('leave-stay').onclick = () => { $('leave').classList.add('hidden'); if (!pausedBeforeLeave) setSpeed(speed); };
+// submenus close on a tap outside their card (on the dimmed backdrop), same as their close button;
+// leave = 'keep fighting'. end-of-battle and resume screens need a real choice, so they don't.
+for (const [id, btn] of [['help', 'help-close'], ['board', 'board-close'], ['profile', 'pf-done'], ['leave', 'leave-stay']]) {
+  $(id).addEventListener('click', (e) => { if (e.target === e.currentTarget) $(btn).click(); });
+}
 $('help-buildings').innerHTML = Object.values(buildings).map((b) => `<li>${b.icon} <b>${b.name}</b> (cost ${b.cost}): ${b.desc}</li>`).join('');
 
 addEventListener('keydown', (e) => {
