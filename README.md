@@ -90,6 +90,7 @@ Vanilla JS modules plus canvas 2D. No build step, no dependencies.
 | `tools/build_audio.py` | turns the downloaded tracks/clips into the files in `audio/` |
 | `js/structures.js` | building scenes that fill a segment: farmland, fort walls and towers, castle with soldiers, hospital, lab |
 | `js/main.js` | screens, input, HUD, frame loop |
+| `js/tune.js` | live tuning panel (`?tune=1`): sliders for the config.js numbers |
 | `sw.js` | service worker: offline play (one cache per build) |
 | `js/mapworker.js` | runs map generation in a background worker (the next conquest map is built while the perk card is up) |
 | `js/analytics.js` | anonymous GoatCounter visit + event counter (off until a site code is set) |
@@ -117,6 +118,9 @@ python tools/balance.py [buildings|perks|all] [--seeds N] [--maps N] [--set farm
 One side is a variant (no buildings, one building banned, only one building allowed, or a perk in a conquest-like start with 600-foglet capitals and camps), the other the normal bot. Every game is played both ways round, because faction 0 has a clear first-mover edge between equal bots. Output: the variant's win share with a 95% margin, average game length, buildings held at the end, and a price-vs-impact table (payback time of each building on the pool's median tile). `--set` changes a price or effect for both sides, to test a change before editing `js/config.js`. Bots only build through `personality.allow` (ai.js) in these tests.
 
 Balance pass (build 64): bots used to put a barracks on every front tile and lost to bots that built nothing (68%); they now pick the building that pays back fastest and beat no-buildings 71%. Prices: hospital 50 → 70, barracks 40 → 25, forts x1.5 → x1.75. Perks, win share vs no perk: plunder 99% → 64% (15% → 2% loot), conscription 79% → 68%, veterans 70% → 55%, healers 59%, engineers 60%, fertile 64%; the rest 47–55%.
+
+## Tuning
+Open the game with `?tune=1` (e.g. `http://localhost:8000/?tune=1`) for a collapsible panel with a slider and number box per balance value in `js/config.js` (rules, building costs, effects, terrain traits). Most values apply live; ones marked ↻ (start troops, caps, growth, capital margin) are set when a battle starts, so press "restart round". "copy changes" copies only the changed values as JSON (e.g. `{"rules.growthRate":0.012}`) to paste back into `config.js`; "reset" goes back to the file's values. Tuned values are kept in localStorage but only used while `?tune=1` is on. Building descriptions don't follow the sliders.
 
 ## Build number
 The menu shows `build N · date time`. A git pre-commit hook (`tools/pre-commit` → `.git/hooks/pre-commit`) runs `tools/stamp_version.py`, which stamps the label and adds `?v=N` to css/js files so browsers load the new version. After a fresh clone, install the hook with `cp tools/pre-commit .git/hooks/pre-commit`.

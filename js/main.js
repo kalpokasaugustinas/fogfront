@@ -1,15 +1,16 @@
 // app shell: menu, campaign map, battle screen, input and the frame loop
-import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=75';
-import { generateMap, rng } from './mapgen.js?v=75';
-import { initAnalytics, track } from './analytics.js?v=75';
-import { makeBand, drawBand, dressBand } from './foglets.js?v=75';
-import { Battle } from './battle.js?v=75';
-import { personalities } from './ai.js?v=75';
-import { Campaign } from './campaign.js?v=75';
-import { Expedition, stages, perks, scoring } from './expedition.js?v=75';
-import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=75';
-import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=75';
-import { previewBuildings } from './structures.js?v=75';
+import { rules, buildings, effects, factionColors, factionNames, colorNames, troopStyles, buildingStyles, neutralColor, themeNames, traits } from './config.js?v=76';
+import { generateMap, rng } from './mapgen.js?v=76';
+import { initAnalytics, track } from './analytics.js?v=76';
+import { makeBand, drawBand, dressBand } from './foglets.js?v=76';
+import { Battle } from './battle.js?v=76';
+import { personalities } from './ai.js?v=76';
+import { Campaign } from './campaign.js?v=76';
+import { Expedition, stages, perks, scoring } from './expedition.js?v=76';
+import { initAudio, sfx, setSfx, setMusic, setTrack, audioPrefs, audioState, audioFiles } from './audio.js?v=76';
+import { MapView, mapScale, hexToRgb, shade, label, pill, unitSprite, pagePoint, pageRect } from './render.js?v=76';
+import { previewBuildings } from './structures.js?v=76';
+import { initTune, tuneChanges } from './tune.js?v=76';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -149,7 +150,9 @@ function preloadMap(setup) {
   } catch { /* no module workers: the stage generates its map on start */ }
 }
 
+let lastStart = null;   // tuning panel: 'restart round' replays the last battle setup
 function startBattle(setup, m, rid = -1) {
+  lastStart = [setup, m, rid];
   // battle maps: random island shape + lakes/mountains (setup.shape can force a shape)
   const opts = mapOpts(setup), pre = nextMap?.key === mapKey(opts) ? nextMap.map : null;
   const map = pre ?? generateMap(opts);
@@ -1588,6 +1591,9 @@ syncAudioButtons();
 renderMenuStats();
 
 // hooks for headless tests
-window.__fl = { skipCountdown: () => { countdown = 0; goFlash = 0; }, setCam, get nextMap() { return nextMap; }, get tutor() { return tutor; }, endTutor, nextTutor, campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv, audioState, audioFiles };
+// ?tune=1: live balance sliders; restart replays the current battle with the tuned values
+initTune(() => { if (lastStart && screen === 'battle') startBattle(...lastStart); });
+
+window.__fl = { tuneChanges, skipCountdown: () => { countdown = 0; goFlash = 0; }, setCam, get nextMap() { return nextMap; }, get tutor() { return tutor; }, endTutor, nextTutor, campaign, startSkirmish, startBattle, startExpedition, get expedition() { return expedition; }, get battle() { return battle; }, get view() { return bv; }, cview: cv, audioState, audioFiles };
 initAnalytics();
 initOffline();
